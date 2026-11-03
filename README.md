@@ -40,7 +40,7 @@ Choices worth knowing:
 
 ## Running it
 
-You need Node 22, Python 3 with NumPy (to convert the voices file), an Android phone or an iPhone, and an OpenAI or Gemini API key.
+You need Node 22, an Android phone or an iPhone, and an OpenAI or Gemini API key.
 
 ```sh
 npm install
