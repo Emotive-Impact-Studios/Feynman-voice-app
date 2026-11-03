@@ -1,0 +1,103 @@
+// Microphone helpers shared by the app and tests. Plain TypeScript, no native code.
+
+/**
+ * Streaming linear resampler. The phone may deliver 44.1 or 48 kHz even when
+ * asked for 16 kHz, and Gemini only needs 16 kHz mono, so we shrink it here
+ * before upload (about a third of the size).
+ */
+export class Resampler {
+  private pos = 0; // position of the next output sample, in input samples
+  private last = 0; // last input sample of the previous buffer
+
+  constructor(private inRate: number, private outRate = 16000) {}
+
+  push(input: Float32Array): Float32Array {
+    if (this.inRate === this.outRate) return input.slice();
+    const step = this.inRate / this.outRate;
+    const out: number[] = [];
+    // Index -1 refers to the last sample of the previous buffer.
+    const at = (i: number) => (i < 0 ? this.last : input[i]);
+    while (this.pos <= input.length - 1) {
+      const i = Math.floor(this.pos);
+      const frac = this.pos - i;
+      const a = at(i);
+      const b = i + 1 <= input.length - 1 ? input[i + 1] : a;
+      out.push(a + (b - a) * frac);
+      this.pos += step;
+    }
+    this.pos -= input.length;
+    if (input.length) this.last = input[input.length - 1];
+    return Float32Array.from(out);
+  }
+}
+
+/**
+ * Very simple energy-based speech detector. It counts seconds where the
+ * learner is actually talking, which is what the minutes balance will charge
+ * for. A short hangover stops gaps between words being counted as silence.
+ */
+export class SpeechMeter {
+  speakingSeconds = 0;
+  totalSeconds = 0;
+  private hangover = 0;
+
+  constructor(private threshold = 0.015, private hangoverSeconds = 0.35) {}
+
+  push(samples: Float32Array, sampleRate: number): boolean {
+    const seconds = samples.length / sampleRate;
+    let sum = 0;
+    for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+    const rms = Math.sqrt(sum / Math.max(1, samples.length));
+    this.totalSeconds += seconds;
+    if (rms >= this.threshold) {
+      this.hangover = this.hangoverSeconds;
+      this.speakingSeconds += seconds;
+      return true;
+    }
+    if (this.hangover > 0) {
+      const counted = Math.min(seconds, this.hangover);
+      this.hangover -= seconds;
+      this.speakingSeconds += counted;
+      return true;
+    }
+    return false;
+  }
+}
+
+export function int16ToFloat32(data: ArrayBuffer): Float32Array {
+  const ints = new Int16Array(data);
+  const out = new Float32Array(ints.length);
+  for (let i = 0; i < ints.length; i++) out[i] = ints[i] / 32768;
+  return out;
+}
+
+export function concatFloat32(parts: Float32Array[]): Float32Array {
+  const out = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
+  let o = 0;
+  for (const p of parts) {
+    out.set(p, o);
+    o += p.length;
+  }
+  return out;
+}
+
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/** Base64 without relying on btoa or Buffer, so it behaves the same everywhere. */
+export function toBase64(bytes: Uint8Array): string {
+  let out = "";
+  let i = 0;
+  for (; i + 2 < bytes.length; i += 3) {
+    const n = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+    out += B64[n >> 18] + B64[(n >> 12) & 63] + B64[(n >> 6) & 63] + B64[n & 63];
+  }
+  const rest = bytes.length - i;
+  if (rest === 1) {
+    const n = bytes[i] << 16;
+    out += B64[n >> 18] + B64[(n >> 12) & 63] + "==";
+  } else if (rest === 2) {
+    const n = (bytes[i] << 16) | (bytes[i + 1] << 8);
+    out += B64[n >> 18] + B64[(n >> 12) & 63] + B64[(n >> 6) & 63] + "=";
+  }
+  return out;
+}
