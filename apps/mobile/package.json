@@ -25,7 +25,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "fetch-model": "../../scripts/fetch-kitten-model.sh assets/kitten"
+    "fetch-model": "../../scripts/fetch-kitten-model.sh assets/kitten",
+    "eas-build-post-install": "npm run fetch-model"
   },
   "private": true
 }

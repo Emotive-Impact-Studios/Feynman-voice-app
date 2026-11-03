@@ -8,7 +8,19 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://feynman-voice-api.vercel.app"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://feynman-voice-api.vercel.app"
       }
     }
+  },
+  "submit": {
+    "production": {}
   }
 }
