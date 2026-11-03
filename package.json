@@ -1,0 +1,13 @@
+{
+  "name": "feynman",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/api",
+    "apps/mobile"
+  ],
+  "scripts": {
+    "test": "npm test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}
