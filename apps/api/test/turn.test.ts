@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { costOf, pricesFromEnv } from "../src/pricing";
+import { encodeWav } from "@feynman/kitten-tts";
+import { costOf, pricesFromEnv, wavSeconds } from "../src/pricing";
 import { handleTurn } from "../src/turn";
 
-const env = { GEMINI_API_KEY: "k", GEMINI_MODEL: "gemini-test", PROTOTYPE_TOKEN: "t" };
+const env = { BRAIN: "gemini", GEMINI_API_KEY: "k", GEMINI_MODEL: "gemini-test", PROTOTYPE_TOKEN: "t" };
+const openaiEnv = { BRAIN: "openai", OPENAI_API_KEY: "k", PROTOTYPE_TOKEN: "t" };
 
 function geminiOk(payload: object, usage: object) {
   return vi.fn(async () =>
@@ -90,5 +92,47 @@ describe("POST /api/turn", () => {
     const res = await handleTurn(turnRequest(audio), env, fetchImpl);
     expect(res.status).toBe(502);
     expect((await res.json()).detail).toBe("bad model");
+  });
+});
+
+describe("POST /api/turn with OpenAI", () => {
+  it("transcribes, asks, and prices both calls", async () => {
+    const wav = encodeWav(new Float32Array(16000 * 30), 16000); // 30 s
+    expect(wavSeconds(wav)).toBeCloseTo(30);
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/audio/transcriptions")) {
+        return new Response(JSON.stringify({ text: "The heart pumps blood." }), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ question: "What makes it pump?" }) } }],
+          usage: { prompt_tokens: 1000, completion_tokens: 20, prompt_tokens_details: { cached_tokens: 400 } },
+        }),
+        { status: 200 },
+      );
+    });
+    const res = await handleTurn(
+      turnRequest({ audioBase64: Buffer.from(wav).toString("base64"), mimeType: "audio/wav", audioSeconds: 20 }),
+      openaiEnv,
+      fetchImpl as never,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.transcript).toBe("The heart pumps blood.");
+    expect(body.question).toBe("What makes it pump?");
+    expect(body.recordedSeconds).toBeCloseTo(30);
+    // Transcription: 0.5 min x $0.003. Chat: 600 x 0.75 + 400 x 0.075 + 20 x 4.5, per million.
+    expect(body.cost.usd).toBeCloseTo(0.0015 + (600 * 0.75 + 400 * 0.075 + 20 * 4.5) / 1e6, 8);
+    expect(body.cost.pencePerLearnerMinute).toBeCloseTo(body.cost.pence / (20 / 60));
+
+    const chat = JSON.parse((fetchImpl.mock.calls[1] as unknown as [string, RequestInit])[1].body as string);
+    expect(chat.model).toBe("gpt-5.4-mini");
+    expect(chat.messages.at(-1)).toEqual({ role: "user", content: "The heart pumps blood." });
+    expect(chat.messages[0].content).not.toContain("faithful transcript");
+  });
+
+  it("needs an OpenAI key", async () => {
+    const res = await handleTurn(turnRequest(audio), { BRAIN: "openai", PROTOTYPE_TOKEN: "t" });
+    expect(res.status).toBe(500);
   });
 });

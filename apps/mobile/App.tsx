@@ -65,7 +65,7 @@ export default function App() {
         <Text style={[styles.mono, { color: c.fg }]}>
           {last
             ? `Last turn: ${last.speakingSeconds.toFixed(1)}s spoken of ${last.recordedSeconds.toFixed(1)}s\n` +
-              `Wait: ${last.waitMs}ms (Gemini ${last.geminiMs}ms, voice ${last.ttsMs}ms)\n` +
+              `Wait: ${last.waitMs}ms (server ${last.brainMs}ms, voice ${last.ttsMs}ms)\n` +
               `Cost: ${last.pence.toFixed(3)}p\n`
             : "No turns yet\n"}
           {totals.secs > 0

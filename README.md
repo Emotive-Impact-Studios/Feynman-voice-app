@@ -7,12 +7,12 @@ This repository holds **build step 1: the voice loop prototype**. It exists to p
 ## How the loop works
 
 ```
-Phone                                   Serverless function (apps/api)          Gemini
------                                   ------------------------------          ------
+Phone                                   Serverless function (apps/api)          OpenAI or Gemini
+-----                                   ------------------------------          ----------------
 mic -> 16 kHz mono PCM
 speech meter counts speaking seconds
 tap "Done" -> WAV, base64  ---------->  POST /api/turn  ----------------------> audio + history + student prompt
-                                                                         <---- { transcript, question } + token usage
+                                                                         <---- { transcript, question } + usage
                                         eSpeak (WASM) turns question
                                         into phonemes, works out cost
                            <----------  { question, phonemes, cost, timings }
@@ -21,7 +21,8 @@ Kitten TTS Nano (ONNX) speaks it
 
 Choices worth knowing:
 
-- **Gemini hears the audio directly.** There is no separate transcription step. It returns a transcript alongside the question, and later turns are sent back as that text, so each call only pays for the new audio.
+- **Two brains, one switch.** `BRAIN=openai` (the default for now) transcribes the turn with `gpt-4o-mini-transcribe`, then asks `gpt-5.4-mini` for the question with structured output. `BRAIN=gemini` sends the audio straight to Gemini in one call, as the brief intends. OpenAI's own audio-in chat models were tried first: they don't support structured output, `gpt-audio-mini` is deprecated, and `gpt-audio-1.5` charges $32 per million audio tokens.
+- **Later turns go back as text.** Each call returns a transcript, and earlier turns are resent as that text, so each call only pays for the new audio.
 - **Phonemes are made on the server.** Kitten TTS needs eSpeak phonemes, and eSpeak is awkward on a phone. The function phonemises the question (a few milliseconds) and the phone only runs the 24MB ONNX model. Nothing about the voice costs money per minute.
 - **Only speaking time counts.** A simple energy meter on the phone counts seconds of actual speech, which is the figure the minutes balance will charge for. Cost per minute in the app uses that figure.
 - **The Gemini key never reaches the phone.** The app holds only a throwaway prototype token.
@@ -51,11 +52,13 @@ npm test
 ### 1. Measure cost without a phone
 
 ```sh
-cp apps/api/.env.example apps/api/.env   # fill in GEMINI_API_KEY and check GEMINI_MODEL
+cp apps/api/.env.example apps/api/.env   # fill in OPENAI_API_KEY (or GEMINI_API_KEY and BRAIN=gemini)
 cd apps/api && node --env-file=.env --import tsx scripts/cost-bench.ts
 ```
 
-With no arguments it speaks a five-turn explanation of the heart with Kitten TTS and sends it to Gemini. Pass your own WAV files to use real voices, which is the better test.
+With no arguments it speaks a five-turn explanation of the heart with Kitten TTS and sends it to the chosen brain.
+
+First run with OpenAI (3 November 2026): 0.46p per learner minute, 1.3 to 2.1 seconds of server time per turn. Transcription is about half the cost and is billed on recorded time, pauses included. The text model's share grows with the session history. Pass your own WAV files to use real voices, which is the better test.
 
 ### 2. Try the loop on a phone
 
@@ -73,7 +76,7 @@ Create a Vercel project with its root directory set to `apps/api`, add the varia
 
 ## Prices
 
-The cost maths reads prices from environment variables (US dollars per million tokens). The defaults are the introductory figures from the brief: $0.75 in and $3.75 out. Audio input has its own variable because Google has priced audio above text on earlier Flash models. Check the live price list before trusting the numbers.
+The cost maths reads prices from environment variables. OpenAI defaults come from OpenAI's price list on 3 November 2026. Gemini defaults are the introductory figures from the brief ($0.75 in and $3.75 out per million tokens), with audio input in its own variable because Google has priced audio above text on earlier Flash models. Check the live price lists before trusting the numbers.
 
 ## Known gaps, on purpose
 

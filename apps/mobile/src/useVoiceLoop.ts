@@ -23,7 +23,7 @@ export interface TurnStats {
   speakingSeconds: number;
   recordedSeconds: number;
   pence: number;
-  geminiMs: number;
+  brainMs: number;
   ttsMs: number;
   /** From tapping "done" to the student starting to speak. */
   waitMs: number;
@@ -112,7 +112,7 @@ export function useVoiceLoop(topic: string) {
           speakingSeconds,
           recordedSeconds: pcm.length / UPLOAD_RATE,
           pence: reply.cost.pence,
-          geminiMs: reply.timingMs.gemini,
+          brainMs: reply.timingMs.brain,
           ttsMs,
           waitMs: Date.now() - tapped,
         },

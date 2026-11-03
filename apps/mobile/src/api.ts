@@ -13,8 +13,9 @@ export interface TurnResponse {
   question: string;
   speech: PhonemeChunk[];
   audioSeconds: number;
-  cost: { pence: number; usd: number; audioInTokens: number; textInTokens: number; outTokens: number };
-  timingMs: { gemini: number; phonemes: number };
+  brain: "openai" | "gemini";
+  cost: { pence: number; usd: number; lines: { label: string; pence: number }[] };
+  timingMs: { brain: number; phonemes: number; transcribe?: number; chat?: number };
 }
 
 export async function sendTurn(input: {

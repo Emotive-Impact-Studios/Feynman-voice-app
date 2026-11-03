@@ -1,7 +1,8 @@
-// Measures real cost per minute against Gemini without a phone.
+// Measures real cost per minute without a phone, using whichever BRAIN is set
+// (openai by default, or gemini).
 //
-//   GEMINI_API_KEY=... npm run bench -w @feynman/api
-//   GEMINI_API_KEY=... npm run bench -w @feynman/api -- my-turn-1.wav my-turn-2.wav
+//   OPENAI_API_KEY=... npm run bench -w @feynman/api
+//   OPENAI_API_KEY=... npm run bench -w @feynman/api -- my-turn-1.wav my-turn-2.wav
 //
 // With no files, it makes "learner" audio with Kitten TTS from a short
 // scripted explanation, so you only need an API key to try it. Real voices
@@ -46,6 +47,7 @@ const turns = await learnerTurns(process.argv.slice(2));
 const history: PastTurn[] = [];
 let totalPence = 0;
 let totalSeconds = 0;
+const waits: number[] = [];
 for (const t of turns) {
   const req = new Request("http://local/api/turn", {
     method: "POST",
@@ -67,12 +69,13 @@ for (const t of turns) {
   history.push({ speaker: "learner", text: body.transcript }, { speaker: "student", text: body.question });
   totalPence += body.cost.pence;
   totalSeconds += t.seconds;
-  console.log(
-    `${t.seconds.toFixed(1)}s  ${body.cost.pence.toFixed(3)}p  ${body.timingMs.gemini}ms  ` +
-      `in ${body.cost.audioInTokens}a/${body.cost.textInTokens}t out ${body.cost.outTokens}\n  Q: ${body.question}`,
-  );
+  waits.push(body.timingMs.brain + body.timingMs.phonemes);
+  console.log(`${t.seconds.toFixed(1)}s spoken, ${body.cost.pence.toFixed(3)}p, ${JSON.stringify(body.timingMs)}`);
+  for (const l of body.cost.lines) console.log(`  ${l.pence.toFixed(4)}p  ${l.label}`);
+  console.log(`  Heard: ${body.transcript}\n  Q: ${body.question}`);
 }
 console.log(
   `\n${turns.length} turns, ${(totalSeconds / 60).toFixed(2)} learner minutes, ${totalPence.toFixed(3)}p in total, ` +
-    `${(totalPence / (totalSeconds / 60)).toFixed(3)}p per minute`,
+    `${(totalPence / (totalSeconds / 60)).toFixed(3)}p per minute. ` +
+    `Server wait per turn: ${Math.min(...waits)} to ${Math.max(...waits)}ms (before the phone speaks).`,
 );

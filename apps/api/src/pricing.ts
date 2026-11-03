@@ -48,3 +48,30 @@ export function costOf(usage: GeminiUsage, prices: Prices): TurnCost {
     (audioInTokens * prices.inAudioPerM + textInTokens * prices.inTextPerM + outTokens * prices.outPerM) / 1e6;
   return { audioInTokens, textInTokens, outTokens, usd, pence: usd * prices.gbpPerUsd * 100 };
 }
+
+export interface CostLine {
+  label: string;
+  usd: number;
+}
+
+export function openAIPricesFromEnv(env: Record<string, string | undefined> = process.env) {
+  const n = (v: string | undefined, d: number) => (v && !Number.isNaN(Number(v)) ? Number(v) : d);
+  // Defaults from OpenAI's price list, checked on 2026-11-03:
+  // gpt-4o-mini-transcribe about $0.003 a minute; gpt-5.4-mini $0.75 in,
+  // $0.075 cached in, $4.50 out per million tokens.
+  return {
+    transcribeUsdPerMin: n(env.OPENAI_TRANSCRIBE_USD_PER_MIN, 0.003),
+    chatInPerM: n(env.OPENAI_PRICE_IN, 0.75),
+    chatCachedInPerM: n(env.OPENAI_PRICE_CACHED_IN, 0.075),
+    chatOutPerM: n(env.OPENAI_PRICE_OUT, 4.5),
+  };
+}
+
+export function wavSeconds(bytes: Uint8Array): number | null {
+  if (bytes.length < 44) return null;
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const tag = (o: number) => String.fromCharCode(bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]);
+  if (tag(0) !== "RIFF" || tag(8) !== "WAVE") return null;
+  const byteRate = v.getUint32(28, true);
+  return byteRate ? (bytes.length - 44) / byteRate : null;
+}
