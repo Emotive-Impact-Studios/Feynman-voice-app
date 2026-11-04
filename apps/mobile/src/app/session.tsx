@@ -39,8 +39,10 @@ function clock(seconds: number) {
 }
 
 export default function Session() {
-  const params = useLocalSearchParams<{ topic?: string }>();
+  // A review card opens the session on its own topic and question.
+  const params = useLocalSearchParams<{ topic?: string; prompt?: string }>();
   const topic = params.topic ?? lastTopic.title;
+  const opening = params.prompt ?? OPENING;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [view, setView] = useState<View3>("light");
@@ -48,7 +50,7 @@ export default function Session() {
 
   const spokenBefore = useMemo(() => loop.stats.reduce((t, s) => t + s.speakingSeconds, 0), [loop.stats]);
   const spoken = spokenBefore + (loop.phase === "listening" ? loop.liveSpeaking : 0);
-  const question = [...loop.turns].reverse().find((t) => t.speaker === "student")?.text ?? OPENING;
+  const question = [...loop.turns].reverse().find((t) => t.speaker === "student")?.text ?? opening;
   const lastYou = [...loop.turns].reverse().find((t) => t.speaker === "learner")?.text;
 
   const studentEnergy = loop.phase === "speaking" ? 1 : loop.phase === "thinking" ? 0.5 : 0;
@@ -64,7 +66,15 @@ export default function Session() {
 
   const canTap = loop.phase === "ready" || loop.phase === "listening";
   const onRing = loop.phase === "listening" ? loop.finish : loop.start;
-  const end = () => router.replace("/feedback");
+  // Stop the microphone, any pending turn and any reply before leaving.
+  const end = () => {
+    loop.cancel();
+    router.replace("/feedback");
+  };
+  const close = () => {
+    loop.cancel();
+    router.back();
+  };
 
   return (
     <View style={styles.root}>
@@ -111,7 +121,7 @@ export default function Session() {
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingTop: insets.top + 130, paddingBottom: 140, paddingHorizontal: 20, gap: 14, flexGrow: 1, justifyContent: "flex-end" }}
           >
-            {(loop.turns.length ? loop.turns : [{ speaker: "student" as const, text: OPENING }]).map((t, i) =>
+            {(loop.turns.length ? loop.turns : [{ speaker: "student" as const, text: opening }]).map((t, i) =>
               t.speaker === "student" ? (
                 <View key={i} style={styles.studentRow}>
                   <LivingLight size={34} energy={i === loop.turns.length - 1 ? studentEnergy : 0} />
@@ -142,7 +152,7 @@ export default function Session() {
               {clock(spoken)} · {Math.max(0, Math.floor(me.minutesLeft - spoken / 60))} min left
             </Label>
           </View>
-          <RoundButton label="Close session" size={44} onPress={() => router.back()}>
+          <RoundButton label="Close session" size={44} onPress={close}>
             <Icon name="close" size={15} />
           </RoundButton>
         </View>

@@ -1,6 +1,6 @@
 // A stack of tall cards with artwork, used for reviews (H2) and gaps (feedback).
 import type { ReactNode } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { colour, radius } from "../theme";
@@ -17,9 +17,22 @@ interface Props {
   behind?: number;
 }
 
+/** Space the stack needs below the card for the cards peeking out behind it. */
+const BEHIND = 26;
+
+/**
+ * Card height that fits the screen: the window minus what sits above the card
+ * and below the stack, kept between min and max so short phones still show
+ * the action buttons.
+ */
+export function useCardHeight({ above, below, max, min = 300 }: { above: number; below: number; max: number; min?: number }) {
+  const { height } = useWindowDimensions();
+  return Math.round(Math.max(min, Math.min(max, height - above - below - BEHIND)));
+}
+
 export function CardStack({ art, tags, title, note, height = 470, actions, behind = 2 }: Props) {
   return (
-    <View style={{ height, marginBottom: 26 }}>
+    <View style={{ height, marginBottom: BEHIND }}>
       {behind > 1 && <View style={[styles.back, { left: 30, right: 30, top: 26, bottom: -26, backgroundColor: "#15161A" }]} />}
       {behind > 0 && <View style={[styles.back, { left: 15, right: 15, top: 13, bottom: -13, backgroundColor: "#1B1D21" }]} />}
       <View style={styles.card}>
