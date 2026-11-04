@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["api", "src", "test", "scripts", "dev.ts"]
+  "include": ["src", "test", "scripts", "dev.ts"]
 }

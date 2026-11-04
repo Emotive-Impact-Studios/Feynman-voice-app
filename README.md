@@ -40,7 +40,7 @@ Choices worth knowing:
 
 ## Running it
 
-You need Node 22, an Android phone or an iPhone, and a Gemini API key.
+You need Node 22, an Android phone or an iPhone, and an OpenAI or Gemini API key.
 
 ```sh
 npm install
@@ -72,7 +72,19 @@ The app uses native ONNX Runtime, so it needs a development build. Expo Go will 
 
 ### 3. Deploy the function
 
-Create a Vercel project with its root directory set to `apps/api`, add the variables from `apps/api/.env.example`, and point `EXPO_PUBLIC_API_URL` at the deployment.
+`npm run build -w @feynman/api` bundles the function into one file in Vercel's prebuilt layout (`apps/api/.vercel/output`). On Vercel, create a project with root directory `apps/api`, build command `npm run build`, install command `npm ci`, and add the variables from `apps/api/.env.example`. The app expects it at `https://feynman-voice-api.vercel.app` (see `apps/mobile/eas.json`).
+
+### 4. TestFlight
+
+From `apps/mobile` on a Mac signed in to the Apple developer account:
+
+```sh
+npx eas-cli@latest login
+npx eas-cli@latest env:create --name EXPO_PUBLIC_PROTOTYPE_TOKEN --value <same as PROTOTYPE_TOKEN on Vercel> --environment production --visibility sensitive
+npx eas-cli@latest build --platform ios --profile production --auto-submit
+```
+
+The first run asks for the Apple ID, creates the app in App Store Connect and sets up signing. The build fetches the Kitten model itself (`eas-build-post-install`). When it lands in TestFlight, add yourself as an internal tester.
 
 ## Prices
 
