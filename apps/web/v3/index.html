@@ -316,47 +316,70 @@ footer .brand { font-size: 17px; color: var(--soft); }
   .draw { stroke-dashoffset: 0; }
 }
 
-/* ---------- v3 hero: cinematic photo frame ---------- */
-.h3 { padding: 76px 14px 0; }
-.h3-frame { position: relative; min-height: calc(100svh - 90px); min-height: max(640px, calc(100svh - 90px)); border-radius: 30px; overflow: hidden; background: #050607; box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; isolation: isolate; }
-.h3 .hero-photo { inset: 0; background: url(../img/hero-student-a.webp) 50% 24% / cover no-repeat; opacity: 1; z-index: -2; }
+/* ---------- v3 hero: full-bleed photo that dissolves into the page ---------- */
+.h3 { position: relative; padding: 0; }
+.h3-frame { position: relative; min-height: max(700px, 100svh); isolation: isolate; overflow: hidden; }
+.h3 .hero-photo { inset: 0; background: url(../img/hero-student-a.webp) 50% 26% / cover no-repeat; opacity: 1; z-index: -3;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 58%, rgba(0,0,0,.55) 78%, transparent 100%);
+          mask-image: linear-gradient(180deg, #000 0%, #000 58%, rgba(0,0,0,.55) 78%, transparent 100%);
+  animation: h3in 2.2s cubic-bezier(.2,.7,.2,1) both; }
 .h3 .hero-photo::after { display: none; }
-.h3-shade { position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background: linear-gradient(0deg, rgba(5,6,7,.92) 0%, rgba(5,6,7,.55) 30%, rgba(5,6,7,0) 58%),
-              linear-gradient(90deg, rgba(5,6,7,.75) 0%, rgba(5,6,7,0) 46%),
-              radial-gradient(120% 90% at 58% 30%, rgba(5,6,7,0) 55%, rgba(5,6,7,.6) 100%); }
-.h3-copy { position: absolute; left: clamp(22px, 4.5vw, 64px); bottom: clamp(26px, 4.5vw, 56px); max-width: 700px; }
-.h3-copy .eyebrow { display: block; margin-bottom: 22px; color: rgba(236,239,244,.7); }
-.h3 h1 { font-size: clamp(40px, 4.4vw, 68px); }
-.h3 h1 .l1 { display: block; color: rgba(236,239,244,.62); }
+@keyframes h3in { from { scale: 1.08; filter: blur(10px) brightness(.6); } to { scale: 1; filter: none; } }
+.h3-shade { position: absolute; inset: 0; z-index: -2; pointer-events: none;
+  background: linear-gradient(180deg, rgba(8,9,11,.7) 0%, rgba(8,9,11,0) 16%),
+              linear-gradient(0deg, var(--ground) 0%, rgba(8,9,11,.82) 18%, rgba(8,9,11,.35) 40%, rgba(8,9,11,0) 60%),
+              linear-gradient(90deg, rgba(8,9,11,.78) 0%, rgba(8,9,11,.25) 34%, rgba(8,9,11,0) 50%),
+              radial-gradient(110% 80% at 55% 28%, rgba(8,9,11,0) 50%, rgba(8,9,11,.55) 100%); }
+/* film grain over the photo, gone by the time it meets the page */
+.h3-frame::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .16; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent 100%); mask-image: linear-gradient(180deg, #000 60%, transparent 100%); }
+.h3-copy { position: absolute; left: max(24px, calc((100vw - 1240px) / 2)); bottom: clamp(70px, 9vh, 110px); max-width: 700px; }
+.h3-copy .eyebrow { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 22px; color: rgba(236,239,244,.72); }
+.h3-copy .eyebrow::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #A9BEE6; box-shadow: 0 0 0 0 rgba(169,190,230,.6); animation: livedot 2.4s ease-out infinite; }
+@keyframes livedot { 0% { box-shadow: 0 0 0 0 rgba(169,190,230,.55); } 70%, 100% { box-shadow: 0 0 0 9px rgba(169,190,230,0); } }
+.h3 h1 { font-size: clamp(40px, 4.6vw, 72px); text-wrap: balance; }
+.h3 h1 .l1 { display: block; color: rgba(236,239,244,.58); }
 .h3 h1 .l2 { display: block; }
-.h3 .lead { margin-top: 18px; max-width: 28em; font-size: 17px; color: rgba(236,239,244,.78); }
+.h3 .lead { margin-top: 18px; max-width: 30em; font-size: 17px; color: rgba(236,239,244,.8); }
 .h3 form.wait { margin-top: 28px; }
-.h3 .btn .arr { display: inline-grid; place-items: center; width: 24px; height: 24px; margin: -4px -8px -4px 6px; border-radius: 50%; background: var(--ground); color: var(--text); font-size: 13px; }
+.h3 .btn .arr { display: inline-grid; place-items: center; width: 24px; height: 24px; margin: -4px -8px -4px 6px; border-radius: 50%; background: var(--ground); color: var(--text); font-size: 13px; transition: transform .4s var(--spring); }
+.h3 .btn:hover .arr { transform: rotate(45deg); }
 .h3-calls { list-style: none; margin: 0; padding: 0; }
-.h3-calls li { position: absolute; display: flex; gap: 10px; max-width: 250px; font-size: 14px; line-height: 1.4; color: rgba(236,239,244,.62); text-shadow: 0 1px 14px rgba(0,0,0,.7); }
+.h3-calls li { position: absolute; display: flex; gap: 10px; max-width: 260px; padding: 11px 14px 12px; border-radius: 16px; font-size: 13.5px; line-height: 1.4; color: rgba(236,239,244,.66);
+  background: rgba(12,13,16,.32); -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 20px 40px -20px rgba(0,0,0,.6); }
+.h3-calls li > span { animation: none; }
 .h3-calls b { color: var(--text); font-weight: 510; }
-.h3-calls svg { flex: none; width: 16px; height: 16px; margin-top: 2px; fill: none; stroke: var(--text); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
-.h3-calls .c1 { left: 6%; top: 13%; }
-.h3-calls .c2 { right: 7%; top: 17%; }
-.h3-calls .c3 { left: 12%; top: 27%; }
-.h3-phone { position: absolute; right: clamp(22px, 4vw, 60px); bottom: clamp(26px, 4vw, 52px); }
-.h3-phone .phone-box { --k: .6; position: relative; }
-.h3-back { position: absolute; inset: 18px -14px -10px 14px; border-radius: 40px; background: rgba(255,255,255,.07); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset; }
-.h3-phone .phone { box-shadow: 0 40px 80px -20px rgba(0,0,0,.8); }
+.h3-calls svg { flex: none; width: 16px; height: 16px; margin-top: 1px; fill: none; stroke: #A9BEE6; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.h3-calls .c1 { left: max(24px, calc((100vw - 1240px) / 2)); top: 19%; }
+.h3-calls .c2 { right: max(24px, calc((100vw - 1240px) / 2)); top: 20%; }
+.h3-calls .c3 { left: calc(max(24px, calc((100vw - 1240px) / 2)) + 90px); top: 33%; }
+.h3-phone { position: absolute; right: max(24px, calc((100vw - 1240px) / 2)); bottom: clamp(56px, 8vh, 96px); }
+.h3-phone .phone-box { --k: .6; position: relative; animation: h3float 7s ease-in-out 1.6s infinite; }
+@keyframes h3float { 50% { translate: 0 -10px; } }
+.h3-back { position: absolute; inset: 22px -16px -12px 16px; border-radius: 40px; background: rgba(255,255,255,.06); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset; }
+.h3-phone .phone { box-shadow: 0 50px 90px -24px rgba(0,0,0,.85), 0 0 80px -10px rgba(169,190,230,.18); }
+.h3-cue { position: absolute; left: 50%; bottom: 22px; translate: -50% 0; display: grid; justify-items: center; gap: 10px; font: 500 10px/1 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: rgba(236,239,244,.45); }
+.h3-cue i { width: 1px; height: 34px; background: linear-gradient(180deg, rgba(236,239,244,.6), transparent); transform-origin: top; animation: cue 2.4s cubic-bezier(.6,0,.2,1) infinite; }
+@keyframes cue { 0% { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
+/* the questions strip picks up where the photo fades out */
+.h3 + .marquee { padding-top: 0; }
 @media (max-width: 1100px) { .h3-calls .c3 { display: none; } .h3-phone .phone-box { --k: .52; } }
 @media (max-width: 900px) {
-  .h3 { padding: 70px 10px 0; }
-  .h3-frame { min-height: 0; display: flex; flex-direction: column; border-radius: 24px; }
-  .h3 .hero-photo { transform: none !important; opacity: 1 !important; position: relative; inset: auto; height: 62svh; min-height: 420px; background-position: 56% 20%; z-index: 0; }
-  .h3-shade { bottom: auto; height: 62svh; min-height: 420px; z-index: 1;
-    background: linear-gradient(0deg, #050607 0%, rgba(5,6,7,.4) 30%, rgba(5,6,7,0) 55%); }
-  .h3-calls { display: none; }
-  .h3-copy { position: relative; left: auto; bottom: auto; margin-top: -150px; padding: 0 20px 8px; z-index: 2; }
-  .h3-phone { position: relative; right: auto; bottom: auto; align-self: center; margin: 40px 0 36px; z-index: 2; }
+  .h3-frame { min-height: 0; display: flex; flex-direction: column; }
+  .h3 .hero-photo { transform: none !important; opacity: 1 !important; position: relative; inset: auto; height: 68svh; min-height: 440px; background-position: 56% 18%; z-index: 0;
+    -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, #000 55%, transparent 100%); }
+  .h3-shade { bottom: auto; height: 68svh; min-height: 440px; z-index: 1;
+    background: linear-gradient(180deg, rgba(8,9,11,.6) 0%, rgba(8,9,11,0) 18%), linear-gradient(0deg, var(--ground) 0%, rgba(8,9,11,.4) 32%, rgba(8,9,11,0) 55%); }
+  .h3-frame::after { display: none; }
+  .h3-calls, .h3-cue { display: none; }
+  .h3-copy .eyebrow { font-size: 10.5px; letter-spacing: .1em; }
+  .h3-copy { position: relative; left: auto; bottom: auto; margin-top: -170px; padding: 0 20px 8px; z-index: 2; }
+  .h3-phone { position: relative; right: auto; bottom: auto; align-self: center; margin: 44px 0 10px; z-index: 2; }
   .h3-phone .phone-box { --k: .78; }
   .h3-back { display: none; }
 }
+@media (prefers-reduced-motion: reduce) { .h3 .hero-photo, .h3-phone .phone-box, .h3-cue i, .h3-copy .eyebrow::before { animation: none; } }
 </style>
 </head>
 <body>
@@ -411,6 +434,8 @@ footer .brand { font-size: 17px; color: var(--soft); }
           </div>
         </div></div>
       </div>
+
+      <a class="h3-cue" href="#session" aria-label="Scroll down">Scroll<i></i></a>
     </div>
   </section>
 
