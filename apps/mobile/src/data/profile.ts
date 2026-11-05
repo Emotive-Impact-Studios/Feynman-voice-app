@@ -16,6 +16,8 @@ export interface TopicRecord {
   sessions: number;
   /** How many questions the student asked. */
   questions: number;
+  /** What they want to be able to explain, in their own words. */
+  goal?: string;
 }
 
 export interface Profile {
@@ -24,9 +26,11 @@ export interface Profile {
   subjects: string[];
   secondsUsed: number;
   topics: TopicRecord[];
+  /** Local day numbers on which they explained something, for the soft streak. */
+  days: number[];
 }
 
-const EMPTY: Profile = { introDone: false, name: "", subjects: [], secondsUsed: 0, topics: [] };
+const EMPTY: Profile = { introDone: false, name: "", subjects: [], secondsUsed: 0, topics: [], days: [] };
 const file = new File(Paths.document, "profile.json");
 
 function load(): Profile {
@@ -74,18 +78,47 @@ export function replayIntro() {
 }
 
 /** Record a finished session. Sessions with no speaking are not saved. */
-export function recordSession(title: string, seconds: number, questions: number) {
+export function recordSession(title: string, seconds: number, questions: number, goal?: string) {
   const t = title.trim();
   if (!t || seconds < 1) return;
-  const old = state.topics.find((x) => x.title.toLowerCase() === t.toLowerCase());
+  const old = findTopic(t);
+  const g = goal?.trim() || old?.goal;
   const rec: TopicRecord = old
-    ? { ...old, at: Date.now(), seconds: old.seconds + seconds, sessions: old.sessions + 1, questions: old.questions + questions }
-    : { title: t, at: Date.now(), seconds, sessions: 1, questions };
+    ? { ...old, at: Date.now(), seconds: old.seconds + seconds, sessions: old.sessions + 1, questions: old.questions + questions, goal: g }
+    : { title: t, at: Date.now(), seconds, sessions: 1, questions, goal: g };
+  const today = dayNumber(Date.now());
   set({
     ...state,
     secondsUsed: state.secondsUsed + seconds,
     topics: [rec, ...state.topics.filter((x) => x !== old)],
+    days: state.days.includes(today) ? state.days : [...state.days, today].slice(-120),
   });
+}
+
+export function findTopic(title: string): TopicRecord | undefined {
+  const t = title.trim().toLowerCase();
+  return state.topics.find((x) => x.title.toLowerCase() === t);
+}
+
+/**
+ * Days in a row you explained something, forgiving one missed day in any
+ * seven. Today only counts once you've explained, and an empty today never
+ * breaks the streak. A soft streak: missing a day is fine, not a reset.
+ */
+export function softStreak(days: number[], today = dayNumber(Date.now())): number {
+  const seen = new Set(days);
+  if (!seen.size) return 0;
+  const first = Math.min(...days);
+  let d = seen.has(today) ? today : today - 1;
+  let streak = 0;
+  const misses: number[] = [];
+  while (d >= first) {
+    if (seen.has(d)) streak++;
+    else if (misses.some((m) => m - d < 7)) break;
+    else misses.push(d);
+    d--;
+  }
+  return streak;
 }
 
 /** Whole minutes left, counting any seconds spoken in a session not yet saved. */
@@ -103,7 +136,7 @@ export function ago(at: number) {
 }
 
 // Local calendar day as a whole number, so clock changes can't shift it.
-function dayNumber(t: number) {
+export function dayNumber(t: number) {
   const d = new Date(t);
   return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
 }
