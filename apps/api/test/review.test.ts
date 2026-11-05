@@ -98,10 +98,11 @@ describe("POST /api/show-me", () => {
 
 describe("shaping", () => {
   it("drops empty items and keeps at most four gaps", () => {
-    const g = { kind: "gap" as const, title: "a", detail: "", source: "", named: false };
+    const g = { kind: "gap" as const, title: "a", detail: "", source: "", named: false, correction: "stray" };
     const out = shapeAnalysis({ strengths: [{ title: "", quote: "x" }], gaps: [g, g, g, g, g, { ...g, title: " " }], thenAndNow: { then: "", now: "x" } }, undefined);
     expect(out.strengths).toHaveLength(0);
     expect(out.gaps).toHaveLength(4);
+    expect(out.gaps[0].correction).toBe("");
     expect(out.thenAndNow).toBeNull();
   });
 

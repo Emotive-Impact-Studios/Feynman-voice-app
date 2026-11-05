@@ -106,6 +106,8 @@ export interface Gap {
   source: string;
   /** The one they named themselves when asked which bit felt shakiest. */
   named: boolean;
+  /** For "muddled": the right version, so a misconception is never left standing. */
+  correction?: string;
 }
 
 export interface Analysis {

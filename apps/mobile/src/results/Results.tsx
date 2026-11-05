@@ -438,6 +438,15 @@ function GapCard({
               {gap.detail}
             </T>
           ) : null}
+          {/* A wrong idea is set right here, since Fenny never explains. */}
+          {gap.correction ? (
+            <View style={styles.shown}>
+              <Label tone="student">The right version</Label>
+              <T size={15.5} style={{ marginTop: 8 }}>
+                {gap.correction}
+              </T>
+            </View>
+          ) : null}
           {shown && (
             <Animated.View entering={FadeInDown.springify().duration(spring.smooth.duration).dampingRatio(spring.smooth.dampingRatio)} style={styles.shown}>
               <Label tone={shown.fromNotes ? "student" : "muted"}>{shown.fromNotes ? "From your notes" : "A quick explanation"}</Label>

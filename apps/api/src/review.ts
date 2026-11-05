@@ -49,6 +49,11 @@ export interface Gap {
   source: string;
   /** True for the card the learner named themselves. */
   named: boolean;
+  /**
+   * For "muddled" only: the right version in one plain sentence, so a
+   * misconception Fenny did not catch is never left standing. Empty otherwise.
+   */
+  correction: string;
 }
 
 export interface Analysis {
@@ -114,6 +119,7 @@ Return:
   - "detail": one or two sentences on what they said or left out, so they know where to look. Do NOT give the answer or the missing fact. Point at it as a question or a pointer instead. If they have notes, you may say which part of their notes covers it.
   - "source": where it lives in their notes in a few words (for example "Notes: competitive inhibition"), or "" if they have no notes.
   - "named": false for every gap you find yourself.
+  - "correction": for "muddled" only, the right version in one plain sentence, from their notes when they have them, so a wrong idea is never left standing. "" for every other kind.
 - thenAndNow: only when an earlier attempt is given. "then" is a short line from the earlier attempt and "now" a line from this call about the same idea that shows the change, both quoted exactly. Use null if there is no earlier attempt or no clear pair.
 
 If they named the part that felt shakiest, do not repeat that same part in gaps; the app adds it as the first card in their words. Instead, give its detail in "shakiestDetail": one or two sentences on what they said about it, without the answer. If they did not name one, make "shakiestDetail" "".
@@ -145,8 +151,9 @@ const ANALYSE_SCHEMA = {
           detail: { type: "string" },
           source: { type: "string" },
           named: { type: "boolean" },
+          correction: { type: "string" },
         },
-        required: ["kind", "title", "detail", "source", "named"],
+        required: ["kind", "title", "detail", "source", "named", "correction"],
         additionalProperties: false,
       },
     },
@@ -245,11 +252,14 @@ export function shapeAnalysis(
     .slice(0, 4);
   const found = (raw.gaps ?? [])
     .filter((g) => g.title?.trim())
-    .map((g) => ({ ...g, kind: (["gap", "skipped", "muddled"] as const).includes(g.kind) ? g.kind : "gap", named: false }))
+    .map((g) => {
+      const kind = (["gap", "skipped", "muddled"] as const).includes(g.kind) ? g.kind : "gap";
+      return { ...g, kind, named: false, correction: kind === "muddled" ? (g.correction ?? "").trim() : "" };
+    })
     .slice(0, 4);
   const named = shakiest?.trim();
   const gaps: Gap[] = named
-    ? [{ kind: "gap", title: named, detail: raw.shakiestDetail?.trim() ?? "", source: "You named it", named: true }, ...found.slice(0, 3)]
+    ? [{ kind: "gap", title: named, detail: raw.shakiestDetail?.trim() ?? "", source: "You named it", named: true, correction: "" }, ...found.slice(0, 3)]
     : found;
   const tn = raw.thenAndNow;
   return { strengths, gaps, focusExplained: raw.focusExplained === true, thenAndNow: tn && tn.then?.trim() && tn.now?.trim() ? { then: unquote(tn.then), now: unquote(tn.now) } : null };
