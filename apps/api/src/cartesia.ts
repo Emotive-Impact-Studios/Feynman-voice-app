@@ -34,11 +34,8 @@ export async function transcribeCartesia(
 
 export const SONIC_SAMPLE_RATE = 24000;
 
-/**
- * Sonic's pace for the student, from 0.6 (slowest) to 1.5. The default 1.0
- * sounded rushed on the phone, so the student speaks a little slower.
- */
-export const SONIC_SPEED = 0.8;
+/** Sonic's pace for the student, from 0.6 (slowest) to 1.5. 1.0 is Sonic's own default. */
+export const SONIC_SPEED = 1;
 
 /**
  * One sentence of the student's voice from Sonic, as 16-bit PCM at 24 kHz.
