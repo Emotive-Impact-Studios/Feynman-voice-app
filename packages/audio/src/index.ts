@@ -1,4 +1,4 @@
-// Microphone helpers shared by the app and tests. Plain TypeScript, no native code.
+// Microphone, turn-taking and stream helpers shared by the app and tests. Plain TypeScript, no native code.
 
 /**
  * Streaming linear resampler. The phone may deliver 44.1 or 48 kHz even when
@@ -100,4 +100,128 @@ export function toBase64(bytes: Uint8Array): string {
     out += B64[n >> 18] + B64[(n >> 12) & 63] + B64[(n >> 6) & 63] + "=";
   }
   return out;
+}
+
+/** Root mean square loudness of a buffer, 0 to 1. */
+export function rms(samples: Float32Array): number {
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+  return Math.sqrt(sum / Math.max(1, samples.length));
+}
+
+/**
+ * Decides when the learner has finished a turn in a live call: once they
+ * have spoken for a moment and then gone quiet for long enough. Fed the same
+ * speech/silence decisions as SpeechMeter.
+ */
+export class EndOfTurn {
+  private spoken = 0;
+  private quiet = 0;
+
+  constructor(
+    /** Seconds of quiet that end a turn. Long enough for a breath mid-thought. */
+    private silenceSeconds = 1.2,
+    /** Speech needed before quiet can end a turn, so a cough does not. */
+    private minSpeechSeconds = 0.6,
+  ) {}
+
+  /** Returns true once, at the moment the turn ends. */
+  push(isSpeech: boolean, seconds: number): boolean {
+    if (isSpeech) {
+      this.spoken += seconds;
+      this.quiet = 0;
+      return false;
+    }
+    if (this.spoken < this.minSpeechSeconds) return false;
+    this.quiet += seconds;
+    if (this.quiet >= this.silenceSeconds) {
+      this.spoken = 0;
+      this.quiet = 0;
+      return true;
+    }
+    return false;
+  }
+
+  get hasSpeech(): boolean {
+    return this.spoken >= this.minSpeechSeconds;
+  }
+
+  reset(): void {
+    this.spoken = 0;
+    this.quiet = 0;
+  }
+}
+
+/**
+ * Notices the learner talking over the student. The phone's own speaker
+ * leaks into the microphone, so this needs louder sound than normal speech
+ * detection, held for a moment, before it counts.
+ */
+export class BargeIn {
+  private loud = 0;
+
+  constructor(private threshold = 0.06, private holdSeconds = 0.3) {}
+
+  push(samples: Float32Array, sampleRate: number): boolean {
+    const seconds = samples.length / sampleRate;
+    if (rms(samples) >= this.threshold) this.loud += seconds;
+    else this.loud = Math.max(0, this.loud - seconds);
+    if (this.loud >= this.holdSeconds) {
+      this.loud = 0;
+      return true;
+    }
+    return false;
+  }
+
+  reset(): void {
+    this.loud = 0;
+  }
+}
+
+/** Decodes little-endian 16-bit PCM (as Sonic sends it) to floats. */
+export function pcm16ToFloat32(bytes: Uint8Array): Float32Array {
+  const n = Math.floor(bytes.length / 2);
+  const out = new Float32Array(n);
+  const v = new DataView(bytes.buffer, bytes.byteOffset, n * 2);
+  for (let i = 0; i < n; i++) out[i] = v.getInt16(i * 2, true) / 32768;
+  return out;
+}
+
+const B64_INDEX = new Map([...B64].map((c, i) => [c, i]));
+
+/** The inverse of toBase64. */
+export function fromBase64(text: string): Uint8Array {
+  const clean = text.replace(/[^A-Za-z0-9+/]/g, "");
+  const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
+  let o = 0;
+  for (let i = 0; i + 1 < clean.length; i += 4) {
+    const a = B64_INDEX.get(clean[i])!;
+    const b = B64_INDEX.get(clean[i + 1])!;
+    const c = B64_INDEX.get(clean[i + 2]);
+    const d = B64_INDEX.get(clean[i + 3]);
+    out[o++] = (a << 2) | (b >> 4);
+    if (c !== undefined) out[o++] = ((b & 15) << 4) | (c >> 2);
+    if (c !== undefined && d !== undefined) out[o++] = ((c & 3) << 6) | d;
+  }
+  return out.subarray(0, o);
+}
+
+/**
+ * Reads a stream of newline-separated JSON, as /api/live-turn sends it,
+ * calling `onEvent` for each complete line.
+ */
+export class NdjsonReader {
+  private pending = "";
+
+  push(text: string, onEvent: (event: Record<string, unknown>) => void): void {
+    this.pending += text;
+    const lines = this.pending.split("\n");
+    this.pending = lines.pop() ?? "";
+    for (const line of lines) if (line.trim()) onEvent(JSON.parse(line));
+  }
+
+  flush(onEvent: (event: Record<string, unknown>) => void): void {
+    if (this.pending.trim()) onEvent(JSON.parse(this.pending));
+    this.pending = "";
+  }
 }

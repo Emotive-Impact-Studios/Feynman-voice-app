@@ -13,7 +13,8 @@ import { Backdrop, Glass, Icon, images, Label, PillButton, RoundButton, T } from
 import { LivingLight } from "../ui/LivingLight";
 import { SilverRing } from "../ui/SilverRing";
 import { VoiceGlow } from "../ui/VoiceGlow";
-import { useVoiceLoop } from "../useVoiceLoop";
+import type { LiveEars, LiveVoice } from "../api";
+import { phononAvailable, useLiveCall, type CallTurnStats } from "../live/useLiveCall";
 
 type View3 = "light" | "subtitles" | "chat";
 const VIEWS: { id: View3; label: string }[] = [
@@ -26,12 +27,51 @@ const OPENING = "Explain it as if I know nothing. I'll ask when I get lost.";
 
 const STATUS = {
   loading: "Getting ready",
-  ready: "Tap the ring and start explaining",
+  ready: "Tap the ring to start the call",
   listening: "Listening",
-  thinking: "Thinking of a question",
-  speaking: "Your student is asking",
+  thinking: "Thinking of a question. Keep talking to carry on.",
+  speaking: "Your student is asking. Talk or tap to cut in.",
   error: "Something went wrong",
 } as const;
+
+// Test switches: which voice speaks and which service hears.
+const VOICES: { id: LiveVoice; label: string }[] = [
+  ...(phononAvailable ? [{ id: "phonon" as const, label: "Phonon" }] : []),
+  { id: "sonic", label: "Sonic" },
+  { id: "kitten", label: "Kitten" },
+];
+const EARS: { id: LiveEars; label: string }[] = [
+  { id: "auto", label: "Auto" },
+  { id: "cartesia", label: "Cartesia" },
+  { id: "openai", label: "OpenAI" },
+];
+const VOICE_NAME: Record<LiveVoice, string> = { phonon: "Phonon", sonic: "Sonic", kitten: "Kitten" };
+
+function statLine(s: CallTurnStats) {
+  const first = s.firstWordMs ? `first word ${(s.firstWordMs / 1000).toFixed(1)}s` : "no sound";
+  const ears = s.ears === "cartesia" ? "Cartesia" : "OpenAI";
+  return `${VOICE_NAME[s.voice]} voice, ${ears} ears. ${first}, ${s.pence.toFixed(2)}p`;
+}
+
+function Segmented<V extends string>({ items, value, onChange }: { items: { id: V; label: string }[]; value: V; onChange: (v: V) => void }) {
+  return (
+    <View style={styles.segment}>
+      {items.map((it) => (
+        <Pressable
+          key={it.id}
+          accessibilityRole="button"
+          accessibilityState={{ selected: it.id === value }}
+          onPress={() => onChange(it.id)}
+          style={[styles.switchItem, it.id === value && { backgroundColor: "rgba(255,255,255,0.14)" }]}
+        >
+          <T size={13} tone={it.id === value ? "text" : "muted"}>
+            {it.label}
+          </T>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
 
 function clock(seconds: number) {
   const s = Math.floor(seconds);
@@ -46,11 +86,16 @@ export default function Session() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [view, setView] = useState<View3>("light");
-  const loop = useVoiceLoop(topic);
+  const [voice, setVoice] = useState<LiveVoice>(phononAvailable ? "phonon" : "kitten");
+  const [ears, setEars] = useState<LiveEars>("auto");
+  const [showSettings, setShowSettings] = useState(false);
+  const loop = useLiveCall(topic, { voice, ears });
+  const lastStat = loop.stats.at(-1);
 
   const spokenBefore = useMemo(() => loop.stats.reduce((t, s) => t + s.speakingSeconds, 0), [loop.stats]);
   const spoken = spokenBefore + (loop.phase === "listening" ? loop.liveSpeaking : 0);
-  const question = [...loop.turns].reverse().find((t) => t.speaker === "student")?.text ?? opening;
+  const asked = [...loop.turns].reverse().find((t) => t.speaker === "student")?.text ?? opening;
+  const question = loop.liveQuestion ?? asked;
   const lastYou = [...loop.turns].reverse().find((t) => t.speaker === "learner")?.text;
 
   const studentEnergy = loop.phase === "speaking" ? 1 : loop.phase === "thinking" ? 0.5 : 0;
@@ -64,8 +109,13 @@ export default function Session() {
     return () => clearInterval(id);
   }, [loop.phase]);
 
-  const canTap = loop.phase === "ready" || loop.phase === "listening";
-  const onRing = loop.phase === "listening" ? loop.finish : loop.start;
+  // The ring starts the call, sends the turn early, or cuts the student off.
+  const canTap = loop.phase !== "loading";
+  const onRing =
+    loop.phase === "listening" ? loop.finish : loop.phase === "thinking" || loop.phase === "speaking" ? loop.interrupt : loop.start;
+  const ringIcon = loop.phase === "listening" ? "check" : loop.phase === "thinking" || loop.phase === "speaking" ? "pause" : "mic";
+  const ringLabel =
+    loop.phase === "listening" ? "Done, ask me" : loop.phase === "thinking" || loop.phase === "speaking" ? "Cut in" : "Start the call";
   // Stop the microphone, any pending turn and any reply before leaving.
   const end = () => {
     loop.cancel();
@@ -152,10 +202,26 @@ export default function Session() {
               {clock(spoken)} · {Math.max(0, Math.floor(me.minutesLeft - spoken / 60))} min left
             </Label>
           </View>
-          <RoundButton label="Close session" size={44} onPress={close}>
-            <Icon name="close" size={15} />
-          </RoundButton>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <RoundButton label="Voice settings" size={44} onPress={() => setShowSettings((v) => !v)}>
+              <Icon name="wave" size={15} />
+            </RoundButton>
+            <RoundButton label="Close session" size={44} onPress={close}>
+              <Icon name="close" size={15} />
+            </RoundButton>
+          </View>
         </View>
+        {showSettings && (
+          <Glass strong style={styles.settings}>
+            <Label>Voice</Label>
+            <Segmented items={VOICES} value={voice} onChange={setVoice} />
+            <Label>Ears</Label>
+            <Segmented items={EARS} value={ears} onChange={setEars} />
+            <T size={12.5} tone="muted">
+              {lastStat ? `Last turn: ${statLine(lastStat)}` : "Changes apply from your next turn."}
+            </T>
+          </Glass>
+        )}
         <Glass strong style={styles.switch}>
           {VIEWS.map((v) => (
             <Pressable
@@ -177,13 +243,13 @@ export default function Session() {
       <Glass strong style={[styles.controls, { bottom: Math.max(insets.bottom, 10) }]}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={loop.phase === "listening" ? "Done, ask me" : "Start talking"}
+          accessibilityLabel={ringLabel}
           disabled={!canTap}
           onPress={onRing}
           style={{ opacity: canTap ? 1 : 0.4 }}
         >
           <SilverRing width={58} height={58}>
-            <Icon name={loop.phase === "listening" ? "check" : "mic"} />
+            <Icon name={ringIcon} />
           </SilverRing>
         </Pressable>
         <View style={{ flex: 1, gap: 4 }}>
@@ -191,9 +257,14 @@ export default function Session() {
             <DotWave width={width - 210} height={34} level={loop.isTalking ? 1 : 0.3} tick={tick} />
           ) : (
             <T size={14} tone="muted" lines={2}>
-              {loop.error ?? STATUS[loop.phase]}
+              {loop.notice ?? loop.error ?? STATUS[loop.phase]}
             </T>
           )}
+          {lastStat && !showSettings ? (
+            <T size={11.5} tone="dim" lines={1}>
+              {statLine(lastStat)}
+            </T>
+          ) : null}
         </View>
         <PillButton label="End" variant="solid" onPress={end} style={{ height: 54 }} />
       </Glass>
@@ -207,6 +278,8 @@ const styles = StyleSheet.create({
   top: { position: "absolute", left: 20, right: 20, gap: 14 },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   switch: { alignSelf: "center", flexDirection: "row", padding: 4, borderRadius: 999, gap: 2 },
+  segment: { flexDirection: "row", gap: 2, padding: 3, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.05)", alignSelf: "flex-start" },
+  settings: { padding: 14, borderRadius: 24, gap: 8 },
   switchItem: { height: 32, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center" },
   controls: { position: "absolute", left: 10, right: 10, height: 96, borderRadius: 38, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14 },
   studentRow: { alignSelf: "flex-start", flexDirection: "row", alignItems: "flex-end", gap: 10, maxWidth: 320 },
