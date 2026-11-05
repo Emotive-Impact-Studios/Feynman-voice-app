@@ -26,6 +26,7 @@ export default function NewTopic() {
   const insets = useSafeAreaInsets();
   const profile = useProfile();
   const [topic, setTopic] = useState("");
+  const [goal, setGoal] = useState("");
   const recent = profile.topics.slice(0, 4);
 
   const dim = useSharedValue(0);
@@ -41,7 +42,7 @@ export default function NewTopic() {
     const title = t.trim();
     if (!title) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    router.replace({ pathname: "/session", params: { topic: title } });
+    router.replace({ pathname: "/session", params: goal.trim() ? { topic: title, goal: goal.trim() } : { topic: title } });
   };
 
   return (
@@ -110,6 +111,20 @@ export default function NewTopic() {
                 </SilverRing>
               </Pressable>
             </View>
+            {topic.trim().length > 0 && (
+              <Animated.View entering={FadeIn}>
+                <TextInput
+                  value={goal}
+                  onChangeText={setGoal}
+                  placeholder="By the exam I want to explain… (optional)"
+                  placeholderTextColor={colour.textDim}
+                  returnKeyType="go"
+                  onSubmitEditing={() => start(topic)}
+                  style={[styles.input, { marginTop: 8, flex: 0 }]}
+                  accessibilityLabel="What you want to be able to explain"
+                />
+              </Animated.View>
+            )}
           </Rise>
 
           {recent.length > 0 && (

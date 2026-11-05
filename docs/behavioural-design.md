@@ -12,6 +12,17 @@ Full write-up: https://claude.ai/artifact/2xzBxSJfscmHntjbaDkB3Y
   "what would happen if" case, then it lets go and moves on. Never more than
   three turns on one gap.
 
+## In the app (built)
+
+- The call opens by asking which bit they think will be hardest. A prediction
+  gives them a stake, and Fenny asks about that part when they reach it.
+- The new topic sheet asks, optionally, what they want to be able to explain by
+  the exam. It is saved on the topic in their words and steers Fenny.
+- Me shows a soft streak: days explaining in a row, forgiving one missed day in
+  any seven. It never shames a reset.
+- Live call mode should wait longer (about 2.5 s) after a "why" or "how"
+  question before ending the learner's turn (with the live call work).
+
 ## Rules for gap analysis (build step 4) and "Show me" (4b)
 
 1. **The learner names the first gap.** When a call ends, Fenny asks "Which bit
@@ -22,6 +33,19 @@ Full write-up: https://claude.ai/artifact/2xzBxSJfscmHntjbaDkB3Y
    words", which opens a call where Fenny's first line is "Go on, tell me in
    your own words."
 3. Results lead with what they explained well, quoting them, then the gaps.
+4. Results show "then and now": a line from their first attempt beside their latest.
+
+## Rules for later screens
+
+- **Topics:** learners can add, merge and rename the sub-topics we pull from notes.
+- **Today:** offer two or three suggested sessions to pick from, and ask "When
+  will you explain this next?" with a nudge at that time.
+- **Review queue (step 6):** frame reviews as "Fenny's forgotten, can you remind
+  them?" Learners can snooze or reorder, with a short note on why spacing helps.
+- **Me:** a growing "things I can explain" list, in their phrasing, once gap
+  analysis can tell what they explained well.
+- **Minutes and plans (steps 5, 7):** show time spent explaining and what it
+  produced, never a countdown or "don't lose your progress".
 
 ## Lines we do not cross
 

@@ -1,8 +1,9 @@
 // Me, from the canvas board: what you've done first, minutes after.
-// Ideas mastered, streaks and gaps closed need gap analysis (build step 4),
-// so this shows only what the phone really knows.
+// Ideas mastered and gaps closed need gap analysis (build step 4), so this
+// shows only what the phone really knows. The streak is soft on purpose: it
+// forgives a missed day a week (see docs/behavioural-design.md).
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { minutesLeft, PROTOTYPE_MINUTES, type Profile } from "../data/profile";
+import { minutesLeft, PROTOTYPE_MINUTES, softStreak, type Profile } from "../data/profile";
 import { MinutesRing } from "../ui/Dots";
 import { Glass, Label, T } from "../ui/kit";
 import { homeStyles } from "./styles";
@@ -12,6 +13,7 @@ export function Me({ profile, top, bottom, onReplayIntro }: { profile: Profile; 
   const left = minutesLeft(profile);
   const sessions = profile.topics.reduce((n, t) => n + t.sessions, 0);
   const questions = profile.topics.reduce((n, t) => n + t.questions, 0);
+  const streak = softStreak(profile.days);
   return (
     <ScrollView contentContainerStyle={[homeStyles.scroll, { paddingTop: top + 70, paddingBottom: bottom + 130 }]} showsVerticalScrollIndicator={false}>
       <In d={1}>
@@ -30,6 +32,11 @@ export function Me({ profile, top, bottom, onReplayIntro }: { profile: Profile; 
           <Stat value={String(questions)} label="questions answered" />
           <Stat value={mins(profile.secondsUsed)} label="explaining" />
         </View>
+        {streak > 1 && (
+          <T size={13} tone="soft" style={{ marginTop: 10 }}>
+            {streak} days explaining in a row. Missing one day a week is fine.
+          </T>
+        )}
       </In>
 
       <In d={3}>

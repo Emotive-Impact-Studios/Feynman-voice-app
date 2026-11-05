@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { minutesLeft, recordSession, useProfile } from "../data/profile";
+import { findTopic, minutesLeft, recordSession, useProfile } from "../data/profile";
 import { colour } from "../theme";
 import { DotWave } from "../ui/Dots";
 import { Backdrop, Glass, Icon, images, Label, PillButton, RoundButton, T } from "../ui/kit";
@@ -24,7 +24,8 @@ const VIEWS: { id: View3; label: string }[] = [
   { id: "chat", label: "Chat" },
 ];
 
-const OPENING = "Explain it as if I know nothing. I'll ask when I get lost.";
+// A prediction gives them a stake before they start (see docs/behavioural-design.md).
+const OPENING = "Before you start, which bit do you think will be hardest? Then explain it as if I know nothing.";
 
 const STATUS = {
   loading: "Getting ready",
@@ -81,8 +82,11 @@ function clock(seconds: number) {
 
 export default function Session() {
   // A review card opens the session on its own topic and question.
-  const params = useLocalSearchParams<{ topic?: string; prompt?: string }>();
+  const params = useLocalSearchParams<{ topic?: string; prompt?: string; goal?: string }>();
   const topic = params.topic?.trim() || "Anything you like";
+  // Their goal for the topic, in their words, steers Fenny's questions.
+  const [goal] = useState(() => params.goal?.trim() || findTopic(topic)?.goal || "");
+  const brainTopic = goal ? `${topic}. What they want to be able to explain: ${goal}` : topic;
   const profile = useProfile();
   const opening = params.prompt ?? OPENING;
   const insets = useSafeAreaInsets();
@@ -91,7 +95,7 @@ export default function Session() {
   const [voice, setVoice] = useState<LiveVoice>("sonic");
   const [ears, setEars] = useState<LiveEars>("auto");
   const [showSettings, setShowSettings] = useState(false);
-  const loop = useLiveCall(topic, { voice, ears });
+  const loop = useLiveCall(brainTopic, { voice, ears });
   const lastStat = loop.stats.at(-1);
 
   const spoken = loop.heardSeconds + (loop.phase === "listening" ? loop.liveSpeaking : 0);
@@ -127,8 +131,8 @@ export default function Session() {
   const save = useCallback(() => {
     if (saved.current) return;
     saved.current = true;
-    recordSession(topic, latest.current.spoken, latest.current.questions);
-  }, [topic]);
+    recordSession(topic, latest.current.spoken, latest.current.questions, goal);
+  }, [topic, goal]);
   useEffect(() => save, [save]);
   const end = () => {
     loop.cancel();
