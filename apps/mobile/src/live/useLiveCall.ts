@@ -20,8 +20,7 @@ import { ClipQueue } from "./clipQueue";
 const RATE = 16000;
 const MAX_TURN_SECONDS = 60;
 const KITTEN_VOICE = "Kiki";
-// A little under normal pace, to match the slowed Sonic voice.
-const KITTEN_SPEED = 0.9;
+const KITTEN_SPEED = 1;
 
 export type CallPhase = "loading" | "ready" | "listening" | "thinking" | "speaking" | "error";
 

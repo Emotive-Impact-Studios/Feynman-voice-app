@@ -118,7 +118,7 @@ describe("POST /api/live-turn", () => {
         const b = JSON.parse(String(init!.body));
         expect(b.model_id).toBe("sonic-3.6");
         expect(b.output_format).toEqual({ container: "raw", encoding: "pcm_s16le", sample_rate: 24000 });
-        expect(b.generation_config).toEqual({ speed: 0.8 });
+        expect(b.generation_config).toEqual({ speed: 1 });
         return new Response(pcm, { status: 200 });
       }
       return chatStream(["Pressure from what, though?"]);
