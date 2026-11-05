@@ -14,7 +14,7 @@ index 42ce9e8..6430a53 100644
      return registry.allRecorders.values.contains { $0.isRecording }
      #else
 diff --git a/node_modules/expo-audio/ios/AudioStream.swift b/node_modules/expo-audio/ios/AudioStream.swift
-index 1534fe5..685de37 100644
+index 1534fe5..15182d7 100644
 --- a/node_modules/expo-audio/ios/AudioStream.swift
 +++ b/node_modules/expo-audio/ios/AudioStream.swift
 @@ -16,7 +16,17 @@ class AudioStream: SharedObject {
@@ -36,7 +36,7 @@ index 1534fe5..685de37 100644
    private var startTimestamp: AVAudioTime?
  
    private var fileWriter: AudioStreamFileWriter?
-@@ -34,7 +44,15 @@ class AudioStream: SharedObject {
+@@ -34,13 +44,37 @@ class AudioStream: SharedObject {
      guard !isStreaming else { return }
  
      let session = AVAudioSession.sharedInstance()
@@ -53,7 +53,100 @@ index 1534fe5..685de37 100644
      try session.setPreferredSampleRate(requestedSampleRate)
      try session.setActive(true)
  
-@@ -285,3 +303,19 @@ internal final class AudioStreamException: GenericException<String> {
++    try startEngine()
++    isStreaming = true
++    emitStatus()
++  }
++
++  // Feynman patch: iOS stops an AVAudioEngine when the audio route or
++  // hardware format changes (as it can when the student's voice starts or
++  // stops playing). Without a restart the mic went silent after the first
++  // reply. So the engine is built here, and built again on a change.
++  private var configObserver: NSObjectProtocol?
++
++  private func startEngine() throws {
+     let engine = AVAudioEngine()
+     let inputNode = engine.inputNode
+     let hardwareFormat = inputNode.outputFormat(forBus: 0)
++    // Mid route change the input can briefly report no format; a tap on it would crash.
++    guard hardwareFormat.sampleRate > 0, hardwareFormat.channelCount > 0 else {
++      throw AudioStreamException("The microphone is not ready yet.")
++    }
+ 
+     let targetSampleRate = requestedSampleRate
+     let targetChannels = AVAudioChannelCount(requestedChannels)
+@@ -69,9 +103,8 @@ class AudioStream: SharedObject {
+         channels = Int(hardwareFormat.channelCount)
+         setupTapWithoutConversion(engine: engine, inputNode: inputNode, format: hardwareFormat)
+         self.audioEngine = engine
++        observeConfigChanges(engine)
+         try engine.start()
+-        isStreaming = true
+-        emitStatus()
+         return
+       }
+       self.converter = conv
+@@ -98,13 +131,57 @@ class AudioStream: SharedObject {
+     }
+ 
+     self.audioEngine = engine
++    observeConfigChanges(engine)
+     try engine.start()
+-    isStreaming = true
+-    emitStatus()
++  }
++
++  private func observeConfigChanges(_ engine: AVAudioEngine) {
++    if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
++    configObserver = NotificationCenter.default.addObserver(
++      forName: .AVAudioEngineConfigurationChange,
++      object: engine,
++      queue: .main
++    ) { [weak self] _ in
++      self?.restartEngine()
++    }
++  }
++
++  private func tearDownEngine() {
++    if let configObserver {
++      NotificationCenter.default.removeObserver(configObserver)
++      self.configObserver = nil
++    }
++    audioEngine?.inputNode.removeTap(onBus: 0)
++    audioEngine?.stop()
++    audioEngine = nil
++    converter = nil
++  }
++
++  private func restartEngine(attempt: Int = 0) {
++    guard isStreaming else { return }
++    tearDownEngine()
++    do {
++      try startEngine()
++    } catch {
++      // The new route may not be ready yet: try again shortly, then give up.
++      if attempt < 3 {
++        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
++          self?.restartEngine(attempt: attempt + 1)
++        }
++        return
++      }
++      isStreaming = false
++      startTimestamp = nil
++      emitStatus()
++    }
+   }
+ 
+   func stop() {
+     guard isStreaming else { return }
++    if let configObserver {
++      NotificationCenter.default.removeObserver(configObserver)
++      self.configObserver = nil
++    }
+     audioEngine?.inputNode.removeTap(onBus: 0)
+     audioEngine?.stop()
+     audioEngine = nil
+@@ -285,3 +362,19 @@ internal final class AudioStreamException: GenericException<String> {
      param
    }
  }
