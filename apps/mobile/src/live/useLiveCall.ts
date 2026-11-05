@@ -242,7 +242,6 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       return;
     }
     const id = ++turnId.current;
-    nextQuiet.current = TURN_QUIET_SECONDS; // until this reply's question is heard
     setPhase("thinking");
     setIsTalking(false);
     const quietAt = Date.now();
