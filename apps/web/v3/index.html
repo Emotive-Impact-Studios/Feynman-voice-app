@@ -421,6 +421,23 @@ footer .brand { font-size: 17px; color: var(--soft); }
 /* phone sits on its own soft shadow, no panel behind */
 .h3-phone .phone { box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 40px 90px -20px rgba(0,0,0,.9); }
 @media (max-height: 860px) { .h3-calls .c3 { display: none; } }
+/* tidy desktop layout: face sits right of centre, copy has its own clear column, callouts line up */
+@media (min-width: 901px) {
+  .h3 .hero-photo { background-size: max(118%, 1100px) auto; background-position: 8% 22%; }
+  .h3-shade { background:
+      linear-gradient(180deg, rgba(8,9,11,.4) 0%, rgba(8,9,11,0) 16%),
+      linear-gradient(0deg, #0B0C0F 0%, rgba(11,12,15,.8) 16%, rgba(8,9,11,.3) 38%, rgba(8,9,11,0) 58%),
+      linear-gradient(90deg, rgba(8,9,11,.88) 0%, rgba(8,9,11,.6) 26%, rgba(8,9,11,.12) 44%, rgba(8,9,11,0) 54%),
+      radial-gradient(110% 80% at 60% 30%, rgba(8,9,11,0) 50%, rgba(8,9,11,.5) 100%); }
+  .h3 h1 { font-size: clamp(40px, 4.2vw, 64px); }
+  .h3-copy { max-width: min(600px, 44%); }
+  .h3 .lead { max-width: 27em; }
+  .h3-calls li { max-width: 280px; }
+  .h3-calls .c1 { top: 19%; left: clamp(22px, 4.5vw, 64px); }
+  .h3-calls .c3 { top: calc(19% + 74px); left: clamp(22px, 4.5vw, 64px); }
+  .h3-calls .c2 { top: 19%; right: clamp(22px, 4vw, 60px); }
+  .h3-cue { display: none; }
+}
 @media (max-width: 900px) {
   .h3 { padding: 4px 10px 0; }
   .h3::before { inset: -20px 0 -360px; }
