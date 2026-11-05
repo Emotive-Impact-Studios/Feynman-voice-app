@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo-google-fonts/geist-mono": "^0.4.3",
     "@expo-google-fonts/instrument-sans": "^0.4.2",
+    "@expo-google-fonts/inter": "^0.4.2",
     "@feynman/audio": "*",
     "@feynman/kitten-tts": "*",
     "@shopify/react-native-skia": "2.14.0",

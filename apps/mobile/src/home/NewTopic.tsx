@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useProfile } from "../data/profile";
-import { colour } from "../theme";
+import { colour, font } from "../theme";
 import { Glass, Icon, Label, PillButton, T } from "../ui/kit";
 import { LivingLight } from "../ui/LivingLight";
 import { smooth, spring } from "../ui/motion";
@@ -175,6 +175,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.07)",
     borderWidth: 1,
     borderColor: colour.hairline,
-    fontFamily: "InstrumentSans_400Regular",
+    fontFamily: font.regular,
   },
 });

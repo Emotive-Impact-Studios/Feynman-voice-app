@@ -24,7 +24,7 @@ import Animated, {
 import Svg, { Path } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
 import { finishIntro, getProfile, SUBJECTS } from "../data/profile";
-import { colour } from "../theme";
+import { colour, font } from "../theme";
 import { Glass, Icon, Label, PillButton, T } from "../ui/kit";
 import { GlowRing } from "../ui/GlowRing";
 import { LivingLight } from "../ui/LivingLight";
@@ -370,7 +370,7 @@ function Splash({ bottom }: { bottom: number }) {
     <>
       <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: "70%", alignItems: "center", gap: 14 }}>
         <Animated.View entering={FadeInDown.delay(1100).duration(1500).easing(ease)}>
-          <T size={54} weight="semibold" style={{ letterSpacing: -1.9, lineHeight: 60 }}>
+          <T size={54} weight="semibold" style={{ fontFamily: font.wordmark, letterSpacing: -1.9, lineHeight: 60 }}>
             feynman
           </T>
         </Animated.View>
@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.07)",
     borderWidth: 1,
     borderColor: colour.hairline,
-    fontFamily: "InstrumentSans_400Regular",
+    fontFamily: font.regular,
   },
   bubble: { paddingVertical: 13, paddingHorizontal: 16, maxWidth: 250 },
   bubbleStudent: { alignSelf: "flex-start", borderRadius: 22, borderBottomLeftRadius: 6, backgroundColor: "rgba(169,190,230,0.14)", borderWidth: 1, borderColor: "rgba(169,190,230,0.26)" },

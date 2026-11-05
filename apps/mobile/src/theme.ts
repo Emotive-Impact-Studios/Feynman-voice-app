@@ -25,10 +25,13 @@ export const silverStops = ["#5B5F66", "#F2F4F7", "#8E939B", "#FFFFFF", "#666A72
 // The student's living light: drifting blobs plus a bright core.
 export const lightBlobs = ["#8EA6D4", "#C7CFDC", "#6E86BC"];
 
+// Inter, as on the website (Linear-style: medium headings, regular body).
+// The wordmark keeps Instrument Sans.
 export const font = {
-  regular: "InstrumentSans_400Regular",
-  medium: "InstrumentSans_500Medium",
-  semibold: "InstrumentSans_600SemiBold",
+  regular: "Inter_400Regular",
+  medium: "Inter_500Medium",
+  semibold: "Inter_600SemiBold",
+  wordmark: "InstrumentSans_600SemiBold",
   mono: "GeistMono_400Regular",
   monoMedium: "GeistMono_500Medium",
 } as const;
