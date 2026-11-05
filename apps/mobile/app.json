@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.emotiveimpact.feynman.prototype"
@@ -31,7 +31,20 @@
         }
       ],
       "expo-asset",
-      "onnxruntime-react-native"
-    ]
+      "onnxruntime-react-native",
+      "expo-router",
+      "expo-image",
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "18.0"
+          }
+        }
+      ]
+    ],
+    "scheme": "feynman",
+    "backgroundColor": "#0A0B0D"
   }
 }

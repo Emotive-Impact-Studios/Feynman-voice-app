@@ -29,16 +29,8 @@ export async function askStudentOpenAI(
 
   // 1. Transcribe.
   const t0 = Date.now();
-  const form = new FormData();
-  const ext = input.mimeType.includes("wav") ? "wav" : input.mimeType.split("/")[1] ?? "wav";
-  form.append("file", new Blob([input.audio as BlobPart], { type: input.mimeType }), `turn.${ext}`);
-  form.append("model", cfg.transcribeModel);
-  form.append("language", "en");
-  form.append("response_format", "json");
-  const tRes = await f("https://api.openai.com/v1/audio/transcriptions", { method: "POST", headers: auth, body: form });
-  if (!tRes.ok) throw new ProviderError("OpenAI transcription", tRes.status, (await tRes.text()).slice(0, 500));
-  const tBody = (await tRes.json()) as { text?: string; usage?: unknown };
-  const transcript = (tBody.text ?? "").trim();
+  const tBody = await transcribeOpenAI(cfg, input.audio, input.mimeType);
+  const transcript = tBody.text;
   const transcribeMs = Date.now() - t0;
 
   // 2. Ask the question.
@@ -116,6 +108,29 @@ export async function askStudentOpenAI(
     costLines,
     timingMs: { transcribe: transcribeMs, chat: chatMs },
   };
+}
+
+/** Turn one recorded turn into text with OpenAI's transcription model. */
+export async function transcribeOpenAI(
+  cfg: Pick<OpenAIConfig, "apiKey" | "transcribeModel" | "fetchImpl">,
+  audio: Uint8Array,
+  mimeType: string,
+): Promise<{ text: string; usage?: unknown }> {
+  const f = cfg.fetchImpl ?? fetch;
+  const form = new FormData();
+  const ext = mimeType.includes("wav") ? "wav" : mimeType.split("/")[1] ?? "wav";
+  form.append("file", new Blob([audio as BlobPart], { type: mimeType }), `turn.${ext}`);
+  form.append("model", cfg.transcribeModel);
+  form.append("language", "en");
+  form.append("response_format", "json");
+  const res = await f("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { authorization: `Bearer ${cfg.apiKey}` },
+    body: form,
+  });
+  if (!res.ok) throw new ProviderError("OpenAI transcription", res.status, (await res.text()).slice(0, 500));
+  const body = (await res.json()) as { text?: string; usage?: unknown };
+  return { text: (body.text ?? "").trim(), usage: body.usage };
 }
 
 export class ProviderError extends Error {

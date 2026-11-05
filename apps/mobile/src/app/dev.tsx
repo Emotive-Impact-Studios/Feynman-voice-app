@@ -1,9 +1,9 @@
-// Deliberately plain. The visual direction is not decided yet, so this screen
-// only exists to feel the loop and read the numbers.
+// Developer screen: the plain voice loop with its timing and cost numbers.
+// Opened from /dev. The real session UI lives in session.tsx.
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
-import { useVoiceLoop } from "./src/useVoiceLoop";
+import { useVoiceLoop } from "../useVoiceLoop";
 
 const LABELS = {
   loading: "Getting ready...",
@@ -14,7 +14,7 @@ const LABELS = {
   error: "Something went wrong",
 } as const;
 
-export default function App() {
+export default function Dev() {
   const dark = useColorScheme() === "dark";
   const c = dark ? { bg: "#111", fg: "#eee", muted: "#999", card: "#1d1d1d" } : { bg: "#fff", fg: "#111", muted: "#666", card: "#f3f3f3" };
   const [topic, setTopic] = useState("How the heart and circulation work");
