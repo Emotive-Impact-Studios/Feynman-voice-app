@@ -9,7 +9,7 @@
   "scripts": {
     "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "postinstall": "patch-package"
+    "postinstall": "node scripts/apply-patches.mjs"
   },
   "dependencies": {
     "patch-package": "^8.0.0"
