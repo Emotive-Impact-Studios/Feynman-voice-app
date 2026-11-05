@@ -1,0 +1,21 @@
+diff --git a/node_modules/expo-audio/ios/AudioStream.swift b/node_modules/expo-audio/ios/AudioStream.swift
+index 1534fe5..576bbdb 100644
+--- a/node_modules/expo-audio/ios/AudioStream.swift
++++ b/node_modules/expo-audio/ios/AudioStream.swift
+@@ -34,7 +34,15 @@ class AudioStream: SharedObject {
+     guard !isStreaming else { return }
+ 
+     let session = AVAudioSession.sharedInstance()
+-    try session.setCategory(.record, mode: .measurement)
++    // Feynman patch: keep playback alive while the mic streams, out of the
++    // loudspeaker (the live call speaks over an open mic).
++    var options: AVAudioSession.CategoryOptions = [.defaultToSpeaker, .allowBluetoothA2DP]
++#if compiler(>=6.2) // Xcode 26
++    options.insert(.allowBluetoothHFP)
++#else
++    options.insert(.allowBluetooth)
++#endif
++    try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
+     try session.setPreferredSampleRate(requestedSampleRate)
+     try session.setActive(true)
+ 
