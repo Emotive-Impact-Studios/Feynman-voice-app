@@ -5,7 +5,8 @@ import { useWindowDimensions, View } from "react-native";
 import { Redirect, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeIn } from "react-native-reanimated";
-import { minutesLeft, replayIntro, useProfile } from "../data/profile";
+import { TELL_ME } from "../data/lastCall";
+import { minutesLeft, replayIntro, useProfile, type SavedGap } from "../data/profile";
 import { Me } from "../home/Me";
 import { Nav, TopBar, type HomeTab } from "../home/Nav";
 import { homeStyles } from "../home/styles";
@@ -24,13 +25,16 @@ export default function Home() {
 
   const onNew = () => router.push("/topic");
   const onTopic = (topic: string) => router.push({ pathname: "/session", params: { topic } });
+  // A saved gap opens a call on that gap, with Fenny asking them to tell it in their own words.
+  const onGap = (topic: string, gap: SavedGap) =>
+    router.push({ pathname: "/session", params: { topic, prompt: TELL_ME, focus: gap.title, focusId: gap.id } });
   const common = { profile, top: insets.top, bottom: insets.bottom };
 
   return (
     <View style={homeStyles.root}>
       <Backdrop source={dusk} opacity={tab === "today" ? 0.85 : 0.45} flip={tab === "topics"} />
       <Animated.View key={tab} entering={FadeIn.duration(300)} style={{ flex: 1 }}>
-        {tab === "today" && <Today {...common} onNew={onNew} onTopic={onTopic} />}
+        {tab === "today" && <Today {...common} onNew={onNew} onTopic={onTopic} onGap={onGap} />}
         {tab === "topics" && <Topics {...common} onNew={onNew} onTopic={onTopic} />}
         {tab === "me" && (
           <Me

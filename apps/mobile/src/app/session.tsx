@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { setFinishedCall } from "../data/lastCall";
 import { findTopic, minutesLeft, recordSession, useProfile } from "../data/profile";
 import { colour } from "../theme";
 import { DotWave } from "../ui/Dots";
@@ -82,11 +83,15 @@ function clock(seconds: number) {
 
 export default function Session() {
   // A review card opens the session on its own topic and question.
-  const params = useLocalSearchParams<{ topic?: string; prompt?: string; goal?: string }>();
+  // A gap card opens it on that gap (focus), with "Go on, tell me in your own words."
+  const params = useLocalSearchParams<{ topic?: string; prompt?: string; goal?: string; focus?: string; focusId?: string }>();
   const topic = params.topic?.trim() || "Anything you like";
   // Their goal for the topic, in their words, steers Fenny's questions.
   const [goal] = useState(() => params.goal?.trim() || findTopic(topic)?.goal || "");
-  const brainTopic = goal ? `${topic}. What they want to be able to explain: ${goal}` : topic;
+  const focus = params.focus?.trim() || "";
+  const brainTopic =
+    (goal ? `${topic}. What they want to be able to explain: ${goal}` : topic) +
+    (focus ? `. They are going back over one part they found shaky, so ask about it: ${focus}` : "");
   const profile = useProfile();
   const opening = params.prompt ?? OPENING;
   const insets = useSafeAreaInsets();
@@ -122,8 +127,8 @@ export default function Session() {
   const ringLabel =
     loop.phase === "listening" ? "Done, ask me" : loop.phase === "thinking" || loop.phase === "speaking" ? "Cut in" : "Start the call";
   // Stop the microphone, any pending turn and any reply before leaving.
-  // Save the topic and the speaking time, then back to Today. (Session
-  // feedback returns with gap analysis, build step 4.)
+  // Save the topic and the speaking time, then on to the results (gap
+  // analysis), or back to Today if nothing was said.
   // Saved once, whether you tap End, close, or go back with the system.
   const saved = useRef(false);
   const latest = useRef({ spoken, questions: 0 });
@@ -137,7 +142,10 @@ export default function Session() {
   const end = () => {
     loop.cancel();
     save();
-    router.back();
+    if (loop.turns.some((t) => t.speaker === "learner" && t.text.trim())) {
+      setFinishedCall({ topic, goal, focus: focus || undefined, focusId: params.focusId, turns: loop.turns, seconds: latest.current.spoken });
+      router.replace("/results");
+    } else router.back();
   };
   const close = end;
 

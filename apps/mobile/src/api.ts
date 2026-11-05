@@ -90,3 +90,57 @@ export async function streamLiveTurn(
   }
   lines.flush((e) => onEvent(e as LiveEvent));
 }
+
+// After the call -------------------------------------------------------------
+
+export interface Strength {
+  title: string;
+  /** Their own words from the call. */
+  quote: string;
+}
+
+export interface Gap {
+  kind: "gap" | "skipped" | "muddled";
+  title: string;
+  detail: string;
+  source: string;
+  /** The one they named themselves when asked which bit felt shakiest. */
+  named: boolean;
+}
+
+export interface Analysis {
+  strengths: Strength[];
+  gaps: Gap[];
+  thenAndNow: { then: string; now: string } | null;
+  focusExplained: boolean;
+  pence: number;
+}
+
+async function postJson<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
+  if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in apps/mobile/.env");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify(body),
+    signal,
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((out as { error?: string }).error ?? `Server returned ${res.status}`);
+  return out as T;
+}
+
+/** What came across clearly and where the gaps are, from the call's transcript. */
+export function analyseCall(
+  input: { topic: string; goal?: string; notes?: string; turns: Turn[]; shakiest?: string; firstAttempt?: string; focus?: string },
+  signal?: AbortSignal,
+): Promise<Analysis> {
+  return postJson("/api/analyse", input, signal);
+}
+
+/** A short explanation of one gap, from their notes when they have added some. */
+export function showMe(
+  input: { topic: string; gap: { title: string; detail?: string }; notes?: string; turns?: Turn[] },
+  signal?: AbortSignal,
+): Promise<{ explanation: string; fromNotes: boolean }> {
+  return postJson("/api/show-me", input, signal);
+}
