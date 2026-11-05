@@ -35,11 +35,17 @@ export async function transcribeCartesia(
 export const SONIC_SAMPLE_RATE = 24000;
 
 /**
+ * Sonic's pace for the student, from 0.6 (slowest) to 1.5. The default 1.0
+ * sounded rushed on the phone, so the student speaks a little slower.
+ */
+export const SONIC_SPEED = 0.8;
+
+/**
  * One sentence of the student's voice from Sonic, as 16-bit PCM at 24 kHz.
  * 16-bit rather than float halves what we send to the phone.
  */
 export async function speakSonic(
-  cfg: CartesiaConfig & { model?: string; voiceId: string },
+  cfg: CartesiaConfig & { model?: string; voiceId: string; speed?: number },
   text: string,
 ): Promise<Uint8Array> {
   const f = cfg.fetchImpl ?? fetch;
@@ -52,8 +58,14 @@ export async function speakSonic(
       voice: { mode: "id", id: cfg.voiceId },
       language: "en",
       output_format: { container: "raw", encoding: "pcm_s16le", sample_rate: SONIC_SAMPLE_RATE },
+      generation_config: { speed: sonicSpeed(cfg.speed) },
     }),
   });
   if (!res.ok) throw new ProviderError("Cartesia Sonic", res.status, (await res.text()).slice(0, 500));
   return new Uint8Array(await res.arrayBuffer());
+}
+
+/** A speed Sonic accepts: the given one if valid, otherwise the default. */
+export function sonicSpeed(speed?: number): number {
+  return speed != null && Number.isFinite(speed) && speed >= 0.6 && speed <= 1.5 ? speed : SONIC_SPEED;
 }

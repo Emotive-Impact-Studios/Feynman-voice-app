@@ -113,7 +113,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
           firstSentenceMs ??= Date.now() - t0;
           const work =
             voice === "sonic"
-              ? speakSonic({ apiKey: env.CARTESIA_API_KEY!, voiceId: env.SONIC_VOICE_ID ?? "62ae83ad-4f6a-430b-af41-a9bede9286ca", model: env.SONIC_MODEL, fetchImpl: f }, text).then(
+              ? speakSonic({ apiKey: env.CARTESIA_API_KEY!, voiceId: env.SONIC_VOICE_ID ?? "62ae83ad-4f6a-430b-af41-a9bede9286ca", model: env.SONIC_MODEL, speed: env.SONIC_SPEED ? Number(env.SONIC_SPEED) : undefined, fetchImpl: f }, text).then(
                   (pcm) => {
                     sonicChars += text.length;
                     return { audio: Buffer.from(pcm).toString("base64"), sampleRate: SONIC_SAMPLE_RATE, encoding: "pcm_s16le" };
