@@ -319,8 +319,12 @@ footer .brand { font-size: 17px; color: var(--soft); }
 }
 
 /* ---------- v3 hero: full-bleed photo that dissolves into the page ---------- */
-.h3 { position: relative; padding: 76px 14px 0; }
-.h3-frame { position: relative; min-height: max(660px, calc(100svh - 96px)); isolation: isolate; overflow: hidden; border-radius: 30px; background: #0B0C0F; }
+.h3 { position: relative; padding: 14px 14px 0; }
+/* the menu sits inside the hero frame until you scroll */
+.bar { transition: background .4s, border-color .4s, top .5s var(--spring), left .5s var(--spring), right .5s var(--spring), border-radius .5s; }
+.bar:not(.scrolled) { top: 14px; left: 14px; right: 14px; border-radius: 30px 30px 0 0; }
+.bar:not(.scrolled) .wrap { padding-left: clamp(22px, 4.5vw, 64px); padding-right: clamp(22px, 4vw, 60px); max-width: none; }
+.h3-frame { position: relative; min-height: max(700px, calc(100svh - 28px)); isolation: isolate; overflow: hidden; border-radius: 30px; background: #0B0C0F; }
 /* hairline round the whole hero */
 .h3-frame::before { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; border: 1px solid rgba(255,255,255,.09); border-radius: inherit; }
 .h3 .hero-photo { inset: 0; background: url(../img/hero-student-a.webp) 50% 26% / cover no-repeat; opacity: 1; z-index: -3;
@@ -361,7 +365,6 @@ footer .brand { font-size: 17px; color: var(--soft); }
 .h3-phone { position: absolute; right: clamp(22px, 4vw, 60px); bottom: clamp(56px, 8vh, 96px); }
 .h3-phone .phone-box { --k: .6; position: relative; animation: h3float 7s ease-in-out 1.6s infinite; }
 @keyframes h3float { 50% { translate: 0 -10px; } }
-.h3-back { position: absolute; inset: 22px -16px -12px 16px; border-radius: 40px; background: rgba(255,255,255,.06); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset; }
 .h3-phone .phone { box-shadow: 0 50px 90px -24px rgba(0,0,0,.85), 0 0 80px -10px rgba(169,190,230,.18); }
 .h3-cue { position: absolute; left: 50%; bottom: 22px; translate: -50% 0; display: grid; justify-items: center; gap: 10px; font: 500 10px/1 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: rgba(236,239,244,.45); }
 .h3-cue i { width: 1px; height: 34px; background: linear-gradient(180deg, rgba(236,239,244,.6), transparent); transform-origin: top; animation: cue 2.4s cubic-bezier(.6,0,.2,1) infinite; }
@@ -371,7 +374,9 @@ footer .brand { font-size: 17px; color: var(--soft); }
 @media (max-width: 900px) { .h3 + .marquee { padding-top: 56px; } }
 @media (max-width: 1100px) { .h3-calls .c3 { display: none; } .h3-phone .phone-box { --k: .52; } }
 @media (max-width: 900px) {
-  .h3 { padding: 70px 10px 0; }
+  .h3 { padding: 10px 10px 0; }
+  .bar:not(.scrolled) { top: 10px; left: 10px; right: 10px; border-radius: 24px 24px 0 0; }
+  .bar:not(.scrolled) .wrap { padding-left: 20px; padding-right: 14px; }
   .h3-frame { min-height: 0; display: flex; flex-direction: column; border-radius: 24px; padding-bottom: 28px; }
   .h3 .hero-photo { transform: none !important; opacity: 1 !important; position: relative; inset: auto; height: 68svh; min-height: 440px; background-position: 56% 18%; z-index: 0;
     -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, #000 55%, transparent 100%); }
@@ -383,7 +388,7 @@ footer .brand { font-size: 17px; color: var(--soft); }
   .h3-copy { position: relative; left: auto; bottom: auto; margin-top: -170px; padding: 0 20px 8px; z-index: 2; }
   .h3-phone { position: relative; right: auto; bottom: auto; align-self: center; margin: 36px 0 0; z-index: 2; }
   .h3-phone .phone-box { --k: .64; }
-  .h3-back { display: none; }
+ 
 }
 @media (prefers-reduced-motion: reduce) { .h3 .hero-photo, .h3-phone .phone-box, .h3-cue i, .h3-copy .eyebrow::before { animation: none; } }
 
@@ -454,7 +459,6 @@ footer .brand { font-size: 17px; color: var(--soft); }
       </div>
 
       <div class="h3-phone load d3">
-        <div class="h3-back" aria-hidden="true"></div>
         <div class="phone-box"><div class="phone hero-phone" aria-label="A Fenny session in progress">
           <div class="screen on">
             <div class="scr-bg"></div>
@@ -825,14 +829,22 @@ addEventListener('scroll', onScroll, { passive: true }); onScroll();
   const add = (who, text, on) => { const el = document.createElement('div'); el.className = 'line ' + who + (on ? ' in' : ''); el.textContent = text; box.appendChild(el); return el; };
   if (still) { script.slice(0, 3).forEach(([w, t]) => add(w, t, true)); return; }
   let i = 0;
-  (function next() {
+  // when the chat starts over, the old lines fade out first so the order always makes sense
+  function nextLine() {
     const [who, text] = script[i++ % script.length];
     const el = add(who, text);
     while (box.children.length > 3) box.firstElementChild.remove();
     requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
     ring.dataset.talking = who === 'student' ? '1' : '';
     setTimeout(next, who === 'student' ? 2600 : 3200);
-  })();
+  }
+  function next() {
+    if (i % script.length === 0) {
+      [...box.children].forEach(c => c.classList.remove('in'));
+      setTimeout(() => { box.textContent = ''; i = 0; nextLine(); }, 700);
+    } else nextLine();
+  }
+  nextLine();
 })();
 
 // Review deck: a centred card with neighbours peeking in 3D. Drag right for got it,

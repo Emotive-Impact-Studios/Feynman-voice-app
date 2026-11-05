@@ -706,14 +706,22 @@ addEventListener('scroll', onScroll, { passive: true }); onScroll();
   const add = (who, text, on) => { const el = document.createElement('div'); el.className = 'line ' + who + (on ? ' in' : ''); el.textContent = text; box.appendChild(el); return el; };
   if (still) { script.slice(0, 3).forEach(([w, t]) => add(w, t, true)); return; }
   let i = 0;
-  (function next() {
+  // when the chat starts over, the old lines fade out first so the order always makes sense
+  function nextLine() {
     const [who, text] = script[i++ % script.length];
     const el = add(who, text);
     while (box.children.length > 3) box.firstElementChild.remove();
     requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
     ring.dataset.talking = who === 'student' ? '1' : '';
     setTimeout(next, who === 'student' ? 2600 : 3200);
-  })();
+  }
+  function next() {
+    if (i % script.length === 0) {
+      [...box.children].forEach(c => c.classList.remove('in'));
+      setTimeout(() => { box.textContent = ''; i = 0; nextLine(); }, 700);
+    } else nextLine();
+  }
+  nextLine();
 })();
 
 // Review deck: a centred card with neighbours peeking in 3D. Drag right for got it,
