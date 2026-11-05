@@ -229,7 +229,7 @@ export default function Session() {
             </RoundButton>
           </View>
         </View>
-        <View>
+        <View style={{ alignItems: "center" }}>
           <T size={15} weight="semibold">
             {topic}
           </T>
