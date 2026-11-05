@@ -320,10 +320,9 @@ footer .brand { font-size: 17px; color: var(--soft); }
 
 /* ---------- v3 hero: full-bleed photo that dissolves into the page ---------- */
 .h3 { position: relative; padding: 76px 14px 0; }
-.h3-frame { position: relative; min-height: max(660px, calc(100svh - 76px)); isolation: isolate; overflow: hidden; border-radius: 30px 30px 0 0; }
-/* hairline frame on top and sides that dissolves at the bottom */
-.h3-frame::before { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; border: 1px solid rgba(255,255,255,.08); border-bottom: 0; border-radius: inherit;
-  -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 95%); mask-image: linear-gradient(180deg, #000 55%, transparent 95%); }
+.h3-frame { position: relative; min-height: max(660px, calc(100svh - 96px)); isolation: isolate; overflow: hidden; border-radius: 30px; background: #0B0C0F; }
+/* hairline round the whole hero */
+.h3-frame::before { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; border: 1px solid rgba(255,255,255,.09); border-radius: inherit; }
 .h3 .hero-photo { inset: 0; background: url(../img/hero-student-a.webp) 50% 26% / cover no-repeat; opacity: 1; z-index: -3;
   -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 58%, rgba(0,0,0,.55) 78%, transparent 100%);
           mask-image: linear-gradient(180deg, #000 0%, #000 58%, rgba(0,0,0,.55) 78%, transparent 100%);
@@ -332,7 +331,7 @@ footer .brand { font-size: 17px; color: var(--soft); }
 @keyframes h3in { from { scale: 1.08; filter: blur(10px) brightness(.6); } to { scale: 1; filter: none; } }
 .h3-shade { position: absolute; inset: 0; z-index: -2; pointer-events: none;
   background: linear-gradient(180deg, rgba(8,9,11,.35) 0%, rgba(8,9,11,0) 14%),
-              linear-gradient(0deg, var(--ground) 0%, rgba(8,9,11,.82) 18%, rgba(8,9,11,.35) 40%, rgba(8,9,11,0) 60%),
+              linear-gradient(0deg, #0B0C0F 0%, rgba(11,12,15,.82) 18%, rgba(8,9,11,.35) 40%, rgba(8,9,11,0) 60%),
               linear-gradient(90deg, rgba(8,9,11,.78) 0%, rgba(8,9,11,.25) 34%, rgba(8,9,11,0) 50%),
               radial-gradient(110% 80% at 55% 28%, rgba(8,9,11,0) 50%, rgba(8,9,11,.55) 100%); }
 /* film grain over the photo, gone by the time it meets the page */
@@ -373,11 +372,11 @@ footer .brand { font-size: 17px; color: var(--soft); }
 @media (max-width: 1100px) { .h3-calls .c3 { display: none; } .h3-phone .phone-box { --k: .52; } }
 @media (max-width: 900px) {
   .h3 { padding: 70px 10px 0; }
-  .h3-frame { min-height: 0; display: flex; flex-direction: column; border-radius: 24px 24px 0 0; }
+  .h3-frame { min-height: 0; display: flex; flex-direction: column; border-radius: 24px; padding-bottom: 28px; }
   .h3 .hero-photo { transform: none !important; opacity: 1 !important; position: relative; inset: auto; height: 68svh; min-height: 440px; background-position: 56% 18%; z-index: 0;
     -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, #000 55%, transparent 100%); }
   .h3-shade { bottom: auto; height: 68svh; min-height: 440px; z-index: 1;
-    background: linear-gradient(0deg, var(--ground) 0%, rgba(8,9,11,.4) 32%, rgba(8,9,11,0) 55%); }
+    background: linear-gradient(0deg, #0B0C0F 0%, rgba(8,9,11,.4) 32%, rgba(8,9,11,0) 55%); }
   .h3-frame::after { display: none; }
   .h3-calls, .h3-cue { display: none; }
   .h3-copy .eyebrow { font-size: 10.5px; letter-spacing: .1em; }
@@ -401,7 +400,7 @@ footer .brand { font-size: 17px; color: var(--soft); }
 .beat-facts b { font-size: clamp(28px, 2.8vw, 40px); font-weight: 510; letter-spacing: -0.022em; color: var(--text); }
 .beat-facts .rise.d1 { transition-delay: .1s; } .beat-facts .rise.d2 { transition-delay: .2s; } .beat-facts .rise.d3 { transition-delay: .3s; }
 .beat-facts span { font-size: 15px; color: var(--soft); max-width: 16em; }
-.h3 + .beat { margin-top: -10px; }
+.h3 + .beat { margin-top: 0; }
 .beat + .marquee { padding-top: 70px; }
 @media (max-width: 760px) {
   .br-d { display: none; }
