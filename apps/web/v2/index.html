@@ -193,26 +193,62 @@ section { position: relative; }
 .row small { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
 .screen .btn { margin-top: auto; height: 48px; width: 100%; }
 
-/* Review deck */
-.deck-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
+/* Review deck: a centred card with neighbours peeking in 3D, the room takes the card's colour,
+   tap to open it full size, or fan the whole day out as slices */
+@property --tint { syntax: '<color>'; inherits: true; initial-value: #F09A80; }
+#review { --tint: #F09A80; transition: --tint 1.2s ease; overflow: clip; }
+#review::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(50% 45% at 72% 52%, color-mix(in srgb, var(--tint) 26%, transparent), transparent 70%); }
+@media (max-width: 900px) { #review::before { background: radial-gradient(80% 40% at 50% 70%, color-mix(in srgb, var(--tint) 24%, transparent), transparent 70%); } }
+.deck-wrap { position: relative; display: grid; grid-template-columns: 1fr 1.1fr; gap: 48px; align-items: center; }
 @media (max-width: 900px) { .deck-wrap { grid-template-columns: 1fr; } }
-.deck { position: relative; height: 470px; display: grid; place-items: center; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-.card { position: absolute; width: 310px; max-width: calc(100vw - 60px); height: 420px; border-radius: 34px; padding: 26px; display: flex; flex-direction: column; overflow: hidden; cursor: grab; background: #121418; box-shadow: 0 40px 80px -20px rgba(0,0,0,.75), 0 0 0 1px rgba(255,255,255,.08); transition: transform .6s var(--spring), opacity .4s, filter .4s; }
+.deck { position: relative; height: 470px; display: grid; place-items: center; perspective: 1300px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.card { position: absolute; width: 300px; height: 420px; border-radius: 34px; padding: 26px; display: flex; flex-direction: column; overflow: hidden; cursor: grab; background: #121418;
+  box-shadow: 0 40px 80px -20px rgba(0,0,0,.75), 0 0 0 1px rgba(255,255,255,.08);
+  transition: transform .75s var(--spring), opacity .45s, filter .45s, width .7s var(--spring), height .7s var(--spring), border-radius .7s var(--spring), padding .7s var(--spring); }
+@media (max-width: 420px) { .card { width: 260px; height: 380px; } }
 .card:active { cursor: grabbing; }
-.card .art { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: .9; }
-.card .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,11,13,0) 25%, rgba(10,11,13,.94) 72%); }
+.card .art { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: .92; }
+.card .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,11,13,0) 25%, rgba(10,11,13,.94) 72%); transition: opacity .5s; }
 .card > *:not(.art) { position: relative; }
-.card .due { font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--soft); }
-.card .body { margin-top: auto; }
-.tag { display: inline-flex; align-items: center; gap: 8px; font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--gap); }
-.tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--gap); box-shadow: 0 0 10px var(--gap); }
+.card .due { font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--soft); transition: opacity .3s; }
+.card .body { margin-top: auto; transition: opacity .3s; }
 .card h3 { margin-top: 10px; font-size: 23px; }
 .card p { margin-top: 8px; font-size: 14.5px; color: var(--soft); }
+.card .slice { position: absolute; left: 50%; bottom: 22px; translate: -50% 0; writing-mode: vertical-rl; transform: rotate(180deg); font: 500 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; opacity: 0; transition: opacity .3s; }
+.tag { display: inline-flex; align-items: center; gap: 8px; font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--gap); }
+.tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--gap); box-shadow: 0 0 10px var(--gap); }
 .stamp { position: absolute; top: 24px; right: 24px; padding: 6px 12px; border-radius: 999px; font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; opacity: 0; transition: opacity .15s; }
 .stamp.got { background: var(--silver); color: var(--ground); }
 .stamp.tom { background: rgba(255,255,255,.14); left: 24px; right: auto; }
+/* Slices: the whole day fanned out */
+.deck.strips .card { width: 64px; padding: 0; border-radius: 22px; cursor: pointer; }
+@media (max-width: 640px) { .deck.strips .card { width: 50px; } }
+.deck.strips .card .due, .deck.strips .card .body, .deck.strips .stamp { opacity: 0; }
+.deck.strips .card .art::after { opacity: .35; }
+.deck.strips .card .slice { opacity: 1; }
+.deck.strips .card:hover { filter: brightness(1.15) !important; }
 .deck-btns { display: flex; gap: 8px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
 .deck-btns .btn { height: 42px; font-size: 14px; }
+.deck-count { text-align: center; margin-top: 14px; font: 400 12px var(--mono); color: var(--muted); letter-spacing: .08em; }
+/* Opened card */
+.sheet { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px; background: rgba(5,6,8,0); -webkit-backdrop-filter: blur(0px); backdrop-filter: blur(0px); transition: background .5s, backdrop-filter .5s, -webkit-backdrop-filter .5s; }
+.sheet[hidden] { display: none; }
+.sheet.open { background: rgba(5,6,8,.6); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.sheet-card { position: relative; width: min(460px, 100%); max-height: calc(100svh - 40px); overflow: auto; border-radius: 40px; background: #121418; box-shadow: 0 60px 120px -20px rgba(0,0,0,.9), 0 0 0 1px rgba(255,255,255,.1); transform-origin: top left; }
+.sheet-art { height: 220px; background-size: cover; background-position: center; position: relative; }
+.sheet-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(18,20,24,0) 30%, #121418); }
+.sheet-in { padding: 0 28px 28px; margin-top: -40px; position: relative; display: grid; gap: 16px; }
+.sheet-in > * { opacity: 0; transform: translateY(14px); transition: opacity .4s, transform .6s var(--spring); }
+.sheet.open .sheet-in > * { opacity: 1; transform: none; }
+.sheet.open .sheet-in > *:nth-child(2) { transition-delay: .06s; } .sheet.open .sheet-in > *:nth-child(3) { transition-delay: .12s; } .sheet.open .sheet-in > *:nth-child(4) { transition-delay: .18s; } .sheet.open .sheet-in > *:nth-child(5) { transition-delay: .24s; }
+.sheet-in h3 { font-size: 28px; }
+.said { padding: 16px 18px; border-radius: 20px; background: rgba(255,255,255,.05); font-size: 15px; color: var(--soft); }
+.said b, .notes b { display: block; font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.said q { font-style: italic; color: var(--text); }
+.notes { padding: 16px 18px; border-radius: 20px; background: rgba(169,190,230,.08); font-size: 15px; color: #D3DCEC; }
+.sheet-close { position: absolute; top: 16px; right: 16px; z-index: 2; width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(0,0,0,.45); color: var(--text); cursor: pointer; font-size: 18px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.sheet-in .btn { width: 100%; height: 50px; }
+.sheet-in small { color: var(--dim); font-size: 13px; text-align: center; }
 .legend { display: grid; gap: 2px; margin-top: 36px; list-style: none; }
 .legend li { display: flex; gap: 16px; align-items: baseline; padding: 16px 0; border-top: 1px solid var(--hairline); color: var(--soft); }
 .legend kbd { flex: none; width: 74px; font: 500 12px var(--mono); color: var(--text); letter-spacing: .06em; }
@@ -426,25 +462,24 @@ footer .brand { font-size: 17px; color: var(--soft); }
         <div class="head" style="margin-bottom:0">
           <span class="eyebrow">Review</span>
           <h2>Gaps come back <em class="s">right before</em> you'd forget.</h2>
-          <p class="lead">Each day Fenny deals you a short stack. Swipe through them on the bus. Try it here.</p>
+          <p class="lead">Each day Fenny deals you a short stack. Swipe through them on the bus, or tap one to open it. Try it here.</p>
         </div>
         <ul class="legend">
           <li><kbd>→ Right</kbd>Got it. It comes back later, further apart each time.</li>
           <li><kbd>← Left</kbd>Not yet. See it again tomorrow.</li>
           <li><kbd>↑ Up</kbd>Explain it now, out loud, to Fenny.</li>
+          <li><kbd>Tap</kbd>Open the card to see what you said and what your notes say.</li>
         </ul>
       </div>
       <div class="rise">
-        <div class="deck" id="deck" aria-label="Review cards. Drag or use the buttons.">
-          <div class="card" data-i="0"><div class="art" style="background-image:url(../img/card-gap.webp)"></div><span class="stamp got">Got it</span><span class="stamp tom">Tomorrow</span><span class="due">Due today · Chemistry</span><div class="body"><span class="tag">Gap</span><h3>Why water's boiling point is so high</h3><p>You named hydrogen bonds but didn't say why they need more energy to break.</p></div></div>
-          <div class="card" data-i="1"><div class="art" style="background-image:url(../img/aurora.webp)"></div><span class="stamp got">Got it</span><span class="stamp tom">Tomorrow</span><span class="due">Due today · Law</span><div class="body"><span class="tag">Gap</span><h3>The neighbour test in Donoghue v Stevenson</h3><p>You quoted the case but couldn't say who counts as a neighbour.</p></div></div>
-          <div class="card" data-i="2"><div class="art" style="background-image:url(../img/intro-trails.webp)"></div><span class="stamp got">Got it</span><span class="stamp tom">Tomorrow</span><span class="due">Due today · Economics</span><div class="body"><span class="tag">Gap</span><h3>Why a price ceiling causes shortages</h3><p>You described the queue, not why suppliers make less.</p></div></div>
-        </div>
-        <div class="deck-btns">
+        <div class="deck" id="deck" aria-label="Review cards. Drag, tap to open, or use the buttons."></div>
+        <div class="deck-btns" id="deckBtns">
           <button class="btn btn-glass" data-swipe="left">Tomorrow</button>
-          <button class="btn btn-glass" data-swipe="up">Explain now</button>
+          <button class="btn btn-glass" data-swipe="open">Open</button>
           <button class="btn btn-solid" data-swipe="right">Got it</button>
+          <button class="btn btn-glass" id="fanBtn">See all 5</button>
         </div>
+        <p class="deck-count" id="deckCount">Card 1 of 5 due today</p>
       </div>
     </div>
   </section>
@@ -531,6 +566,14 @@ footer .brand { font-size: 17px; color: var(--soft); }
     </div>
   </section>
 </main>
+
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-label="Review card">
+  <div class="sheet-card" id="sheetCard">
+    <button class="sheet-close" id="sheetClose" aria-label="Close">×</button>
+    <div class="sheet-art" id="sheetArt"></div>
+    <div class="sheet-in" id="sheetIn"></div>
+  </div>
+</div>
 
 <footer>
   <div class="wrap">
@@ -637,37 +680,94 @@ function onScroll() {
 }
 addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
-// Review deck: drag right for got it, left for tomorrow, up to explain now
-const deck = document.getElementById('deck');
+// Review deck: a centred card with neighbours peeking in 3D. Drag right for got it,
+// left for tomorrow, up to explain now; tap to open; "See all" fans the day out as slices.
+const CARDS = [
+  { subj: 'Chemistry', art: 'card-gap', tint: '#F09A80', title: "Why water's boiling point is so high", gap: "You named hydrogen bonds but didn't say why they need more energy to break.",
+    said: 'Because of hydrogen bonds. They’re… stronger, I think?', notes: 'Lecture 7, slide 14: each water molecule can form up to four hydrogen bonds, so more energy is needed to pull molecules apart into a gas.' },
+  { subj: 'Law', art: 'aurora', tint: '#9DB4E0', title: 'The neighbour test in Donoghue v Stevenson', gap: "You quoted the case but couldn't say who counts as a neighbour.",
+    said: 'You have to take care not to injure your neighbour, like, legally.', notes: 'Week 3 reading: neighbours are people so closely and directly affected by your act that you ought to have them in mind.' },
+  { subj: 'Economics', art: 'intro-trails', tint: '#C9CFDA', title: 'Why a price ceiling causes shortages', gap: 'You described the queue, not why suppliers make less.',
+    said: 'If the price is capped, people queue and there isn’t enough.', notes: 'Seminar 5 notes: below the equilibrium price, quantity supplied falls while quantity demanded rises.' },
+  { subj: 'Biology', art: 'horizon', tint: '#A9BEE6', title: 'What a ribosome is made of', gap: 'You said what it does, not what it is.',
+    said: 'It’s where proteins get made, it reads the RNA.', notes: 'Lecture 2: ribosomes are built from ribosomal RNA and proteins, in a large and a small subunit.' },
+  { subj: 'History', art: 'intro-dawn', tint: '#8FA7D8', title: 'Why the Corn Laws were repealed in 1846', gap: 'You named Peel but not the famine or the pressure from industry.',
+    said: 'Peel changed his mind and repealed them.', notes: 'Essay plan: the Irish famine and the Anti-Corn Law League’s campaign pushed Peel to repeal.' },
+];
+const deck = document.getElementById('deck'), review = document.getElementById('review');
+const deckCount = document.getElementById('deckCount'), fanBtn = document.getElementById('fanBtn');
+CARDS.forEach((d, i) => {
+  const c = document.createElement('div');
+  c.className = 'card'; c.dataset.i = i; c.tabIndex = -1;
+  c.innerHTML = `<div class="art" style="background-image:url(../img/${d.art}.webp)"></div><span class="stamp got">Got it</span><span class="stamp tom">Tomorrow</span><span class="due">Due today · ${d.subj}</span><div class="body"><span class="tag">Gap</span><h3>${d.title}</h3><p>${d.gap}</p></div><span class="slice">${d.subj}</span>`;
+  deck.appendChild(c);
+});
 let cards = [...deck.querySelectorAll('.card')];
+let fanned = false;
+const narrow = () => innerWidth < 640;
 function layout() {
+  const n = cards.length;
+  if (fanned) {
+    const w = narrow() ? 56 : 74;
+    [...cards].sort((a, b) => a.dataset.i - b.dataset.i).forEach((c, j) => {
+      c.style.zIndex = 10; c.style.opacity = 1; c.style.filter = 'brightness(.85)';
+      c.style.transform = `translateX(${(j - (n - 1) / 2) * w}px) rotateY(0deg)`;
+    });
+    return;
+  }
   cards.forEach((c, i) => {
-    c.style.zIndex = 10 - i;
-    c.style.transform = i === 0 ? '' : `translateY(${i * 14}px) scale(${1 - i * .05})`;
-    c.style.filter = i === 0 ? '' : `brightness(${1 - i * .25})`;
-    c.style.opacity = i > 2 ? 0 : 1;
+    if (c.dataset.busy) return;
+    const pos = i === 0 ? 0 : i === 1 ? 1 : i === n - 1 ? -1 : 2;
+    const x = narrow() ? 46 : 62;
+    c.style.zIndex = pos === 0 ? 10 : pos === 2 ? 1 : 5;
+    c.style.transform = pos === 0 ? 'none' : pos === 2 ? 'translateZ(-260px) scale(.8)' : `translateX(${pos * x}%) translateZ(-120px) rotateY(${-pos * 24}deg) scale(.86)`;
+    c.style.filter = pos === 0 ? '' : 'brightness(.45) saturate(.8)';
+    c.style.opacity = pos === 2 ? 0 : 1;
   });
+  const d = CARDS[cards[0].dataset.i];
+  review.style.setProperty('--tint', d.tint);
+  deckCount.textContent = `${d.subj} · card ${+cards[0].dataset.i + 1} of ${n} due today`;
 }
 layout();
+addEventListener('resize', layout);
 function fling(dir) {
-  const c = cards[0]; if (!c || c.dataset.busy) return;
+  if (fanned) return;
+  if (dir === 'open') return openCard(cards[0]);
+  const c = cards[0]; if (c.dataset.busy) return;
   c.dataset.busy = 1;
-  const to = { right: 'translate(130%, -4%) rotate(18deg)', left: 'translate(-130%, -4%) rotate(-18deg)', up: 'translate(0, -120%) scale(.9)' }[dir];
+  const to = { right: 'translate(140%, -6%) rotate(16deg)', left: 'translate(-140%, -6%) rotate(-16deg)', up: 'translate(0, -125%) scale(.9)' }[dir];
   c.querySelector('.got').style.opacity = dir === 'right' ? 1 : 0;
   c.querySelector('.tom').style.opacity = dir === 'left' ? 1 : 0;
-  c.style.transition = 'transform .55s cubic-bezier(.2,.7,.2,1), opacity .5s';
+  c.style.transition = 'transform .5s cubic-bezier(.2,.7,.2,1), opacity .45s';
   c.style.transform = to; c.style.opacity = 0;
+  cards.push(cards.shift());
+  // the rest of the deck springs into place while the card leaves
+  const keep = c; c.style.zIndex = 11;
+  requestAnimationFrame(layout);
   setTimeout(() => {
-    cards.push(cards.shift());
-    c.style.transition = 'none'; c.style.transform = 'translateY(42px) scale(.85)';
-    c.querySelectorAll('.stamp').forEach((s) => s.style.opacity = 0);
-    requestAnimationFrame(() => { c.style.transition = ''; delete c.dataset.busy; layout(); });
-  }, 520);
+    keep.style.transition = 'none'; keep.querySelectorAll('.stamp').forEach((s) => s.style.opacity = 0);
+    keep.style.transform = 'translateX(-90%) translateZ(-200px) rotateY(30deg) scale(.8)'; keep.style.opacity = 0;
+    requestAnimationFrame(() => requestAnimationFrame(() => { keep.style.transition = ''; delete keep.dataset.busy; layout(); }));
+  }, 480);
 }
 document.querySelectorAll('[data-swipe]').forEach((b) => b.addEventListener('click', () => fling(b.dataset.swipe)));
+fanBtn.addEventListener('click', () => {
+  fanned = !fanned; deck.classList.toggle('strips', fanned);
+  fanBtn.textContent = fanned ? 'Back to the stack' : `See all ${CARDS.length}`;
+  document.querySelectorAll('[data-swipe]').forEach((b) => b.disabled = fanned);
+  deckCount.textContent = fanned ? 'Today’s review, fanned out. Tap one to pick it.' : deckCount.textContent;
+  layout();
+});
 let drag = null;
 deck.addEventListener('pointerdown', (e) => {
-  const c = cards[0]; if (!c.contains(e.target) || c.dataset.busy) return;
+  const hit = e.target.closest('.card'); if (!hit) return;
+  if (fanned) { // pick a slice: bring it to the front and close the fan
+    while (cards[0] !== hit) cards.push(cards.shift());
+    fanned = false; deck.classList.remove('strips'); fanBtn.textContent = `See all ${CARDS.length}`;
+    document.querySelectorAll('[data-swipe]').forEach((b) => b.disabled = false);
+    layout(); return;
+  }
+  const c = cards[0]; if (hit !== c || c.dataset.busy) return;
   drag = { c, x: e.clientX, y: e.clientY, dx: 0, dy: 0 };
   c.setPointerCapture(e.pointerId); c.style.transition = 'none';
 });
@@ -681,14 +781,51 @@ deck.addEventListener('pointermove', (e) => {
 const endDrag = () => {
   if (!drag) return;
   const { c, dx, dy } = drag; drag = null; c.style.transition = '';
+  if (Math.abs(dx) < 6 && Math.abs(dy) < 6) { c.style.transform = 'none'; return openCard(c); }
   if (dx > 100) fling('right'); else if (dx < -100) fling('left'); else if (dy < -110) fling('up');
-  else { c.style.transform = ''; c.querySelectorAll('.stamp').forEach((s) => s.style.opacity = 0); }
+  else { c.style.transform = 'none'; c.querySelectorAll('.stamp').forEach((s) => s.style.opacity = 0); }
 };
 deck.addEventListener('pointerup', endDrag); deck.addEventListener('pointercancel', endDrag);
 addEventListener('keydown', (e) => {
+  if (!sheet.hidden) { if (e.key === 'Escape') closeCard(); return; }
   const r = deck.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return;
   if (e.key === 'ArrowRight') fling('right'); if (e.key === 'ArrowLeft') fling('left');
 });
+
+// Opening a card: it grows out of the deck into a full sheet (a FLIP spring), and shrinks back
+const sheet = document.getElementById('sheet'), sheetCard = document.getElementById('sheetCard');
+let openFrom = null;
+function flipFrom(rect) {
+  const to = sheetCard.getBoundingClientRect();
+  return `translate(${rect.left - to.left}px, ${rect.top - to.top}px) scale(${rect.width / to.width}, ${rect.height / to.height})`;
+}
+function openCard(c) {
+  const d = CARDS[c.dataset.i];
+  document.getElementById('sheetArt').style.backgroundImage = `url(../img/${d.art}.webp)`;
+  document.getElementById('sheetIn').innerHTML = `<span class="tag">Gap · ${d.subj}</span><h3>${d.title}</h3>
+    <div class="said"><b>What you said</b><q>${d.said}</q></div>
+    <div class="notes"><b>From your notes</b>${d.notes}</div>
+    <button class="btn btn-solid" type="button">Now explain it to Fenny</button><small>Fenny still won't explain it. This comes from your own notes.</small>`;
+  document.getElementById('sheetIn').querySelector('.btn').addEventListener('click', closeCard);
+  openFrom = c; sheet.hidden = false;
+  const rect = c.getBoundingClientRect();
+  sheetCard.style.transition = 'none'; sheetCard.style.borderRadius = '34px';
+  sheetCard.style.transform = flipFrom(rect); c.style.opacity = 0;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    sheetCard.style.transition = still ? 'none' : 'transform .75s var(--spring), border-radius .6s';
+    sheetCard.style.transform = 'none'; sheetCard.style.borderRadius = '';
+    sheet.classList.add('open'); document.getElementById('sheetClose').focus({ preventScroll: true });
+  }));
+}
+function closeCard() {
+  if (sheet.hidden) return;
+  const c = openFrom; sheet.classList.remove('open');
+  sheetCard.style.transition = still ? 'none' : 'transform .55s cubic-bezier(.3,.7,.2,1)';
+  sheetCard.style.transform = flipFrom(c.getBoundingClientRect());
+  setTimeout(() => { c.style.opacity = 1; sheet.hidden = true; sheetCard.style.transform = ''; }, still ? 0 : 520);
+}
+document.getElementById('sheetClose').addEventListener('click', closeCard);
+sheet.addEventListener('click', (e) => { if (e.target === sheet) closeCard(); });
 
 // Forgetting curve, drawn to one scale: x = day 0 to 30, y = 0 to 100% recall
 (function curve() {
