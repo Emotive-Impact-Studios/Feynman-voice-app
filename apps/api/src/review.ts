@@ -8,7 +8,9 @@
 //
 // "Show me" gives a short explanation of one gap, from their notes when there
 // are any. The app always follows it with "Now tell Fenny in your own words",
-// so the explaining is still theirs. Fenny itself never explains.
+// so the explaining is still theirs. Fenny itself never explains. The same
+// endpoint serves the in-call offer ("Want a quick explanation, then tell me in
+// your own words?") after the learner is stuck twice.
 import { ProviderError } from "./openai";
 import { openAIPricesFromEnv, pricesFromEnv } from "./pricing";
 
@@ -171,7 +173,8 @@ export const SHOW_ME_PROMPT = `A university student is learning a topic by expla
 Rules:
 - If their notes are given, explain it from their notes, using the notes' own terms. Do not add facts the notes do not support. If the notes do not cover it, say so in one short sentence first, then explain it briefly from general knowledge.
 - If no notes are given, explain it briefly from general knowledge at the level of a first-year university course, and do not mention notes at all.
-- At most 80 words, two or three short sentences, plain spoken English. One idea, the missing step, not the whole topic.
+- About 20 to 30 seconds read aloud: 50 to 80 words, plain spoken English. One idea, the missing step, not the whole topic.
+- Include one everyday analogy, taken from their notes or their own words when they have one.
 - No lists, no markdown, no emoji. Do not quiz them or tell them to explain it back; the app does that.
 - British English.`;
 
