@@ -11,7 +11,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "postinstall": "patch-package"
   },
-  "devDependencies": {
+  "dependencies": {
     "patch-package": "^8.0.0"
   }
 }
