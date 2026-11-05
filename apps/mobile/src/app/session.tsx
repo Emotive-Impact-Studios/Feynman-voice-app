@@ -10,6 +10,7 @@ import { minutesLeft, recordSession, useProfile } from "../data/profile";
 import { colour } from "../theme";
 import { DotWave } from "../ui/Dots";
 import { Backdrop, Glass, Icon, images, Label, PillButton, RoundButton, T } from "../ui/kit";
+import { GlowRing } from "../ui/GlowRing";
 import { LivingLight } from "../ui/LivingLight";
 import { SilverRing } from "../ui/SilverRing";
 import { VoiceGlow } from "../ui/VoiceGlow";
@@ -143,7 +144,7 @@ export default function Session() {
           <Backdrop source={images.horizon} opacity={0.3} />
           <VoiceGlow level={voiceLevel} height={230} dim />
           <View style={[styles.centre, { paddingTop: insets.top + 120 }]}>
-            <LivingLight size={230} energy={studentEnergy} />
+            <GlowRing size={230} energy={studentEnergy} />
             <Label tone="student" style={{ marginTop: 28 }}>
               Student
             </Label>
