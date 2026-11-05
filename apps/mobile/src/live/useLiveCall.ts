@@ -128,15 +128,21 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     }
     if (!wasStreaming.current || !callOn.current) return;
     wasStreaming.current = false;
-    silence();
     resampler.current = null;
+    // A turn already sent (thinking or speaking) carries on: only the mic
+    // comes back. A half-heard turn starts again.
+    const wasListening = phaseRef.current === "listening";
     Promise.resolve()
       .then(() => streamRef.current.start())
       .then(() => {
-        if (callOn.current) resumeListening(true);
+        // Ended while the mic was reopening: close it again.
+        if (!callOn.current) return streamRef.current.stop();
+        if (wasListening && phaseRef.current === "listening") freshTurn();
       })
       .catch(() => {
+        if (!callOn.current) return;
         callOn.current = false;
+        silence();
         setError("The microphone stopped. End the call and start it again.");
         setPhase("error");
       });
