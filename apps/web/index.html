@@ -58,6 +58,7 @@ img { display: block; max-width: 100%; }
 .bar.scrolled { background: rgba(10,11,13,0.72); backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4); border-color: var(--hairline); }
 .bar .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 19px; letter-spacing: -0.01em; }
+.brand-mark { width: 26px; height: 26px; }
 .brand-dot { width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle at 40% 40%, #fff, var(--student) 45%, rgba(110,134,188,0) 72%); box-shadow: 0 0 18px rgba(169,190,230,0.6); }
 .links { display: flex; gap: 28px; align-items: center; font-size: 15px; color: var(--soft); }
 .links a:hover { color: var(--text); }
@@ -108,6 +109,9 @@ form.wait .btn { height: 48px; }
 .phone-top .mono { font-size: 10px; }
 .phone-top div:last-child { font-size: 15px; margin-top: 4px; }
 
+/* Fenny's light: a grainy ring that breathes (drawn in script) */
+.ring { pointer-events: none; }
+.phone-ring-light { position: absolute; left: 50%; top: 34%; width: 270px; height: 270px; translate: -50% -50%; }
 /* The living light */
 .light { position: absolute; left: 50%; top: 34%; width: 200px; height: 200px; translate: -50% -50%; opacity: .78; }
 .light span { position: absolute; inset: 0; border-radius: 50%; filter: blur(28px); mix-blend-mode: screen; }
@@ -197,7 +201,8 @@ details p { color: var(--soft); padding: 0 0 26px; max-width: 640px; }
 
 /* Final call */
 .final { text-align: center; padding: 160px 0 120px; overflow: hidden; }
-.final .light { position: relative; left: auto; top: auto; translate: none; margin: 0 auto 48px; width: 180px; height: 180px; }
+.final-mark { margin: 0 auto 8px; width: 44px; height: 44px; }
+.final-ring { display: block; margin: -8px auto 40px; width: 300px; height: 300px; max-width: 100%; }
 .final h2 { max-width: 760px; margin: 0 auto; }
 .final form.wait { margin: 40px auto 0; }
 .final .form-note { text-align: center; }
@@ -221,7 +226,8 @@ footer .wrap { display: flex; justify-content: space-between; gap: 24px; flex-wr
 
 <header class="bar" id="bar">
   <div class="wrap">
-    <a class="brand" href="#top" aria-label="Fenny home"><span class="brand-dot"></span>Fenny</a>
+    <!-- Logo: swap img/mark.svg to change the mark everywhere -->
+    <a class="brand" href="#top" aria-label="Fenny home"><img class="brand-mark" src="img/mark.svg" alt="" width="26" height="26">Fenny</a>
     <nav class="links">
       <a href="#how">How it works</a>
       <a href="#pricing">Pricing</a>
@@ -248,7 +254,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 24px; flex-wr
 
       <div class="phone" aria-label="A Fenny session in progress">
         <div class="phone-top"><div class="mono">Teaching</div><div>Hydrogen bonds</div></div>
-        <div class="light" id="phoneLight" aria-hidden="true"><span></span><span></span><span></span><i></i></div>
+        <canvas class="ring phone-ring-light" id="phoneLight" aria-hidden="true"></canvas>
         <div class="lines" id="lines" aria-live="off"></div>
         <div class="phone-ring" aria-hidden="true"><b></b></div>
       </div>
@@ -386,7 +392,8 @@ footer .wrap { display: flex; justify-content: space-between; gap: 24px; flex-wr
 
   <section class="final" id="join">
     <div class="wrap">
-      <div class="light rise" aria-hidden="true"><span></span><span></span><span></span><i></i></div>
+      <img class="final-mark rise" src="img/mark.svg" alt="" width="44" height="44">
+      <canvas class="ring final-ring" aria-hidden="true"></canvas>
       <h2 class="rise"><span class="lead-dim">Your exam is going to ask.</span>Let Fenny ask first.</h2>
       <form class="wait rise" data-wait>
         <input type="email" name="email" placeholder="Your email" autocomplete="email" required aria-label="Email address">
@@ -442,12 +449,75 @@ function next() {
   lines.appendChild(el);
   while (lines.children.length > 3) lines.firstElementChild.remove();
   requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
-  light.classList.toggle('talking', who === 'student');
+  light.dataset.talking = who === 'student' ? '1' : '';
   i++;
   setTimeout(next, who === 'student' ? 2600 : 3200);
 }
 if (still) script.slice(0, 3).forEach(([who, text]) => { const el = document.createElement('div'); el.className = 'line in ' + who; el.textContent = text; lines.appendChild(el); });
 else setTimeout(next, 700);
+
+
+// Fenny's light: a soft, grainy ring of silver-blue that breathes.
+// Rebuilt from Edem's reference loop. Bright points drift round the ring,
+// vertical streaks give it the brushed look, and fresh grain every frame.
+function glowRing(canvas) {
+  const S = 240, dpr = Math.min(2, devicePixelRatio || 1);
+  canvas.width = S * dpr; canvas.height = S * dpr;
+  const ctx = canvas.getContext('2d');
+  // Older Safari ignores canvas filters, so soften the whole canvas instead
+  if (!('filter' in ctx)) canvas.style.filter = 'blur(5px)';
+  const blur = document.createElement('canvas'); blur.width = blur.height = S;
+  const b = blur.getContext('2d');
+  const grain = [0, 1, 2].map(() => {
+    const g = document.createElement('canvas'); g.width = g.height = S;
+    const gx = g.getContext('2d'), d = gx.createImageData(S, S);
+    for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 22; }
+    gx.putImageData(d, 0, 0); return g;
+  });
+  const seeds = Array.from({ length: 160 }, (_, i) => [(i + Math.random() * 0.8) / 160, Math.random(), Math.random()]);
+  let f = 0;
+  function draw(t) {
+    const s = t / 1000, talking = canvas.dataset.talking === '1';
+    const breathe = 1 + Math.sin(s * (talking ? 4.2 : 1.6)) * (talking ? 0.05 : 0.035);
+    const cx = S / 2, cy = S / 2, r = 70 * breathe;
+    b.clearRect(0, 0, S, S);
+    b.globalCompositeOperation = 'lighter';
+    const spin = s * 0.35;
+    for (const [u, v, w] of seeds) {
+      const a = u * Math.PI * 2;
+      const x = cx + Math.cos(a) * r * 0.86, y = cy + Math.sin(a) * r;
+      // hot points near the top and bottom, slowly wandering
+      const hot = Math.exp(-Math.pow(Math.sin(a + Math.PI / 2 + Math.sin(spin) * 0.25), 2) * 5);
+      const flick = 0.6 + 0.4 * Math.sin(s * (1 + w * 2) + v * 9);
+      const alpha = (0.10 + 0.22 * hot) * flick;
+      const len = 10 + 30 * hot * w;
+      const g = b.createLinearGradient(x, y - len, x, y + len);
+      g.addColorStop(0, 'rgba(150,185,230,0)');
+      g.addColorStop(0.5, `rgba(${120 + 110 * hot | 0},${170 + 70 * hot | 0},${225 + 30 * hot | 0},${alpha})`);
+      g.addColorStop(1, 'rgba(150,185,230,0)');
+      b.fillStyle = g; b.fillRect(x - 1.5 - 3 * w, y - len, 3 + 6 * w, len * 2);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, S, S);
+    ctx.globalCompositeOperation = 'source-over';
+    // halo, then a soft copy of the streaks, then a crisper copy
+    const halo = ctx.createRadialGradient(cx, cy, r * 0.6, cx, cy, r * 1.7);
+    halo.addColorStop(0, 'rgba(90,140,200,0.16)'); halo.addColorStop(1, 'rgba(110,150,210,0)');
+    ctx.fillStyle = halo; ctx.fillRect(0, 0, S, S);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.filter = 'blur(12px)'; ctx.drawImage(blur, 0, 0); ctx.drawImage(blur, 0, 0);
+    ctx.filter = 'blur(4px)'; ctx.drawImage(blur, 0, 0);
+    ctx.filter = 'none';
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.drawImage(grain[f++ % 3], 0, 0);
+  }
+  if (still) { draw(0); return; }
+  let on = true;
+  new IntersectionObserver(([e]) => { on = e.isIntersecting; if (on) requestAnimationFrame(loop); }).observe(canvas);
+  function loop(t) { if (!on) return; draw(t); requestAnimationFrame(loop); }
+  requestAnimationFrame(loop);
+}
+document.querySelectorAll('canvas.ring').forEach(glowRing);
 
 // Waitlist
 document.querySelectorAll('[data-wait]').forEach((form) => {
