@@ -88,23 +88,24 @@ export function recordSession(title: string, seconds: number, questions: number)
   });
 }
 
-export function minutesLeft(p: Profile) {
-  return Math.max(0, Math.floor(PROTOTYPE_MINUTES - p.secondsUsed / 60));
+/** Whole minutes left, counting any seconds spoken in a session not yet saved. */
+export function minutesLeft(p: Profile, pendingSeconds = 0) {
+  return Math.max(0, Math.floor(PROTOTYPE_MINUTES - (p.secondsUsed + pendingSeconds) / 60));
 }
 
 /** "2 days ago", "today", "yesterday". */
 export function ago(at: number) {
-  const days = Math.floor((startOfDay(Date.now()) - startOfDay(at)) / 86400000);
+  const days = dayNumber(Date.now()) - dayNumber(at);
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";
   if (days < 7) return `${days} days ago`;
   return new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-function startOfDay(t: number) {
+// Local calendar day as a whole number, so clock changes can't shift it.
+function dayNumber(t: number) {
   const d = new Date(t);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+  return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
 }
 
 export function greeting(now = new Date()) {
