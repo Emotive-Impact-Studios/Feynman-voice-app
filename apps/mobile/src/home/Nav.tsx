@@ -1,38 +1,78 @@
-// Home's bottom bar: the three states plus the living light to start talking.
+// Home's shared chrome, from the canvas board: a top bar (tab title,
+// minutes, you) and the bottom bar (three tabs plus the light to start).
 import { Pressable, StyleSheet, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { useEffect } from "react";
+import { colour } from "../theme";
 import { Glass, T } from "../ui/kit";
 import { LivingLight } from "../ui/LivingLight";
+import { smooth } from "../ui/motion";
 import { SilverRing } from "../ui/SilverRing";
 import { NAV_HEIGHT, navOffset } from "./styles";
 
-export type HomeState = "explain" | "today" | "me";
+export type HomeTab = "today" | "topics" | "me";
+const TABS: { id: HomeTab; label: string }[] = [
+  { id: "today", label: "Today" },
+  { id: "topics", label: "Topics" },
+  { id: "me", label: "Me" },
+];
 
-export function Nav({ bottom, state, onChange, onStart }: { bottom: number; state: HomeState; onChange: (s: HomeState) => void; onStart: () => void }) {
-  const tabs: { id: HomeState; label: string }[] = [
-    { id: "today", label: "Today" },
-    { id: "explain", label: "Explain" },
-    { id: "me", label: "Me" },
-  ];
+export function TopBar({ top, tab, minutes, initial, onMe }: { top: number; tab: HomeTab; minutes: number; initial: string; onMe: () => void }) {
+  return (
+    <View style={[styles.top, { paddingTop: top + 6 }]}>
+      <T size={17} weight="semibold">
+        {TABS.find((t) => t.id === tab)?.label}
+      </T>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <Pressable onPress={onMe} accessibilityRole="button" accessibilityLabel={`${minutes} minutes left`}>
+          <Glass style={styles.minutes}>
+            <T size={13} weight="mono">
+              {minutes} min
+            </T>
+          </Glass>
+        </Pressable>
+        <Pressable onPress={onMe} accessibilityRole="button" accessibilityLabel="You">
+          <Glass style={styles.avatar}>
+            <T size={14} weight="semibold">
+              {initial}
+            </T>
+          </Glass>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+export function Nav({ bottom, tab, onChange, onStart, width }: { bottom: number; tab: HomeTab; onChange: (t: HomeTab) => void; onStart: () => void; width: number }) {
+  // The silver ring slides between tabs instead of jumping.
+  const barW = width - 32 - 10 - NAV_HEIGHT - 12;
+  const slot = barW / 3;
+  const x = useSharedValue(TABS.findIndex((t) => t.id === tab) * slot);
+  useEffect(() => {
+    x.value = smooth(TABS.findIndex((t) => t.id === tab) * slot);
+  }, [tab, slot, x]);
+  const ringStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
   return (
     <View style={[styles.nav, { bottom: navOffset(bottom) }]} accessibilityRole="tablist">
       <Glass strong style={styles.navBar}>
-        {tabs.map((t) =>
-          t.id === state ? (
-            <View key={t.id} style={{ flex: 1 }} accessibilityRole="tab" accessibilityState={{ selected: true }}>
-              <SilverRing width={100} height={52} fill="#1A1B1F" style={{ alignSelf: "center" }}>
-                <T size={12.5}>{t.label}</T>
-              </SilverRing>
-            </View>
-          ) : (
-            <Pressable key={t.id} accessibilityRole="tab" onPress={() => onChange(t.id)} style={styles.navItem}>
-              <T size={12.5} tone="muted">
-                {t.label}
-              </T>
-            </Pressable>
-          ),
-        )}
+        <Animated.View pointerEvents="none" style={[{ position: "absolute", left: 6, top: 6 }, ringStyle]}>
+          <SilverRing width={slot} height={52} fill="#1A1B1F" />
+        </Animated.View>
+        {TABS.map((t) => (
+          <Pressable
+            key={t.id}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: t.id === tab }}
+            onPress={() => onChange(t.id)}
+            style={styles.navItem}
+          >
+            <T size={12.5} tone={t.id === tab ? "text" : "muted"}>
+              {t.label}
+            </T>
+          </Pressable>
+        ))}
       </Glass>
-      <Pressable accessibilityRole="button" accessibilityLabel="Start explaining" onPress={onStart}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Start explaining something new" onPress={onStart}>
         <Glass strong style={styles.navLight}>
           <LivingLight size={40} />
         </Glass>
@@ -42,6 +82,9 @@ export function Nav({ bottom, state, onChange, onStart }: { bottom: number; stat
 }
 
 const styles = StyleSheet.create({
+  top: { position: "absolute", left: 0, right: 0, top: 0, paddingHorizontal: 20, paddingBottom: 10, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 5 },
+  minutes: { height: 36, borderRadius: 999, paddingHorizontal: 12, justifyContent: "center" },
+  avatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colour.glass },
   nav: { position: "absolute", left: 16, right: 16, flexDirection: "row", gap: 10 },
   navBar: { flex: 1, height: NAV_HEIGHT, borderRadius: 999, flexDirection: "row", alignItems: "center", padding: 6 },
   navItem: { flex: 1, height: 52, alignItems: "center", justifyContent: "center" },

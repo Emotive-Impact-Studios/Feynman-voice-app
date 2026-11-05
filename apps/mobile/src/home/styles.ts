@@ -8,6 +8,7 @@ export const navOffset = (bottomInset: number) => Math.max(bottomInset, 16) + 6;
 export const homeStyles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colour.ground },
   page: { flex: 1, paddingHorizontal: 22 },
+  scroll: { paddingHorizontal: 20 },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   stats: { flexDirection: "row", justifyContent: "center", gap: 40 },
 });

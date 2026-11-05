@@ -19,7 +19,10 @@ function useLoop(ms: number) {
 }
 
 export function LivingLight({ size, energy = 0 }: Props) {
-  const c = size / 2;
+  // The canvas is drawn larger than the light so the blur never meets its
+  // edge (a hard edge shows as a square box around the glow).
+  const pad = size / 2;
+  const c = size / 2 + pad;
   const a = useLoop(7000);
   const b = useLoop(9000);
   const d = useLoop(8000);
@@ -41,7 +44,7 @@ export function LivingLight({ size, energy = 0 }: Props) {
   const blur = size * 0.13;
 
   return (
-    <Canvas style={{ width: size, height: size }} pointerEvents="none">
+    <Canvas style={{ width: size + pad * 2, height: size + pad * 2, margin: -pad }} pointerEvents="none">
       <Group origin={vec(c, c)} transform={transform} blendMode="screen">
         <Group opacity={0.7}>
           <Circle cx={ax} cy={ay} r={size * 0.28} color={lightBlobs[0]} />
@@ -56,7 +59,7 @@ export function LivingLight({ size, energy = 0 }: Props) {
           <Blur blur={blur} />
         </Group>
         <Circle cx={c} cy={c} r={coreR}>
-          <RadialGradient c={vec(c * 0.9, c * 0.85)} r={size * 0.32} colors={["#FFFFFF", "#D9E1EE", "rgba(160,180,215,0)"]} positions={[0, 0.4, 1]} />
+          <RadialGradient c={vec(c - size * 0.05, c - size * 0.075)} r={size * 0.32} colors={["#FFFFFF", "#D9E1EE", "rgba(160,180,215,0)"]} positions={[0, 0.4, 1]} />
           <Blur blur={size * 0.05} />
         </Circle>
       </Group>

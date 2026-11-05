@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { lastTopic, me } from "../data/mock";
+import { minutesLeft, recordSession, useProfile } from "../data/profile";
 import { colour } from "../theme";
 import { DotWave } from "../ui/Dots";
 import { Backdrop, Glass, Icon, images, Label, PillButton, RoundButton, T } from "../ui/kit";
@@ -81,12 +81,13 @@ function clock(seconds: number) {
 export default function Session() {
   // A review card opens the session on its own topic and question.
   const params = useLocalSearchParams<{ topic?: string; prompt?: string }>();
-  const topic = params.topic ?? lastTopic.title;
+  const topic = params.topic?.trim() || "Anything you like";
+  const profile = useProfile();
   const opening = params.prompt ?? OPENING;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [view, setView] = useState<View3>("light");
-  const [voice, setVoice] = useState<LiveVoice>(phononAvailable ? "phonon" : "kitten");
+  const [voice, setVoice] = useState<LiveVoice>("sonic");
   const [ears, setEars] = useState<LiveEars>("auto");
   const [showSettings, setShowSettings] = useState(false);
   const loop = useLiveCall(topic, { voice, ears });
@@ -117,14 +118,14 @@ export default function Session() {
   const ringLabel =
     loop.phase === "listening" ? "Done, ask me" : loop.phase === "thinking" || loop.phase === "speaking" ? "Cut in" : "Start the call";
   // Stop the microphone, any pending turn and any reply before leaving.
+  // Save the topic and the speaking time, then back to Today. (Session
+  // feedback returns with gap analysis, build step 4.)
   const end = () => {
     loop.cancel();
-    router.replace("/feedback");
-  };
-  const close = () => {
-    loop.cancel();
+    recordSession(topic, spoken, loop.turns.filter((t) => t.speaker === "student").length);
     router.back();
   };
+  const close = end;
 
   return (
     <View style={styles.root}>
@@ -199,7 +200,7 @@ export default function Session() {
               {topic}
             </T>
             <Label>
-              {clock(spoken)} · {Math.max(0, Math.floor(me.minutesLeft - spoken / 60))} min left
+              {clock(spoken)} · {Math.max(0, minutesLeft(profile) - Math.floor(spoken / 60))} min left
             </Label>
           </View>
           <View style={{ flexDirection: "row", gap: 8 }}>
