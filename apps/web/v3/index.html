@@ -289,7 +289,15 @@ section { position: relative; }
 .plan li::before { content: ""; position: absolute; left: 2px; top: .6em; width: 8px; height: 8px; border-radius: 50%; background: var(--student); opacity: .7; }
 .plan .btn { margin-top: auto; width: 100%; height: 48px; }
 .plan.featured { background: linear-gradient(180deg, rgba(169,190,230,.13), rgba(255,255,255,.035)); border-color: transparent; }
-.plan.featured::after { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; opacity: .65; background: conic-gradient(from 200deg, #5B5F66, #F2F4F7, #8E939B, #FFFFFF, #666A72, #CDD1D7, #5B5F66); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+@property --ring { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.plan.featured::after { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none;
+  background: conic-gradient(from var(--ring), transparent 0deg, transparent 200deg, rgba(169,190,230,.5) 270deg, #FFFFFF 325deg, #DCE6FA 340deg, rgba(169,190,230,.4) 352deg, transparent 360deg),
+              conic-gradient(from 200deg, rgba(91,95,102,.35), rgba(242,244,247,.35), rgba(142,147,155,.35), rgba(255,255,255,.35), rgba(102,106,114,.35), rgba(205,209,215,.35), rgba(91,95,102,.35));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: ringspin 5s linear infinite; }
+.plan.featured { box-shadow: 0 0 60px -20px rgba(169,190,230,.35); }
+@keyframes ringspin { to { --ring: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .plan.featured::after { animation: none; } }
 .pill { position: absolute; top: 28px; right: 28px; font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 6px 10px; border-radius: 999px; background: rgba(169,190,230,.16); color: var(--student); }
 .price-note { margin-top: 22px; font-size: 14px; color: var(--dim); }
 
