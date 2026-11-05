@@ -119,7 +119,7 @@ section { position: relative; }
 .rise.on { opacity: 1; transform: none; filter: none; }
 
 /* Questions marquee */
-.marquee { padding-block: 90px 30px; display: grid; gap: 14px; overflow: hidden; mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+.marquee { padding-block: 90px 30px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; overflow: hidden; mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
 .marquee .intro { text-align: center; margin-bottom: 30px; }
 .track { display: flex; gap: 12px; width: max-content; animation: slide 60s linear infinite; }
 .track.rev { animation-direction: reverse; animation-duration: 70s; }
@@ -212,6 +212,8 @@ section { position: relative; }
   box-shadow: 0 40px 80px -20px rgba(0,0,0,.75), 0 0 0 1px rgba(255,255,255,.08);
   transition: transform .75s var(--spring), opacity .45s, filter .45s, width .7s var(--spring), height .7s var(--spring), border-radius .7s var(--spring), padding .7s var(--spring); }
 @media (max-width: 420px) { .card { width: 260px; height: 380px; } }
+.card .body, .card .due { transition: opacity .35s; }
+@media (max-width: 640px) { .deck:not(.strips) .card:not([data-pos="0"]) .body, .deck:not(.strips) .card:not([data-pos="0"]) .due { opacity: 0; } }
 .card:active { cursor: grabbing; }
 .card .art { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: .92; }
 .card .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,11,13,0) 25%, rgba(10,11,13,.94) 72%); transition: opacity .5s; }
@@ -367,6 +369,7 @@ footer .brand { font-size: 17px; color: var(--soft); }
 @keyframes cue { 0% { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
 /* the questions strip picks up where the photo fades out */
 .h3 + .marquee { padding-top: 0; }
+@media (max-width: 900px) { .h3 + .marquee { padding-top: 56px; } }
 @media (max-width: 1100px) { .h3-calls .c3 { display: none; } .h3-phone .phone-box { --k: .52; } }
 @media (max-width: 900px) {
   .h3 { padding: 70px 10px 0; }
@@ -379,8 +382,8 @@ footer .brand { font-size: 17px; color: var(--soft); }
   .h3-calls, .h3-cue { display: none; }
   .h3-copy .eyebrow { font-size: 10.5px; letter-spacing: .1em; }
   .h3-copy { position: relative; left: auto; bottom: auto; margin-top: -170px; padding: 0 20px 8px; z-index: 2; }
-  .h3-phone { position: relative; right: auto; bottom: auto; align-self: center; margin: 44px 0 10px; z-index: 2; }
-  .h3-phone .phone-box { --k: .78; }
+  .h3-phone { position: relative; right: auto; bottom: auto; align-self: center; margin: 36px 0 0; z-index: 2; }
+  .h3-phone .phone-box { --k: .64; }
   .h3-back { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .h3 .hero-photo, .h3-phone .phone-box, .h3-cue i, .h3-copy .eyebrow::before { animation: none; } }
@@ -839,6 +842,7 @@ function layout() {
     c.style.transform = pos === 0 ? 'none' : pos === 2 ? 'translateZ(-260px) scale(.8)' : `translateX(${pos * x}%) translateZ(-120px) rotateY(${-pos * 24}deg) scale(.86)`;
     c.style.filter = pos === 0 ? '' : 'brightness(.45) saturate(.8)';
     c.style.opacity = pos === 2 ? 0 : 1;
+    c.dataset.pos = pos;
   });
   const d = CARDS[cards[0].dataset.i];
   review.style.setProperty('--tint', d.tint);
