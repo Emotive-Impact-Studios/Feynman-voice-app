@@ -10,7 +10,7 @@ import {
   useAudioStream,
   type AudioStreamBuffer,
 } from "expo-audio";
-import { BargeIn, concatFloat32, EndOfTurn, fromBase64, pcm16ToFloat32, Resampler, SpeechMeter, toBase64 } from "@feynman/audio";
+import { BargeIn, concatFloat32, EndOfTurn, fromBase64, pcm16ToFloat32, quietAfter, Resampler, SpeechMeter, toBase64, TURN_QUIET_SECONDS } from "@feynman/audio";
 import { encodeWav, SAMPLE_RATE as KITTEN_RATE, synthesise } from "@feynman/kitten-tts";
 import { Phonon, PHONON_DEFAULT_VOICE } from "../../modules/phonon";
 import { PHONON_BUNDLE_URL, streamLiveTurn, type LiveEars, type LiveEvent, type LiveVoice, type Turn } from "../api";
@@ -70,6 +70,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const resamplerRate = useRef(0);
   const meter = useRef(new SpeechMeter());
   const endOfTurn = useRef(new EndOfTurn());
+  // Quiet that ends the learner's next turn: longer after a "why" or "how".
+  const nextQuiet = useRef(TURN_QUIET_SECONDS);
   const bargeIn = useRef(new BargeIn());
   // While thinking, the learner may carry on talking: then the turn was not over.
   const carryOn = useRef(new BargeIn(0.015, 0.4));
@@ -154,6 +156,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     meter.current = new SpeechMeter();
     if (keep) meter.current.push(keep, RATE);
     endOfTurn.current.reset();
+    endOfTurn.current.setSilence(nextQuiet.current);
     bargeIn.current.reset();
     carryOn.current.reset();
     setLiveSpeaking(meter.current.speakingSeconds);
@@ -223,6 +226,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   /** Start the call: open the microphone and listen. */
   const start = useCallback(async () => {
     setError(null);
+    nextQuiet.current = TURN_QUIET_SECONDS;
     freshTurn();
     resampler.current = null;
     await streamRef.current.start();
@@ -264,6 +268,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       if (e.type === "sentence") {
         spoken = spoken ? `${spoken} ${e.text}` : e.text;
         setLiveQuestion(spoken);
+        // Known as soon as it's said, so cutting in mid-question still gets it.
+        nextQuiet.current = quietAfter(spoken);
         if (voice === "phonon") {
           voiced = voiced.then(async () => {
             if (id !== turnId.current) return;
@@ -284,6 +290,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       }
       if (e.type === "done") {
         done = e;
+        nextQuiet.current = quietAfter(e.question);
         setHeardSeconds((n) => n + speakingSeconds);
         setTurns((t) => [...t, { speaker: "learner", text: e.transcript }, { speaker: "student", text: e.question }]);
       }

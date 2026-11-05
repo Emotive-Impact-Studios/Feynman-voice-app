@@ -150,6 +150,25 @@ export class EndOfTurn {
     this.spoken = 0;
     this.quiet = 0;
   }
+
+  /** Change how much quiet ends the next turn. */
+  setSilence(seconds: number): void {
+    this.silenceSeconds = seconds;
+  }
+}
+
+/** Quiet that ends a turn after an ordinary question. */
+export const TURN_QUIET_SECONDS = 1.2;
+/** Quiet that ends a turn after a "why" or "how" question, which needs thinking time. */
+export const THINKING_QUIET_SECONDS = 2.5;
+
+/**
+ * How long to wait in silence before the learner's answer to this question
+ * counts as finished. "Why" and "how" questions get longer, so a learner who
+ * stops to think is not cut off.
+ */
+export function quietAfter(question: string): number {
+  return /\b(why|how)\b/i.test(question) ? THINKING_QUIET_SECONDS : TURN_QUIET_SECONDS;
 }
 
 /**
