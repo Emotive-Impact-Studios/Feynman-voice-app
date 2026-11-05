@@ -387,6 +387,31 @@ footer .brand { font-size: 17px; color: var(--soft); }
   .h3-back { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .h3 .hero-photo, .h3-phone .phone-box, .h3-cue i, .h3-copy .eyebrow::before { animation: none; } }
+
+/* ---------- breather band under the hero ---------- */
+.beat { position: relative; padding: 70px 0 30px; text-align: center; }
+.beat::before { content: ""; position: absolute; left: 50%; top: 10px; width: min(760px, 90vw); height: 320px; translate: -50% 0; pointer-events: none;
+  background: radial-gradient(50% 50% at 50% 50%, rgba(169,190,230,.10), rgba(169,190,230,0) 70%); }
+.beat-line { position: relative; margin: 0 auto; max-width: 18em; font-size: clamp(30px, 3.6vw, 52px); font-weight: 510; line-height: 1.08; letter-spacing: -0.022em; color: var(--muted); text-wrap: balance; }
+.beat-line span { color: var(--text); }
+.beat-facts span { text-wrap: balance; }
+.beat-facts { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); margin: 64px auto 0; max-width: 980px; border-top: 1px solid var(--hairline); }
+.beat-facts > div { display: grid; gap: 8px; justify-items: center; align-content: start; padding: 30px 22px 6px; }
+.beat-facts > div + div { border-left: 1px solid var(--hairline); }
+.beat-facts b { font-size: clamp(28px, 2.8vw, 40px); font-weight: 510; letter-spacing: -0.022em; color: var(--text); }
+.beat-facts .rise.d1 { transition-delay: .1s; } .beat-facts .rise.d2 { transition-delay: .2s; } .beat-facts .rise.d3 { transition-delay: .3s; }
+.beat-facts span { font-size: 15px; color: var(--soft); max-width: 16em; }
+.h3 + .beat { margin-top: -10px; }
+.beat + .marquee { padding-top: 70px; }
+@media (max-width: 760px) {
+  .br-d { display: none; }
+  .beat-line span { display: block; }
+  .beat { padding: 56px 0 10px; }
+  .beat-facts { grid-template-columns: 1fr; margin-top: 40px; }
+  .beat-facts > div { padding: 22px 10px; }
+  .beat-facts > div + div { border-left: 0; border-top: 1px solid var(--hairline); }
+  .beat + .marquee { padding-top: 50px; }
+}
 </style>
 </head>
 <body>
@@ -443,6 +468,18 @@ footer .brand { font-size: 17px; color: var(--soft); }
       </div>
 
       <a class="h3-cue" href="#session" aria-label="Scroll down">Scroll<i></i></a>
+    </div>
+  </section>
+
+  <!-- A breather between the hero and the rest of the page -->
+  <section class="beat" aria-label="Why Fenny works">
+    <div class="wrap">
+      <p class="beat-line rise">You only really know something<br class="br-d"> <span>once you can explain it.</span></p>
+      <div class="beat-facts">
+        <div class="rise d1"><b>0</b><span>answers Fenny gives you. It only asks.</span></div>
+        <div class="rise d2"><b>10 min</b><span>free to try, no card needed.</span></div>
+        <div class="rise d3"><b>Any subject</b><span>from contract law to the Krebs cycle.</span></div>
+      </div>
     </div>
   </section>
 
