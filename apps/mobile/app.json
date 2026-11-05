@@ -8,7 +8,10 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emotiveimpact.feynman.prototype"
+      "bundleIdentifier": "com.emotiveimpact.feynman.prototype",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -45,6 +48,12 @@
       ]
     ],
     "scheme": "feynman",
-    "backgroundColor": "#0A0B0D"
+    "backgroundColor": "#0A0B0D",
+    "extra": {
+      "eas": {
+        "projectId": "566f8aea-e600-4b92-b18a-0654bfe9fb08"
+      }
+    },
+    "owner": "emotiveimpact"
   }
 }

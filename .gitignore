@@ -5,6 +5,6 @@ models/
 *.wav
 dist/
 .expo/
-ios/
-android/
+/apps/mobile/ios/
+/apps/mobile/android/
 .vercel/
