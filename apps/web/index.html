@@ -8,7 +8,8 @@
 <meta name="theme-color" content="#0A0B0D">
 <meta property="og:title" content="Fenny · Teach it to know it">
 <meta property="og:description" content="Explain it out loud. Find what you missed. A voice study partner for university students.">
-<meta property="og:image" content="img/intro-dawn.webp">
+<meta property="og:image" content="img/social.jpg">
+<link rel="icon" href="img/mark-small.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -57,8 +58,8 @@ img { display: block; max-width: 100%; }
 }
 .bar.scrolled { background: rgba(10,11,13,0.72); backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4); border-color: var(--hairline); }
 .bar .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 19px; letter-spacing: -0.01em; }
-.brand-mark { width: 26px; height: 26px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 400; font-size: 21px; letter-spacing: -0.01em; }
+.brand-mark { width: 24px; height: 24px; }
 .brand-dot { width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle at 40% 40%, #fff, var(--student) 45%, rgba(110,134,188,0) 72%); box-shadow: 0 0 18px rgba(169,190,230,0.6); }
 .links { display: flex; gap: 28px; align-items: center; font-size: 15px; color: var(--soft); }
 .links a:hover { color: var(--text); }
@@ -226,8 +227,8 @@ footer .wrap { display: flex; justify-content: space-between; gap: 24px; flex-wr
 
 <header class="bar" id="bar">
   <div class="wrap">
-    <!-- Logo: swap img/mark.svg to change the mark everywhere -->
-    <a class="brand" href="#top" aria-label="Fenny home"><img class="brand-mark" src="img/mark.svg" alt="" width="26" height="26">Fenny</a>
+    <!-- Logo: swap img/mark-small.svg (header, favicon) and img/mark.svg to change the mark -->
+    <a class="brand" href="#top" aria-label="Fenny home"><img class="brand-mark" src="img/mark-small.svg" alt="" width="24" height="24">fenny</a>
     <nav class="links">
       <a href="#how">How it works</a>
       <a href="#pricing">Pricing</a>
@@ -392,7 +393,6 @@ footer .wrap { display: flex; justify-content: space-between; gap: 24px; flex-wr
 
   <section class="final" id="join">
     <div class="wrap">
-      <img class="final-mark rise" src="img/mark.svg" alt="" width="44" height="44">
       <canvas class="ring final-ring" aria-hidden="true"></canvas>
       <h2 class="rise"><span class="lead-dim">Your exam is going to ask.</span>Let Fenny ask first.</h2>
       <form class="wait rise" data-wait>
