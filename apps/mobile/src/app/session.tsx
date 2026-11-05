@@ -25,8 +25,7 @@ const VIEWS: { id: View3; label: string }[] = [
   { id: "chat", label: "Chat" },
 ];
 
-// A prediction gives them a stake before they start (see docs/behavioural-design.md).
-const OPENING = "Before you start, which bit do you think will be hardest? Then explain it as if I know nothing.";
+const OPENING = "Explain it as if I know nothing. I'll ask when I get lost.";
 
 const STATUS = {
   loading: "Getting ready",

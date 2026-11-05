@@ -8,14 +8,15 @@ Full write-up: https://claude.ai/artifact/2xzBxSJfscmHntjbaDkB3Y
 
 - Fenny asks the question whose answer is the missing idea, instead of naming it.
 - Fenny builds on the learner's own analogy and repeats their words back.
-- When the learner is stuck, Fenny climbs a ladder: a simpler nudge, then a
-  "what would happen if" case, then it lets go and moves on. Never more than
-  three turns on one gap.
+- When the learner is stuck, Fenny asks one simpler, concrete question, then
+  lets go and moves on. Never more than two questions on one thing.
+- Fenny never asks vague or meta questions ("what do you mean", "which bit"),
+  and there is no "before you start" opener. Edem found both insufferable in
+  build 9 (2026-11-05). Fenny must never feel like a nag: questions stay
+  concrete, about the subject, and a good explanation is left to flow.
 
 ## In the app (built)
 
-- The call opens by asking which bit they think will be hardest. A prediction
-  gives them a stake, and Fenny asks about that part when they reach it.
 - The new topic sheet asks, optionally, what they want to be able to explain by
   the exam. It is saved on the topic in their words and steers Fenny.
 - Me shows a soft streak: days explaining in a row, forgiving one missed day in
