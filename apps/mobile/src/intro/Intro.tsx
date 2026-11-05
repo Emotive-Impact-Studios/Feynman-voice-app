@@ -26,6 +26,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { finishIntro, getProfile, SUBJECTS } from "../data/profile";
 import { colour } from "../theme";
 import { Glass, Icon, Label, PillButton, T } from "../ui/kit";
+import { GlowRing } from "../ui/GlowRing";
 import { LivingLight } from "../ui/LivingLight";
 import { smooth, snappy, spring } from "../ui/motion";
 import { SilverRing } from "../ui/SilverRing";
@@ -604,7 +605,7 @@ function Meet({ name, bottom, onDone, onReplay }: { name: string; bottom: number
       <Animated.Image source={img.glow} resizeMode="cover" style={[StyleSheet.absoluteFill, { opacity: 0.8 }]} />
       <Animated.View entering={FadeInDown.duration(1900).easing(ease)} style={{ position: "absolute", top: "20%", alignSelf: "center", width: 220, height: 220 }}>
         <Ripples size={220} />
-        <LivingLight size={220} energy={typed ? 0 : 1} />
+        <GlowRing size={220} energy={typed ? 0 : 1} />
       </Animated.View>
       <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 26, paddingBottom: Math.max(bottom, 20) + 10, alignItems: "center" }}>
         <Animated.View entering={FadeInDown.delay(1200).duration(700)}>
