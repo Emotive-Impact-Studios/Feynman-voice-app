@@ -1,9 +1,11 @@
-// Bundles the function into Vercel's Build Output API layout:
+// Bundles the functions into Vercel's Build Output API layout:
 //   .vercel/output/functions/api/turn.func/index.mjs
+//   .vercel/output/functions/api/live-turn.func/index.mjs (streams its response)
 // One self-contained file, so workspace packages written in TypeScript and
 // the eSpeak build inside `phonemizer` all come along without extra config.
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { build } from "esbuild";
+import { writePhononBundle } from "./scripts/phonon-bundle.mjs";
 
 const out = ".vercel/output";
 const fn = `${out}/functions/api/turn.func`;
@@ -21,9 +23,18 @@ await build({
   banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
 });
 
-writeFileSync(
-  `${fn}/.vc-config.json`,
-  JSON.stringify({ runtime: "nodejs22.x", handler: "index.mjs", launcherType: "Nodejs", maxDuration: 30 }, null, 2),
-);
+const config = { runtime: "nodejs22.x", handler: "index.mjs", launcherType: "Nodejs", maxDuration: 30 };
+writeFileSync(`${fn}/.vc-config.json`, JSON.stringify(config, null, 2));
+
+// The same bundle serves the live turn; it routes on the path. Streaming lets
+// the first sentence reach the phone before the brain has finished.
+const live = `${out}/functions/api/live-turn.func`;
+cpSync(fn, live, { recursive: true });
+writeFileSync(`${live}/.vc-config.json`, JSON.stringify({ ...config, supportsResponseStreaming: true }, null, 2));
+// The iPhone voice model, served as static files for the app to download.
+if (process.env.SKIP_PHONON_BUNDLE !== "1") {
+  const { out: dir, files } = await writePhononBundle(`${out}/static`);
+  console.log(`Phonon bundle: ${files} files in ${dir}`);
+}
 writeFileSync(`${out}/config.json`, JSON.stringify({ version: 3 }, null, 2));
-console.log(`Built ${fn}/index.mjs`);
+console.log(`Built ${fn} and ${live}`);
