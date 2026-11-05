@@ -1,0 +1,34 @@
+diff --git a/node_modules/onnxruntime-react-native/ios/OnnxruntimeModule.mm b/node_modules/onnxruntime-react-native/ios/OnnxruntimeModule.mm
+index 8155f92..ff39940 100644
+--- a/node_modules/onnxruntime-react-native/ios/OnnxruntimeModule.mm
++++ b/node_modules/onnxruntime-react-native/ios/OnnxruntimeModule.mm
+@@ -10,6 +10,10 @@
+ #import <ReactCommon/RCTTurboModule.h>
+ #import <jsi/jsi.h>
+ 
++@protocol ORTRuntimeProvider
++- (void *)runtime;
++@end
++
+ @implementation OnnxruntimeModule
+ 
+ @synthesize bridge = _bridge;
+@@ -27,12 +31,15 @@ RCT_EXPORT_MODULE(Onnxruntime)
+  */
+ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(install) {
+   @try {
+-    RCTCxxBridge* cxxBridge = (RCTCxxBridge*)_bridge;
+-    if (cxxBridge == nil) {
++    // React Native 0.88 no longer exposes RCTCxxBridge here. Both the old
++    // bridge and the bridgeless RCTBridgeProxy answer -runtime, so ask for
++    // it that way instead of casting to RCTCxxBridge.
++    id<ORTRuntimeProvider> provider = (id<ORTRuntimeProvider>)_bridge;
++    if (provider == nil) {
+       return @false;
+     }
+ 
+-    auto jsiRuntime = (facebook::jsi::Runtime*)cxxBridge.runtime;
++    auto jsiRuntime = (facebook::jsi::Runtime*)[provider runtime];
+     if (jsiRuntime == nil) {
+       return @false;
+     }
