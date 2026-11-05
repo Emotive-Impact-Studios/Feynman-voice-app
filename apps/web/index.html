@@ -12,7 +12,7 @@
 <link rel="icon" href="img/mark-small.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&family=Instrument+Sans:wght@400&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
   --ground: #0A0B0D;
@@ -26,7 +26,8 @@
   --silver: #E6E9EE;
   --student: #A9BEE6;
   --gap: #F09A80;
-  --sans: "Instrument Sans", system-ui, -apple-system, sans-serif;
+  --sans: "Inter", "Inter Variable", "SF Pro Display", -apple-system, system-ui, sans-serif;
+  --wordmark: "Instrument Sans", system-ui, sans-serif;
   --mono: "Geist Mono", ui-monospace, monospace;
   /* Springs from the motion notes: smooth 550ms/0.85, snappy 350ms/0.9 */
   --spring-smooth: linear(0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%, 1.017 19.8%, 1.051 22.6%, 1.059 25.8%, 1.035 33.3%, 1.004 42.6%, 0.995 52.9%, 1);
@@ -40,7 +41,9 @@ body {
   color: var(--text);
   font-family: var(--sans);
   font-size: 17px;
-  line-height: 1.5;
+  line-height: 1.55;
+  letter-spacing: -0.011em;
+  font-feature-settings: "cv01", "ss03";
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
@@ -58,7 +61,7 @@ img { display: block; max-width: 100%; }
 }
 .bar.scrolled { background: rgba(10,11,13,0.72); backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4); border-color: var(--hairline); }
 .bar .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 400; font-size: 21px; letter-spacing: -0.01em; }
+.brand { display: flex; align-items: center; gap: 10px; font: 400 21px var(--wordmark); letter-spacing: -0.01em; }
 .brand-mark { width: 24px; height: 24px; }
 .brand-dot { width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle at 40% 40%, #fff, var(--student) 45%, rgba(110,134,188,0) 72%); box-shadow: 0 0 18px rgba(169,190,230,0.6); }
 .links { display: flex; gap: 28px; align-items: center; font-size: 15px; color: var(--soft); }
@@ -66,7 +69,7 @@ img { display: block; max-width: 100%; }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   height: 44px; padding: 0 20px; border-radius: 999px; border: 0;
-  font: 500 15px var(--sans); cursor: pointer; white-space: nowrap;
+  font: 510 15px var(--sans); cursor: pointer; white-space: nowrap;
   transition: transform .35s var(--spring-snappy), background .2s, opacity .2s;
 }
 .btn:active { transform: scale(0.96); }
@@ -82,7 +85,7 @@ img { display: block; max-width: 100%; }
 .hero-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,11,13,.4) 0%, rgba(10,11,13,0) 40%, rgba(10,11,13,.6) 80%, var(--ground) 100%); }
 .hero .wrap { position: relative; display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 56px; align-items: center; }
 @media (max-width: 900px) { .hero .wrap { grid-template-columns: 1fr; gap: 64px; } }
-h1, h2, h3 { font-weight: 500; letter-spacing: -0.025em; line-height: 1.04; }
+h1, h2, h3 { font-weight: 510; letter-spacing: -0.022em; line-height: 1.04; }
 h1 { font-size: clamp(42px, 6vw, 76px); }
 h2 { font-size: clamp(34px, 4.6vw, 56px); }
 h3 { font-size: 22px; letter-spacing: -0.01em; line-height: 1.2; }
@@ -154,7 +157,7 @@ section { padding: 140px 0; position: relative; }
 @media (max-width: 900px) { .split { grid-template-columns: 1fr; gap: 48px; } }
 .rules { list-style: none; display: grid; gap: 2px; margin-top: 40px; }
 .rules li { display: flex; gap: 16px; padding: 20px 0; border-top: 1px solid var(--hairline); color: var(--soft); }
-.rules li strong { color: var(--text); font-weight: 500; display: block; margin-bottom: 2px; }
+.rules li strong { color: var(--text); font-weight: 510; display: block; margin-bottom: 2px; }
 .rules .ico { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--glass-strong); font-family: var(--mono); font-size: 12px; color: var(--student); }
 
 /* Gap card visual */
@@ -172,13 +175,13 @@ section { padding: 140px 0; position: relative; }
 .gapcard p { margin-top: 10px; font-size: 15px; color: var(--soft); }
 .gapcard .row { display: flex; gap: 8px; margin-top: 20px; }
 .gapcard .row span { flex: 1; height: 40px; border-radius: 999px; display: grid; place-items: center; font-size: 14px; background: rgba(255,255,255,0.1); }
-.gapcard .row span:last-child { background: var(--silver); color: var(--ground); font-weight: 500; }
+.gapcard .row span:last-child { background: var(--silver); color: var(--ground); font-weight: 510; }
 
 /* Pricing */
 .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: stretch; }
 @media (max-width: 900px) { .plans { grid-template-columns: 1fr; } }
 .plan { display: flex; flex-direction: column; }
-.plan .price { font-size: 48px; letter-spacing: -0.03em; margin: 28px 0 4px; font-weight: 500; }
+.plan .price { font-size: 48px; letter-spacing: -0.03em; margin: 28px 0 4px; font-weight: 510; }
 .plan .price small { font-size: 16px; color: var(--muted); letter-spacing: 0; font-weight: 400; }
 .plan ul { list-style: none; margin: 24px 0 32px; display: grid; gap: 10px; color: var(--soft); font-size: 15px; }
 .plan ul li { padding-left: 22px; position: relative; }

@@ -52,7 +52,6 @@ button { font: inherit; color: inherit; }
 h1, h2, h3 { font-weight: var(--w-head); letter-spacing: -0.022em; line-height: 1.04; text-wrap: balance; }
 h2 { font-size: clamp(36px, 5.2vw, 68px); }
 h3 { font-size: 22px; letter-spacing: -0.015em; line-height: 1.25; }
-em.s { font-style: normal; }
 .dim { color: var(--dim); }
 .lead { color: var(--soft); font-size: clamp(18px, 1.5vw, 20px); max-width: 560px; }
 
@@ -182,7 +181,7 @@ section { position: relative; }
 .line { font-size: 14.5px; line-height: 1.35; padding: 10px 14px; border-radius: 20px; max-width: 86%; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
 .line.student { background: rgba(40,48,66,.75); color: #DCE5F6; align-self: flex-start; border-bottom-left-radius: 6px; }
 .line.you { background: rgba(30,31,35,.8); align-self: flex-end; border-bottom-right-radius: 6px; }
-.line.stall { color: var(--soft); font-style: italic; }
+.line.stall { color: var(--soft); }
 .gapflag { align-self: center; display: inline-flex; gap: 8px; align-items: center; padding: 7px 12px; border-radius: 999px; background: rgba(240,154,128,.13); color: var(--gap); font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .gapflag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--gap); box-shadow: 0 0 10px var(--gap); }
 .edge { position: absolute; left: -20%; right: -20%; bottom: -60px; height: 150px; border-radius: 50%; background: radial-gradient(closest-side, rgba(240,154,128,.55), rgba(240,154,128,0)); filter: blur(12px); animation: edge 2.4s ease-in-out infinite; z-index: -1; }
@@ -251,7 +250,7 @@ section { position: relative; }
 .sheet-in h3 { font-size: 28px; }
 .said { padding: 16px 18px; border-radius: 20px; background: rgba(255,255,255,.05); font-size: 15px; color: var(--soft); }
 .said b, .notes b { display: block; font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-.said q { font-style: italic; color: var(--text); }
+.said q { color: var(--text); }
 .notes { padding: 16px 18px; border-radius: 20px; background: rgba(169,190,230,.08); font-size: 15px; color: #D3DCEC; }
 .sheet-close { position: absolute; top: 16px; right: 16px; z-index: 2; width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(0,0,0,.45); color: var(--text); cursor: pointer; font-size: 18px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 .sheet-in .btn { width: 100%; height: 50px; }
@@ -400,22 +399,22 @@ footer .brand { font-size: 17px; color: var(--soft); }
         <div class="steps" id="steps">
           <div class="step on">
             <span class="eyebrow">1 · Bring your topic</span>
-            <h2>Start with your own <em class="s">notes.</em></h2>
+            <h2>Start with your own notes.</h2>
             <p>Add lecture slides, a PDF or a photo of your page. Or just say the topic. Fenny reads what you give it so it can check you against your course.</p>
           </div>
           <div class="step">
             <span class="eyebrow">2 · Teach Fenny</span>
-            <h2>Talk it through, like it's <em class="s">never heard of it.</em></h2>
+            <h2>Talk it through, like it's never heard of it.</h2>
             <p>No typing and no flashcards. You explain, and Fenny cuts in with the naive questions a clever first year would ask.</p>
           </div>
           <div class="step">
             <span class="eyebrow">3 · Hit a wall</span>
-            <h2>Where you stall is a <em class="s" style="color:var(--gap)">gap.</em></h2>
+            <h2>Where you stall is a gap.</h2>
             <p>That pause when you can't say why is the most useful moment of revision. Fenny notes it quietly and lets you carry on.</p>
           </div>
           <div class="step">
             <span class="eyebrow">4 · See what you missed</span>
-            <h2>Every gap, in <em class="s">plain words.</em></h2>
+            <h2>Every gap, in plain words.</h2>
             <p>After each session you see what you explained clearly and what you skipped, fudged or got wrong. Each gap becomes a card for later.</p>
           </div>
           <div class="dots" aria-hidden="true"><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i></div>
@@ -476,7 +475,7 @@ footer .brand { font-size: 17px; color: var(--soft); }
       <div class="rise">
         <div class="head" style="margin-bottom:0">
           <span class="eyebrow">Review</span>
-          <h2>Gaps come back <em class="s">right before</em> you'd forget.</h2>
+          <h2>Gaps come back right before you'd forget.</h2>
           <p class="lead">Each day Fenny deals you a short stack. Swipe through them on the bus, or tap one to open it. Try it here.</p>
         </div>
         <ul class="legend">
@@ -521,7 +520,7 @@ footer .brand { font-size: 17px; color: var(--soft); }
     <div class="wrap">
       <div class="head rise">
         <span class="eyebrow">Pricing</span>
-        <h2>Start free. Pay when it's <em class="s">working.</em></h2>
+        <h2>Start free. Pay when it's working.</h2>
       </div>
       <div class="plans">
         <div class="plan rise">
@@ -572,7 +571,7 @@ footer .brand { font-size: 17px; color: var(--soft); }
   <section class="final" id="join">
     <div class="wrap">
       <canvas class="ring final-ring" data-r="0.25" aria-hidden="true"></canvas>
-      <h2 class="rise"><span class="dim">Your exam is going to ask.</span><br>Let Fenny ask <em class="s">first.</em></h2>
+      <h2 class="rise"><span class="dim">Your exam is going to ask.</span><br>Let Fenny ask first.</h2>
       <form class="wait rise" data-wait>
         <input type="email" name="email" id="email-bottom" placeholder="Your university email" autocomplete="email" required aria-label="Email address">
         <button class="btn btn-solid" type="submit">Join the waitlist</button>
