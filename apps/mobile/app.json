@@ -34,7 +34,7 @@
         }
       ],
       "expo-asset",
-      "onnxruntime-react-native",
+      "./plugins/withOnnxruntime",
       "expo-router",
       "expo-image",
       "expo-font",
