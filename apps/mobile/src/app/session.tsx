@@ -2,11 +2,11 @@
 //   light     (S1): the student is the living light in the middle
 //   subtitles (S2): the question fills the screen, your voice glows along the bottom
 //   chat      (S3): the conversation as bubbles
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { lastTopic, me } from "../data/mock";
+import { minutesLeft, recordSession, useProfile } from "../data/profile";
 import { colour } from "../theme";
 import { DotWave } from "../ui/Dots";
 import { Backdrop, Glass, Icon, images, Label, PillButton, RoundButton, T } from "../ui/kit";
@@ -81,19 +81,19 @@ function clock(seconds: number) {
 export default function Session() {
   // A review card opens the session on its own topic and question.
   const params = useLocalSearchParams<{ topic?: string; prompt?: string }>();
-  const topic = params.topic ?? lastTopic.title;
+  const topic = params.topic?.trim() || "Anything you like";
+  const profile = useProfile();
   const opening = params.prompt ?? OPENING;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [view, setView] = useState<View3>("light");
-  const [voice, setVoice] = useState<LiveVoice>(phononAvailable ? "phonon" : "kitten");
+  const [voice, setVoice] = useState<LiveVoice>("sonic");
   const [ears, setEars] = useState<LiveEars>("auto");
   const [showSettings, setShowSettings] = useState(false);
   const loop = useLiveCall(topic, { voice, ears });
   const lastStat = loop.stats.at(-1);
 
-  const spokenBefore = useMemo(() => loop.stats.reduce((t, s) => t + s.speakingSeconds, 0), [loop.stats]);
-  const spoken = spokenBefore + (loop.phase === "listening" ? loop.liveSpeaking : 0);
+  const spoken = loop.heardSeconds + (loop.phase === "listening" ? loop.liveSpeaking : 0);
   const asked = [...loop.turns].reverse().find((t) => t.speaker === "student")?.text ?? opening;
   const question = loop.liveQuestion ?? asked;
   const lastYou = [...loop.turns].reverse().find((t) => t.speaker === "learner")?.text;
@@ -117,14 +117,24 @@ export default function Session() {
   const ringLabel =
     loop.phase === "listening" ? "Done, ask me" : loop.phase === "thinking" || loop.phase === "speaking" ? "Cut in" : "Start the call";
   // Stop the microphone, any pending turn and any reply before leaving.
+  // Save the topic and the speaking time, then back to Today. (Session
+  // feedback returns with gap analysis, build step 4.)
+  // Saved once, whether you tap End, close, or go back with the system.
+  const saved = useRef(false);
+  const latest = useRef({ spoken, questions: 0 });
+  latest.current = { spoken, questions: loop.turns.filter((t) => t.speaker === "student").length };
+  const save = useCallback(() => {
+    if (saved.current) return;
+    saved.current = true;
+    recordSession(topic, latest.current.spoken, latest.current.questions);
+  }, [topic]);
+  useEffect(() => save, [save]);
   const end = () => {
     loop.cancel();
-    router.replace("/feedback");
-  };
-  const close = () => {
-    loop.cancel();
+    save();
     router.back();
   };
+  const close = end;
 
   return (
     <View style={styles.root}>
@@ -199,7 +209,7 @@ export default function Session() {
               {topic}
             </T>
             <Label>
-              {clock(spoken)} · {Math.max(0, Math.floor(me.minutesLeft - spoken / 60))} min left
+              {clock(spoken)} · {minutesLeft(profile, spoken)} min left
             </Label>
           </View>
           <View style={{ flexDirection: "row", gap: 8 }}>

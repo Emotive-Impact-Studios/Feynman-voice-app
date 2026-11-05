@@ -1,68 +1,85 @@
-// H3: minutes and last topic, also shown when minutes run low.
-import { StyleSheet, View } from "react-native";
-import { lastTopic, me } from "../data/mock";
-import { colour } from "../theme";
+// Me, from the canvas board: what you've done first, minutes after.
+// Ideas mastered, streaks and gaps closed need gap analysis (build step 4),
+// so this shows only what the phone really knows.
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { minutesLeft, PROTOTYPE_MINUTES, type Profile } from "../data/profile";
 import { MinutesRing } from "../ui/Dots";
-import { Backdrop, Glass, images, Label, PillButton, T } from "../ui/kit";
+import { Glass, Label, T } from "../ui/kit";
 import { homeStyles } from "./styles";
+import { In, mins } from "./Today";
 
-export function Me({ top, onNew, onCarryOn }: { top: number; onNew: () => void; onCarryOn: () => void }) {
+export function Me({ profile, top, bottom, onReplayIntro }: { profile: Profile; top: number; bottom: number; onReplayIntro: () => void }) {
+  const left = minutesLeft(profile);
+  const sessions = profile.topics.reduce((n, t) => n + t.sessions, 0);
+  const questions = profile.topics.reduce((n, t) => n + t.questions, 0);
   return (
-    <>
-      <Backdrop source={images.horizon} opacity={0.5} flip offsetY={-380} />
-      <View style={[homeStyles.page, { paddingTop: top + 16, alignItems: "center" }]}>
-        <Label>Minutes left</Label>
-        <View style={{ marginTop: 22 }}>
-          <MinutesRing left={me.minutesLeft} total={me.minutesTotal} size={300} />
-        </View>
-        <T size={13} tone="muted" style={{ marginTop: -96 }}>
-          of {me.minutesTotal} · renews {me.renews}
+    <ScrollView contentContainerStyle={[homeStyles.scroll, { paddingTop: top + 70, paddingBottom: bottom + 130 }]} showsVerticalScrollIndicator={false}>
+      <In d={1}>
+        <Label style={{ marginTop: 40 }}>What you've done</Label>
+        <T size={40} weight="medium" style={{ marginTop: 10, lineHeight: 42 }}>
+          <T size={40} weight="mono">
+            {profile.topics.length}
+          </T>{" "}
+          {profile.topics.length === 1 ? "topic" : "topics"}
+          {"\n"}explained.
         </T>
-      </View>
-      <View style={styles.panelWrap}>
-        <Glass strong style={styles.panel}>
-          <Backdrop source={images.titanium} opacity={0.35} />
-          <View style={{ padding: 24, flex: 1 }}>
-            <View style={homeStyles.rowBetween}>
-              <Label tone="soft">Last topic</Label>
-              <Label tone="soft">
-                {lastTopic.clear} / {lastTopic.total} clear
-              </Label>
-            </View>
-            <T size={26} weight="medium" style={{ marginTop: 12 }}>
-              {lastTopic.title}
+      </In>
+      <In d={2}>
+        <View style={styles.stats}>
+          <Stat value={String(sessions)} label="sessions" />
+          <Stat value={String(questions)} label="questions answered" />
+          <Stat value={mins(profile.secondsUsed)} label="explaining" />
+        </View>
+      </In>
+
+      <In d={3}>
+        <Label style={{ marginTop: 28 }}>Minutes</Label>
+        <Glass style={styles.plan}>
+          <MinutesRing left={left} total={PROTOTYPE_MINUTES} size={140} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <T size={20} weight="semibold">
+              <T size={20} weight="mono">
+                {left}
+              </T>{" "}
+              min left
             </T>
-            <Progress clear={lastTopic.clear} gaps={lastTopic.gaps} total={lastTopic.total} />
-            <View style={{ flex: 1 }} />
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <PillButton label="New topic" onPress={onNew} style={{ flex: 1 }} />
-              <PillButton label="Carry on" variant="solid" onPress={onCarryOn} style={{ flex: 1.4 }} />
-            </View>
+            <T size={13} tone="soft">
+              Of {PROTOTYPE_MINUTES} in this prototype. Plans come later.
+            </T>
+            <T size={12} tone="muted" style={{ marginTop: 4 }}>
+              Only your speaking time counts. The student's questions are free.
+            </T>
           </View>
         </Glass>
-      </View>
-    </>
+      </In>
+
+      <In d={4}>
+        <Label style={{ marginTop: 28 }}>{profile.name || "You"}</Label>
+        <Glass style={{ marginTop: 10, borderRadius: 24 }}>
+          <Pressable onPress={onReplayIntro} style={styles.rowBtn} accessibilityRole="button">
+            <T size={15}>Play the intro again</T>
+          </Pressable>
+        </Glass>
+      </In>
+    </ScrollView>
   );
 }
 
-function Progress({ clear, gaps, total }: { clear: number; gaps: number; total: number }) {
+function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <View
-      style={{ flexDirection: "row", gap: 4, marginTop: 16 }}
-      accessible
-      accessibilityLabel={`${clear} of ${total} clear, ${gaps} gaps`}
-    >
-      {Array.from({ length: total }, (_, i) => (
-        <View
-          key={i}
-          style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i < clear ? colour.clear : i < clear + gaps ? colour.gap : "rgba(255,255,255,0.15)" }}
-        />
-      ))}
-    </View>
+    <Glass style={{ flex: 1, borderRadius: 20, padding: 14, gap: 2 }}>
+      <T size={22} weight="mono" style={{ lineHeight: 26 }}>
+        {value}
+      </T>
+      <T size={12} tone="soft">
+        {label}
+      </T>
+    </Glass>
   );
 }
 
 const styles = StyleSheet.create({
-  panelWrap: { position: "absolute", left: 10, right: 10, bottom: 100, height: 250 },
-  panel: { flex: 1, borderRadius: 38 },
+  stats: { marginTop: 18, flexDirection: "row", gap: 8 },
+  plan: { marginTop: 10, borderRadius: 24, flexDirection: "row", alignItems: "center", gap: 10, padding: 8, paddingRight: 16 },
+  rowBtn: { paddingVertical: 16, paddingHorizontal: 18 },
 });

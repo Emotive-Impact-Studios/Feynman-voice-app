@@ -78,6 +78,9 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const clips = useRef(new ClipQueue());
   const phononReady = useRef(false);
   const callOn = useRef(false);
+  // Speaking seconds of every turn the server has heard, counted when its
+  // transcript arrives, so ending mid-reply still keeps them.
+  const [heardSeconds, setHeardSeconds] = useState(0);
 
   const onBuffer = useCallback((buf: AudioStreamBuffer) => {
     let samples = new Float32Array(buf.data);
@@ -242,6 +245,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       }
       if (e.type === "done") {
         done = e;
+        setHeardSeconds((n) => n + speakingSeconds);
         setTurns((t) => [...t, { speaker: "learner", text: e.transcript }, { speaker: "student", text: e.question }]);
       }
       if (e.type === "error") throw new Error(e.error);
@@ -312,6 +316,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     error,
     notice,
     turns,
+    /** Speaking seconds of every turn the student has heard. */
+    heardSeconds,
     stats,
     liveQuestion,
     liveSpeaking,
