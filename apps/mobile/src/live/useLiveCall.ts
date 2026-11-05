@@ -67,6 +67,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   // Microphone state for the turn being heard.
   const parts = useRef<Float32Array[]>([]);
   const resampler = useRef<Resampler | null>(null);
+  const resamplerRate = useRef(0);
   const meter = useRef(new SpeechMeter());
   const endOfTurn = useRef(new EndOfTurn());
   const bargeIn = useRef(new BargeIn());
@@ -87,7 +88,11 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const onBuffer = useCallback((buf: AudioStreamBuffer) => {
     let samples = new Float32Array(buf.data);
     if (buf.channels > 1) samples = samples.filter((_, i) => i % buf.channels === 0);
-    resampler.current ??= new Resampler(buf.sampleRate, RATE);
+    // A new audio route can bring a new rate: start a fresh resampler then.
+    if (!resampler.current || resamplerRate.current !== buf.sampleRate) {
+      resampler.current = new Resampler(buf.sampleRate, RATE);
+      resamplerRate.current = buf.sampleRate;
+    }
     const down = resampler.current.push(samples);
     const seconds = down.length / RATE;
     const p = phaseRef.current;
@@ -107,9 +112,35 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     }
   }, []);
 
-  const { stream } = useAudioStream({ sampleRate: RATE, channels: 1, encoding: "float32", onBuffer });
+  const { stream, isStreaming } = useAudioStream({ sampleRate: RATE, channels: 1, encoding: "float32", onBuffer });
   const streamRef = useRef(stream);
   streamRef.current = stream;
+
+  // The microphone can stop on its own mid-call, if iOS changes the audio
+  // route and it cannot come back. Try once to open it again; otherwise say
+  // so, rather than sit "listening" to nothing. Ending the call clears
+  // callOn first, so that stop is never mistaken for this.
+  const wasStreaming = useRef(false);
+  useEffect(() => {
+    if (isStreaming) {
+      wasStreaming.current = true;
+      return;
+    }
+    if (!wasStreaming.current || !callOn.current) return;
+    wasStreaming.current = false;
+    silence();
+    resampler.current = null;
+    Promise.resolve()
+      .then(() => streamRef.current.start())
+      .then(() => {
+        if (callOn.current) resumeListening(true);
+      })
+      .catch(() => {
+        callOn.current = false;
+        setError("The microphone stopped. End the call and start it again.");
+        setPhase("error");
+      });
+  }, [isStreaming]);
 
   /** Fresh buffers for a new turn. `keep` carries audio over (cutting in). */
   const freshTurn = (keep?: Float32Array) => {

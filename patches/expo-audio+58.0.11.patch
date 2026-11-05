@@ -14,7 +14,7 @@ index 42ce9e8..6430a53 100644
      return registry.allRecorders.values.contains { $0.isRecording }
      #else
 diff --git a/node_modules/expo-audio/ios/AudioStream.swift b/node_modules/expo-audio/ios/AudioStream.swift
-index 1534fe5..15182d7 100644
+index 1534fe5..3e48718 100644
 --- a/node_modules/expo-audio/ios/AudioStream.swift
 +++ b/node_modules/expo-audio/ios/AudioStream.swift
 @@ -16,7 +16,17 @@ class AudioStream: SharedObject {
@@ -36,8 +36,11 @@ index 1534fe5..15182d7 100644
    private var startTimestamp: AVAudioTime?
  
    private var fileWriter: AudioStreamFileWriter?
-@@ -34,13 +44,37 @@ class AudioStream: SharedObject {
+@@ -32,15 +42,43 @@ class AudioStream: SharedObject {
+ 
+   func start() throws {
      guard !isStreaming else { return }
++    generation += 1
  
      let session = AVAudioSession.sharedInstance()
 -    try session.setCategory(.record, mode: .measurement)
@@ -63,6 +66,9 @@ index 1534fe5..15182d7 100644
 +  // stops playing). Without a restart the mic went silent after the first
 +  // reply. So the engine is built here, and built again on a change.
 +  private var configObserver: NSObjectProtocol?
++  // Bumped on every start and stop, so a restart retry left over from an
++  // earlier run never touches a newer one.
++  private var generation = 0
 +
 +  private func startEngine() throws {
      let engine = AVAudioEngine()
@@ -75,7 +81,7 @@ index 1534fe5..15182d7 100644
  
      let targetSampleRate = requestedSampleRate
      let targetChannels = AVAudioChannelCount(requestedChannels)
-@@ -69,9 +103,8 @@ class AudioStream: SharedObject {
+@@ -69,9 +107,8 @@ class AudioStream: SharedObject {
          channels = Int(hardwareFormat.channelCount)
          setupTapWithoutConversion(engine: engine, inputNode: inputNode, format: hardwareFormat)
          self.audioEngine = engine
@@ -86,7 +92,7 @@ index 1534fe5..15182d7 100644
          return
        }
        self.converter = conv
-@@ -98,13 +131,57 @@ class AudioStream: SharedObject {
+@@ -98,13 +135,71 @@ class AudioStream: SharedObject {
      }
  
      self.audioEngine = engine
@@ -103,7 +109,8 @@ index 1534fe5..15182d7 100644
 +      object: engine,
 +      queue: .main
 +    ) { [weak self] _ in
-+      self?.restartEngine()
++      guard let self else { return }
++      self.restartEngine(generation: self.generation)
 +    }
 +  }
 +
@@ -118,8 +125,8 @@ index 1534fe5..15182d7 100644
 +    converter = nil
 +  }
 +
-+  private func restartEngine(attempt: Int = 0) {
-+    guard isStreaming else { return }
++  private func restartEngine(generation: Int, attempt: Int = 0) {
++    guard isStreaming, generation == self.generation else { return }
 +    tearDownEngine()
 +    do {
 +      try startEngine()
@@ -127,18 +134,31 @@ index 1534fe5..15182d7 100644
 +      // The new route may not be ready yet: try again shortly, then give up.
 +      if attempt < 3 {
 +        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-+          self?.restartEngine(attempt: attempt + 1)
++          self?.restartEngine(generation: generation, attempt: attempt + 1)
 +        }
 +        return
 +      }
++      // Give up: the stream ends as if stop() were called, so JS hears it
++      // stopped and any file recording is finished.
++      self.generation += 1
 +      isStreaming = false
 +      startTimestamp = nil
 +      emitStatus()
++      finishFileRecording()
++    }
++  }
++
++  private func finishFileRecording() {
++    fileWriterQueue.sync {
++      _ = try? self.fileWriter?.finish()
++      self.fileWriter = nil
++      self.fileWriterError = nil
 +    }
    }
  
    func stop() {
      guard isStreaming else { return }
++    generation += 1
 +    if let configObserver {
 +      NotificationCenter.default.removeObserver(configObserver)
 +      self.configObserver = nil
@@ -146,7 +166,20 @@ index 1534fe5..15182d7 100644
      audioEngine?.inputNode.removeTap(onBus: 0)
      audioEngine?.stop()
      audioEngine = nil
-@@ -285,3 +362,19 @@ internal final class AudioStreamException: GenericException<String> {
+@@ -116,11 +211,7 @@ class AudioStream: SharedObject {
+     // Auto-finalize any in-progress file recording.
+     // removeTap above ensures no more data is dispatched to fileWriterQueue;
+     // syncing on the queue drains any appends already in flight before closing the writer.
+-    fileWriterQueue.sync {
+-      _ = try? self.fileWriter?.finish()
+-      self.fileWriter = nil
+-      self.fileWriterError = nil
+-    }
++    finishFileRecording()
+   }
+ 
+   func startFileRecording(url: URL, format: AudioStreamFileFormat) throws -> String {
+@@ -285,3 +376,19 @@ internal final class AudioStreamException: GenericException<String> {
      param
    }
  }
