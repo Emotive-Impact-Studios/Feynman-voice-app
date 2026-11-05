@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fenny · Teach it to know it</title>
+<meta name="description" content="Fenny is a curious student that knows nothing. Explain your topic out loud, answer its questions, and find the gaps in what you know before your exam does.">
+<meta name="theme-color" content="#0A0B0D">
+<meta property="og:title" content="Fenny · Teach it to know it">
+<meta property="og:description" content="Explain it out loud. Find what you missed. A voice study partner for university students.">
+<meta property="og:image" content="img/intro-dawn.webp">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ground: #0A0B0D;
+  --glass: rgba(255,255,255,0.06);
+  --glass-strong: rgba(255,255,255,0.09);
+  --hairline: rgba(255,255,255,0.10);
+  --text: #F2F3F5;
+  --soft: #A9ADB4;
+  --muted: #8E929A;
+  --dim: #6F737B;
+  --silver: #E6E9EE;
+  --student: #A9BEE6;
+  --gap: #F09A80;
+  --sans: "Instrument Sans", system-ui, -apple-system, sans-serif;
+  --mono: "Geist Mono", ui-monospace, monospace;
+  /* Springs from the motion notes: smooth 550ms/0.85, snappy 350ms/0.9 */
+  --spring-smooth: linear(0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%, 1.017 19.8%, 1.051 22.6%, 1.059 25.8%, 1.035 33.3%, 1.004 42.6%, 0.995 52.9%, 1);
+  --spring-snappy: linear(0, 0.06, 0.24 4.5%, 0.79 13%, 0.98 18%, 1.02 22%, 1.01 30%, 1);
+  --page: min(1120px, calc(100vw - 32px));
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: var(--ground); scroll-behavior: smooth; }
+body {
+  background: var(--ground);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+.wrap { width: var(--page); margin: 0 auto; }
+.mono { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.dim { color: var(--dim); }
+
+/* Top bar */
+.bar {
+  position: fixed; inset: 0 0 auto 0; z-index: 50;
+  transition: background .4s, backdrop-filter .4s, border-color .4s;
+  border-bottom: 1px solid transparent;
+}
+.bar.scrolled { background: rgba(10,11,13,0.72); backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4); border-color: var(--hairline); }
+.bar .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 19px; letter-spacing: -0.01em; }
+.brand-dot { width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle at 40% 40%, #fff, var(--student) 45%, rgba(110,134,188,0) 72%); box-shadow: 0 0 18px rgba(169,190,230,0.6); }
+.links { display: flex; gap: 28px; align-items: center; font-size: 15px; color: var(--soft); }
+.links a:hover { color: var(--text); }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px; padding: 0 20px; border-radius: 999px; border: 0;
+  font: 500 15px var(--sans); cursor: pointer; white-space: nowrap;
+  transition: transform .35s var(--spring-snappy), background .2s, opacity .2s;
+}
+.btn:active { transform: scale(0.96); }
+.btn-solid { background: var(--silver); color: var(--ground); }
+.btn-solid:hover { background: #fff; }
+.btn-glass { background: var(--glass-strong); color: var(--text); }
+.btn-glass:hover { background: rgba(255,255,255,0.14); }
+@media (max-width: 720px) { .links a:not(.btn) { display: none; } }
+
+/* Hero */
+.hero { position: relative; min-height: 100svh; display: flex; align-items: center; padding: 120px 0 80px; overflow: hidden; }
+.hero-bg { position: absolute; inset: 0; background: url(img/intro-dawn.webp) center 70% / cover no-repeat; opacity: .55; }
+.hero-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,11,13,.4) 0%, rgba(10,11,13,0) 40%, rgba(10,11,13,.6) 80%, var(--ground) 100%); }
+.hero .wrap { position: relative; display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 56px; align-items: center; }
+@media (max-width: 900px) { .hero .wrap { grid-template-columns: 1fr; gap: 64px; } }
+h1, h2, h3 { font-weight: 500; letter-spacing: -0.025em; line-height: 1.04; }
+h1 { font-size: clamp(42px, 6vw, 76px); }
+h2 { font-size: clamp(34px, 4.6vw, 56px); }
+h3 { font-size: 22px; letter-spacing: -0.01em; line-height: 1.2; }
+.lead-dim { color: var(--dim); display: block; }
+.hero p.sub { margin-top: 24px; font-size: clamp(18px, 1.6vw, 20px); color: var(--soft); max-width: 520px; }
+.hero .mono { margin-bottom: 22px; display: block; }
+
+form.wait { margin-top: 36px; display: flex; gap: 8px; max-width: 460px; padding: 6px; border-radius: 999px; background: var(--glass); border: 1px solid var(--hairline); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+form.wait input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font: 400 16px var(--sans); padding: 0 16px; }
+form.wait input::placeholder { color: var(--dim); }
+form.wait .btn { height: 48px; }
+.form-note { margin-top: 14px; font-size: 14px; color: var(--dim); min-height: 21px; }
+.form-note.ok { color: var(--student); }
+.form-note.err { color: var(--gap); }
+@media (max-width: 420px) { form.wait { flex-direction: column; border-radius: 28px; } form.wait input { height: 48px; } }
+
+/* Phone */
+.phone {
+  justify-self: center; width: 320px; max-width: 100%; aspect-ratio: 9 / 19.2; border-radius: 52px; position: relative; overflow: hidden;
+  background: linear-gradient(180deg, #050607 0%, #050607 30%, rgba(5,6,7,0) 55%, rgba(5,6,7,0) 75%, rgba(5,6,7,.7) 100%), #050607 url(img/horizon.webp) center 160% / 120% auto no-repeat;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 0 0 10px #111316, 0 0 0 11px rgba(255,255,255,0.08), 0 60px 120px -20px rgba(0,0,0,.8), 0 0 140px -30px rgba(169,190,230,0.35);
+}
+.phone::before { content: ""; position: absolute; top: 12px; left: 50%; translate: -50% 0; width: 96px; height: 28px; border-radius: 20px; background: #000; z-index: 3; }
+.phone-top { position: absolute; top: 56px; left: 0; right: 0; text-align: center; z-index: 2; }
+.phone-top .mono { font-size: 10px; }
+.phone-top div:last-child { font-size: 15px; margin-top: 4px; }
+
+/* The living light */
+.light { position: absolute; left: 50%; top: 34%; width: 200px; height: 200px; translate: -50% -50%; opacity: .78; }
+.light span { position: absolute; inset: 0; border-radius: 50%; filter: blur(28px); mix-blend-mode: screen; }
+.light span:nth-child(1) { background: #8EA6D4; animation: drift1 9s ease-in-out infinite; }
+.light span:nth-child(2) { background: #C7CFDC; inset: 25%; animation: drift2 11s ease-in-out infinite; opacity: .8; }
+.light span:nth-child(3) { background: #6E86BC; inset: 10%; animation: drift3 13s ease-in-out infinite; opacity: .7; }
+.light i { position: absolute; inset: 42%; border-radius: 50%; background: #fff; filter: blur(10px); animation: breathe 3.2s ease-in-out infinite; }
+.light.talking i { animation-duration: .9s; }
+@keyframes drift1 { 50% { transform: translate(14px, -10px) scale(0.86); } }
+@keyframes drift2 { 50% { transform: translate(-18px, 12px) scale(1.15); } }
+@keyframes drift3 { 50% { transform: translate(8px, 16px) scale(0.9); } }
+@keyframes breathe { 50% { transform: scale(1.25); opacity: .8; } }
+
+.lines { position: absolute; left: 22px; right: 22px; bottom: 116px; z-index: 2; display: flex; flex-direction: column; gap: 10px; }
+.line { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); font-size: 15px; line-height: 1.35; padding: 10px 14px; border-radius: 20px; max-width: 86%; opacity: 0; transform: translateY(12px) scale(.96); transition: opacity .5s, transform .55s var(--spring-smooth); }
+.line.in { opacity: 1; transform: none; }
+.line.student { background: rgba(40,48,66,0.72); color: #DCE5F6; align-self: flex-start; border-bottom-left-radius: 6px; }
+.line.you { background: rgba(30,31,35,0.78); align-self: flex-end; border-bottom-right-radius: 6px; }
+.phone-ring { position: absolute; bottom: 34px; left: 50%; translate: -50% 0; width: 60px; height: 60px; border-radius: 50%; z-index: 2;
+  background: conic-gradient(#5B5F66, #F2F4F7, #8E939B, #FFFFFF, #666A72, #CDD1D7, #5B5F66); padding: 2px; }
+.phone-ring::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: #0D0E11; }
+.phone-ring b { position: absolute; inset: 22px; border-radius: 50%; background: var(--silver); z-index: 1; }
+
+/* Sections */
+section { padding: 140px 0; position: relative; }
+@media (max-width: 720px) { section { padding: 96px 0; } }
+.head { max-width: 720px; margin-bottom: 64px; }
+.head .mono { display: block; margin-bottom: 18px; }
+.head p { margin-top: 20px; color: var(--soft); font-size: 19px; }
+
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 900px) { .steps { grid-template-columns: 1fr; } }
+.card { background: var(--glass); border: 1px solid var(--hairline); border-radius: 32px; padding: 32px; position: relative; overflow: hidden; }
+.card .num { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-bottom: 64px; display: block; }
+.card p { color: var(--soft); margin-top: 12px; font-size: 16px; }
+
+/* Rule split */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; gap: 48px; } }
+.rules { list-style: none; display: grid; gap: 2px; margin-top: 40px; }
+.rules li { display: flex; gap: 16px; padding: 20px 0; border-top: 1px solid var(--hairline); color: var(--soft); }
+.rules li strong { color: var(--text); font-weight: 500; display: block; margin-bottom: 2px; }
+.rules .ico { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--glass-strong); font-family: var(--mono); font-size: 12px; color: var(--student); }
+
+/* Gap card visual */
+.gapstack { position: relative; height: 520px; overflow: hidden; overflow: clip; overflow-clip-margin: 40px; display: grid; place-items: center; }
+.gapcard { position: absolute; width: 300px; height: 420px; border-radius: 34px; overflow: hidden; padding: 28px; display: flex; flex-direction: column; justify-content: flex-end;
+  background: #120E0D url(img/card-gap.webp) center / cover; box-shadow: 0 40px 80px -20px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,0.08); transition: transform .6s var(--spring-smooth); }
+.gapcard::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,11,13,0) 30%, rgba(10,11,13,.92) 85%); }
+.gapcard > * { position: relative; }
+.gapcard.back { transform: rotate(-9deg) translate(-70px, 18px) scale(.92); filter: brightness(.6) saturate(.7); background-image: url(img/aurora.webp); }
+.gapcard.mid { transform: rotate(7deg) translate(64px, 8px) scale(.96); filter: brightness(.75); background-image: url(img/intro-trails.webp); }
+.gapstack:hover .gapcard.front { transform: translateY(-10px) rotate(-1deg); }
+.tag { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--gap); }
+.tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--gap); box-shadow: 0 0 10px var(--gap); }
+.gapcard h3 { margin-top: 12px; font-size: 24px; }
+.gapcard p { margin-top: 10px; font-size: 15px; color: var(--soft); }
+.gapcard .row { display: flex; gap: 8px; margin-top: 20px; }
+.gapcard .row span { flex: 1; height: 40px; border-radius: 999px; display: grid; place-items: center; font-size: 14px; background: rgba(255,255,255,0.1); }
+.gapcard .row span:last-child { background: var(--silver); color: var(--ground); font-weight: 500; }
+
+/* Pricing */
+.plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: stretch; }
+@media (max-width: 900px) { .plans { grid-template-columns: 1fr; } }
+.plan { display: flex; flex-direction: column; }
+.plan .price { font-size: 48px; letter-spacing: -0.03em; margin: 28px 0 4px; font-weight: 500; }
+.plan .price small { font-size: 16px; color: var(--muted); letter-spacing: 0; font-weight: 400; }
+.plan ul { list-style: none; margin: 24px 0 32px; display: grid; gap: 10px; color: var(--soft); font-size: 15px; }
+.plan ul li { padding-left: 22px; position: relative; }
+.plan ul li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 8px; height: 8px; border-radius: 50%; background: var(--student); opacity: .7; }
+.plan .btn { margin-top: auto; width: 100%; height: 48px; }
+.plan.featured { background: linear-gradient(180deg, rgba(169,190,230,0.12), rgba(255,255,255,0.04)); }
+.plan.featured::after { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: conic-gradient(from 200deg, #5B5F66, #F2F4F7, #8E939B, #FFFFFF, #666A72, #CDD1D7, #5B5F66);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; opacity: .6; }
+.pill { position: absolute; top: 28px; right: 28px; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 6px 10px; border-radius: 999px; background: rgba(169,190,230,0.16); color: var(--student); }
+.price-note { margin-top: 24px; font-size: 14px; color: var(--dim); }
+
+/* FAQ */
+.faq { max-width: 780px; }
+details { border-top: 1px solid var(--hairline); }
+details:last-child { border-bottom: 1px solid var(--hairline); }
+summary { list-style: none; cursor: pointer; padding: 26px 0; font-size: 20px; display: flex; justify-content: space-between; gap: 24px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; font-family: var(--mono); color: var(--muted); transition: transform .35s var(--spring-snappy); }
+details[open] summary::after { transform: rotate(45deg); }
+details p { color: var(--soft); padding: 0 0 26px; max-width: 640px; }
+
+/* Final call */
+.final { text-align: center; padding: 160px 0 120px; overflow: hidden; }
+.final .light { position: relative; left: auto; top: auto; translate: none; margin: 0 auto 48px; width: 180px; height: 180px; }
+.final h2 { max-width: 760px; margin: 0 auto; }
+.final form.wait { margin: 40px auto 0; }
+.final .form-note { text-align: center; }
+
+footer { border-top: 1px solid var(--hairline); padding: 40px 0 56px; color: var(--dim); font-size: 14px; }
+footer .wrap { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+
+/* Reveal on scroll */
+.rise { opacity: 0; transform: translateY(28px); filter: blur(6px); transition: opacity .7s, transform .8s var(--spring-smooth), filter .7s; }
+.rise.on { opacity: 1; transform: none; filter: none; }
+
+@media (max-width: 480px) { .gapcard { width: 260px; height: 380px; } .gapcard.back { transform: rotate(-8deg) translate(-40px, 14px) scale(.92); } .gapcard.mid { transform: rotate(6deg) translate(40px, 8px) scale(.96); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .rise { opacity: 1; transform: none; filter: none; }
+  .line { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="bar" id="bar">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Fenny home"><span class="brand-dot"></span>Fenny</a>
+    <nav class="links">
+      <a href="#how">How it works</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">Questions</a>
+      <a class="btn btn-solid" href="#join">Join the waitlist</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="wrap">
+      <div>
+        <span class="mono">Teach Fenny · For university students</span>
+        <h1><span class="lead-dim">Explain it out loud.</span>Find what you missed.</h1>
+        <p class="sub">Fenny is a curious student who knows nothing about your subject. Teach it by voice. It asks the simple questions your examiner will, and it never hands you the answer.</p>
+        <form class="wait" data-wait>
+          <input type="email" name="email" placeholder="Your email" autocomplete="email" required aria-label="Email address">
+          <button class="btn btn-solid" type="submit">Join the waitlist</button>
+        </form>
+        <p class="form-note" data-note>iPhone first. We'll email you once, when it's ready.</p>
+      </div>
+
+      <div class="phone" aria-label="A Fenny session in progress">
+        <div class="phone-top"><div class="mono">Teaching</div><div>Hydrogen bonds</div></div>
+        <div class="light" id="phoneLight" aria-hidden="true"><span></span><span></span><span></span><i></i></div>
+        <div class="lines" id="lines" aria-live="off"></div>
+        <div class="phone-ring" aria-hidden="true"><b></b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="head rise">
+        <span class="mono">How it works</span>
+        <h2><span class="lead-dim">Ten minutes of talking</span>beats an hour of rereading.</h2>
+        <p>It's the Feynman technique, made easy. If you can teach something to someone who knows nothing, you understand it. Where you stall is a gap.</p>
+      </div>
+      <div class="steps">
+        <div class="card rise">
+          <span class="num">01</span>
+          <h3>Bring your topic</h3>
+          <p>Add lecture slides, a PDF or a photo of your notes. Or just say the topic out loud.</p>
+        </div>
+        <div class="card rise">
+          <span class="num">02</span>
+          <h3>Teach Fenny</h3>
+          <p>Talk it through like a friend is listening. Fenny cuts in with the questions you'd rather not be asked.</p>
+        </div>
+        <div class="card rise">
+          <span class="num">03</span>
+          <h3>See your gaps</h3>
+          <p>We check what you said against your notes. Every weak spot comes back for another go on the right day.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap split">
+      <div class="rise">
+        <span class="mono">Why it works</span>
+        <h2 style="margin-top:18px"><span class="lead-dim">Fenny won't explain it.</span>That's the point.</h2>
+        <ul class="rules">
+          <li><span class="ico">?</span><div><strong>It only asks</strong>Naive questions push you to say it simply. Saying it simply is how you find out if you know it.</div></li>
+          <li><span class="ico">↺</span><div><strong>Gaps come back</strong>Anything you skipped, fudged or got wrong turns into a card that returns when you're about to forget it.</div></li>
+          <li><span class="ico">✳</span><div><strong>It uses your notes</strong>Fenny checks you against your course, not the whole internet, so the gaps it finds are the ones that matter.</div></li>
+        </ul>
+      </div>
+      <div class="gapstack rise" aria-hidden="true">
+        <div class="gapcard back"></div>
+        <div class="gapcard mid"></div>
+        <div class="gapcard front">
+          <span class="tag">Gap</span>
+          <h3>Why water's boiling point is so high</h3>
+          <p>You named hydrogen bonds but didn't say why they need more energy to break.</p>
+          <div class="row"><span>Tomorrow</span><span>Explain now</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing">
+    <div class="wrap">
+      <div class="head rise">
+        <span class="mono">Pricing</span>
+        <h2><span class="lead-dim">Start free.</span>Pay when it's working.</h2>
+      </div>
+      <div class="plans">
+        <div class="card plan rise">
+          <span class="mono">Free</span>
+          <div class="price">£0</div>
+          <span class="dim">Try it on one topic</span>
+          <ul>
+            <li>10 minutes of teaching a month</li>
+            <li>Gap cards after every session</li>
+            <li>Upload your own notes</li>
+          </ul>
+          <a class="btn btn-glass" href="#join">Join the waitlist</a>
+        </div>
+        <div class="card plan featured rise">
+          <span class="pill">Most students</span>
+          <span class="mono">Student</span>
+          <div class="price">£7.99 <small>/ month</small></div>
+          <span class="dim">For steady revision all term</span>
+          <ul>
+            <li>200 minutes a month</li>
+            <li>Natural voice for Fenny</li>
+            <li>Review queue that brings gaps back</li>
+            <li>Cancel any time</li>
+          </ul>
+          <a class="btn btn-solid" href="#join">Join the waitlist</a>
+        </div>
+        <div class="card plan rise">
+          <span class="mono">Exam pass</span>
+          <div class="price">£21.99 <small>once</small></div>
+          <span class="dim">Three months, no subscription</span>
+          <ul>
+            <li>400 minutes to use over 3 months</li>
+            <li>Everything in Student</li>
+            <li>Made for exam season</li>
+          </ul>
+          <a class="btn btn-glass" href="#join">Join the waitlist</a>
+        </div>
+      </div>
+      <p class="price-note rise">Launch prices, which may change before release. Prices include VAT.</p>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="head rise">
+        <span class="mono">Questions</span>
+        <h2>Good ones, too.</h2>
+      </div>
+      <div class="faq rise">
+        <details>
+          <summary>Will Fenny explain things I don't understand?</summary>
+          <p>No. Fenny is your student, not your tutor. When you get stuck it asks a smaller question to help you find your way, and the gap goes on your list so you can look it up in your own notes.</p>
+        </details>
+        <details>
+          <summary>Do I have to upload notes?</summary>
+          <p>No. You can just say a topic and start talking. Notes help Fenny check you against your course, so the gaps it finds are more useful.</p>
+        </details>
+        <details>
+          <summary>What subjects does it work for?</summary>
+          <p>Anything you can explain out loud: sciences, law, history, economics, medicine, philosophy. If it's on a slide, you can teach it.</p>
+        </details>
+        <details>
+          <summary>When can I use it?</summary>
+          <p>We're testing it with a small group of students now. iPhone comes first, Android after. Join the waitlist and we'll let you know when it's your turn.</p>
+        </details>
+        <details>
+          <summary>Is it only for UK students?</summary>
+          <p>We're starting with UK universities, but it works for anyone studying in English.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="final" id="join">
+    <div class="wrap">
+      <div class="light rise" aria-hidden="true"><span></span><span></span><span></span><i></i></div>
+      <h2 class="rise"><span class="lead-dim">Your exam is going to ask.</span>Let Fenny ask first.</h2>
+      <form class="wait rise" data-wait>
+        <input type="email" name="email" placeholder="Your email" autocomplete="email" required aria-label="Email address">
+        <button class="btn btn-solid" type="submit">Join the waitlist</button>
+      </form>
+      <p class="form-note" data-note>No spam. One email when it's ready.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Fenny. Teach it to know it.</span>
+    <span>Made in the UK</span>
+  </div>
+</footer>
+
+<script>
+// Glass top bar once the page scrolls
+const bar = document.getElementById('bar');
+const onScroll = () => bar.classList.toggle('scrolled', scrollY > 24);
+addEventListener('scroll', onScroll, { passive: true }); onScroll();
+
+// Staggered reveal on scroll
+const io = new IntersectionObserver((entries) => {
+  entries.forEach((e) => {
+    if (!e.isIntersecting) return;
+    const sibs = [...e.target.parentElement.children].filter((c) => c.classList.contains('rise'));
+    e.target.style.transitionDelay = (Math.max(0, sibs.indexOf(e.target)) * 70) + 'ms';
+    e.target.classList.add('on');
+    io.unobserve(e.target);
+  });
+}, { threshold: 0.15 });
+document.querySelectorAll('.rise').forEach((el) => io.observe(el));
+
+// The demo conversation in the phone
+const script = [
+  ['you', 'Water has a high boiling point because of hydrogen bonds.'],
+  ['student', 'What is a hydrogen bond, though?'],
+  ['you', 'A weak pull between molecules, I think…'],
+  ['student', 'Weak how? Like a magnet?'],
+  ['you', 'Sort of. The oxygen end is slightly negative and…'],
+  ['student', 'So why does that make it harder to boil?'],
+];
+const lines = document.getElementById('lines');
+const light = document.getElementById('phoneLight');
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let i = 0;
+function next() {
+  const [who, text] = script[i % script.length];
+  const el = document.createElement('div');
+  el.className = 'line ' + who; el.textContent = text;
+  lines.appendChild(el);
+  while (lines.children.length > 3) lines.firstElementChild.remove();
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
+  light.classList.toggle('talking', who === 'student');
+  i++;
+  setTimeout(next, who === 'student' ? 2600 : 3200);
+}
+if (still) script.slice(0, 3).forEach(([who, text]) => { const el = document.createElement('div'); el.className = 'line in ' + who; el.textContent = text; lines.appendChild(el); });
+else setTimeout(next, 700);
+
+// Waitlist
+document.querySelectorAll('[data-wait]').forEach((form) => {
+  const note = form.nextElementSibling;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = form.querySelector('button');
+    const email = form.email.value.trim();
+    btn.disabled = true; btn.style.opacity = .6;
+    try {
+      const res = await fetch('/api/waitlist', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, source: location.hash || 'site' }) });
+      if (!res.ok) throw new Error(String(res.status));
+      form.reset();
+      note.className = 'form-note ok'; note.textContent = "You're on the list. Fenny can't wait to be confused by you.";
+    } catch {
+      note.className = 'form-note err'; note.textContent = "That didn't go through. Please try again in a moment.";
+    } finally { btn.disabled = false; btn.style.opacity = ''; }
+  });
+});
+</script>
+</body>
+</html>
