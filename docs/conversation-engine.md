@@ -13,7 +13,11 @@ Each turn of a live call (`apps/api/src/live.ts`, when `FENNY_ENGINE` is not `of
    the second gets the Show me offer (or a let-go on phones without it); asking
    to be told opens Show me; no repeated moves; listening at most once in three
    turns; the 30 second retell from turn 7 and by turn 12, then a warm close
-   with "which bit felt shakiest?".
+   with "which bit felt shakiest?", then a short thank-you and goodbye (`wrap`;
+   the phone can end the call when it sees that move). The engine reads the whole
+   call history for these counts and sends only the last 20 lines to the model.
+   Lines the next turn reads back (offer, Show me, retell, close, wrap) are forced
+   into recognisable wording in code.
 3. **One line** (`engine/engine.ts`): the model picks one allowed move, says one
    line (one question at most) and reports which key ideas are covered. Vague
    questions ("what do you mean", "which bit") are replaced before Fenny speaks.

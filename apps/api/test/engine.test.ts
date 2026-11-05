@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { allowedMoves, callState, isVague, moveOf, OFFER_LINE } from "../src/engine/policy";
 import { engineTurn, oneQuestion } from "../src/engine/engine";
+import { keyIdeas } from "../src/engine/ideas";
 import type { PastTurn } from "../src/gemini";
 
 const L = (text: string): PastTurn => ({ speaker: "learner", text });
@@ -36,6 +37,34 @@ describe("engine limits", () => {
     expect(allowedMoves(callState(h, "And that's about it."))).toEqual(["retell"]);
     const h2 = [...h, L("That's it."), F("Thanks. Can you explain the whole thing again in 30 seconds, really simply?")];
     expect(allowedMoves(callState(h2, "The heart pumps blood round and valves keep it one way."))).toEqual(["close"]);
+  });
+
+  it("thanks them and stops once they say which bit felt shakiest", () => {
+    const h = [L("Short version."), F("That was clear. Which bit felt shakiest to you?")];
+    expect(allowedMoves(callState(h, "Probably the Km part."))).toEqual(["wrap"]);
+    expect(moveOf("Thanks, that's a good place to stop. We'll pick it up next time.")).toBe("wrap");
+    const h2 = [...h, L("Probably the Km part."), F("Thanks, that's a good place to stop. We'll pick it up next time.")];
+    expect(allowedMoves(callState(h2, "See you next time!"))).toEqual(["wrap"]);
+    expect(allowedMoves(callState(h2, "Actually wait, I want to have another go at why a low Km means the enzyme binds tightly."))).not.toContain("wrap");
+  });
+
+  it("waits for the retell before closing", () => {
+    const h = [L("That's it."), F("Thanks. Can you explain the whole thing again in 30 seconds, really simply?")];
+    expect(allowedMoves(callState(h, "Ooh, give me a sec."))).toEqual(["listen"]);
+    const h2 = [...h, L("Ooh, give me a sec."), F("Mm, take your time."), L("Okay."), F("Go on.")];
+    expect(allowedMoves(callState(h2, "Erm."))).toEqual(["close"]);
+  });
+
+  it("still retells at turn 12 when only part of the call is sent to the model", () => {
+    const h: PastTurn[] = [];
+    for (let i = 0; i < 11; i++) h.push(L(`Point ${i} about the heart and blood.`), F(`So how does part ${i} connect to the lungs then?`));
+    expect(allowedMoves(callState(h.slice(-20), "And that's about it."))).not.toEqual(["retell"]);
+    expect(allowedMoves(callState(h, "And that's about it."))).toEqual(["retell"]);
+  });
+
+  it("does not mistake the word pass for being stuck", () => {
+    expect(callState([], "Blood can pass through the valve.").stuckStreak).toBe(0);
+    expect(callState([], "Pass.").stuckStreak).toBe(1);
   });
 
   it("does not repeat the last move and keeps listening rare", () => {
@@ -80,5 +109,34 @@ describe("engineTurn", () => {
       ideas,
     });
     expect(r.move).toBe("simpler");
+  });
+
+  it("says the offer in fixed words so a yes next turn is understood", async () => {
+    const h = [L("I don't know."), F("That's fine. What's inside a vein?")];
+    const r = await engineTurn(cfg({ move: "offer_show_me", say: "Would you like a short explanation first?", covered: [], stuck_on: "k2" }), {
+      transcript: "No idea.",
+      history: h,
+      topic: "Circulation",
+      ideas,
+      limits: { canShowMe: true },
+    });
+    expect(r.say).toContain(OFFER_LINE);
+    expect(allowedMoves(callState([...h, L("No idea."), F(r.say)], "Yes please."))).toEqual(["show_me"]);
+  });
+
+  it("keys the ideas cache on the whole notes, and counts the cost once", async () => {
+    let calls = 0;
+    const f = (async () => {
+      calls++;
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ideas: [{ idea: `idea ${calls}` }] }) } }], usage: { prompt_tokens: 9 } }));
+    }) as unknown as typeof fetch;
+    const c = { apiKey: "k", model: "m", fetchImpl: f };
+    const a = await keyIdeas(c, "Cache test", "aaaa");
+    const b = await keyIdeas(c, "Cache test", "bbbb");
+    const again = await keyIdeas(c, "Cache test", "aaaa");
+    expect(a.ideas[0].idea).not.toBe(b.ideas[0].idea);
+    expect(a.usage).toBeDefined();
+    expect(again).toEqual({ ideas: a.ideas });
+    expect(calls).toBe(2);
   });
 });

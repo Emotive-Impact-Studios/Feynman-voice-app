@@ -71,16 +71,22 @@ async function judge(topic: string, convo: PastTurn[]): Promise<Score> {
 
 async function run(kind: "old" | "engine", persona: string, topic: string, turns: number) {
   const convo: PastTurn[] = [];
-  const ideas = kind === "engine" ? await keyIdeas(cfg, topic) : undefined;
+  const ideas = kind === "engine" ? (await keyIdeas(cfg, topic)).ideas : undefined;
   const moves: string[] = [];
   for (let i = 0; i < turns; i++) {
     const said = await learnerSay(persona, topic, convo);
     let reply: string;
     if (kind === "old") reply = await oldFenny(topic, convo, said);
     else {
-      const t = await engineTurn(cfg, { transcript: said, history: convo, topic, ideas, limits: { canShowMe: true } });
+      // Same split as live.ts: the whole call for state, the last 20 lines for the model.
+      const t = await engineTurn(cfg, { transcript: said, history: convo.slice(-20), callHistory: convo, topic, ideas, limits: { canShowMe: true } });
       reply = t.say;
       moves.push(t.move);
+      if (t.move === "wrap") {
+        // The call ends here, as it will on the phone.
+        convo.push({ speaker: "learner", text: said }, { speaker: "student", text: reply });
+        break;
+      }
     }
     convo.push({ speaker: "learner", text: said }, { speaker: "student", text: reply });
   }
@@ -98,7 +104,13 @@ const which = (process.argv[2] ?? "both") as "old" | "engine" | "both";
 const turns = Number(process.argv[3] ?? 10);
 const kinds = which === "both" ? (["old", "engine"] as const) : [which];
 const jobs = kinds.flatMap((k) => Object.keys(PERSONAS).flatMap((p) => TOPICS.map((t) => ({ k, p, t }))));
-const results = await Promise.all(jobs.map(async (j) => ({ ...j, r: await run(j.k, j.p, j.t, turns).catch((e) => { console.error(j, e.message); return null; }) })));
+// A few calls at a time, so rate limits don't quietly shrink the sample.
+const results: { k: string; p: string; t: string; r: Awaited<ReturnType<typeof run>> | null }[] = [];
+for (let i = 0; i < jobs.length; i += 6) {
+  results.push(...(await Promise.all(jobs.slice(i, i + 6).map(async (j) => ({ ...j, r: await run(j.k, j.p, j.t, turns).catch((e) => { console.error(j, e.message); return null; }) })))));
+}
+const failed = results.filter((x) => !x.r).length;
+if (failed) console.log(`\n${failed} of ${results.length} calls FAILED and are left out of the scores below.`);
 
 for (const k of kinds) {
   const rs = results.filter((x) => x.k === k && x.r).map((x) => x.r!);

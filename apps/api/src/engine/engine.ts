@@ -6,7 +6,7 @@
 import type { PastTurn } from "../gemini";
 import { chatJSON, type ChatCfg, type ChatUsage } from "./chat";
 import { keyIdeas, type KeyIdea } from "./ideas";
-import { allowedMoves, callState, DEFAULT_LIMITS, isVague, OFFER_LINE, SHOW_ME_LINE, type Limits, type Move } from "./policy";
+import { allowedMoves, callState, DEFAULT_LIMITS, isVague, moveOf, OFFER_LINE, SHOW_ME_LINE, type Limits, type Move } from "./policy";
 
 const MOVE_GUIDE: Record<Move, string> = {
   listen: "They stopped mid-thought or are clearly about to carry on. Give a tiny spoken nudge of two to four words so they keep going.",
@@ -21,6 +21,7 @@ const MOVE_GUIDE: Record<Move, string> = {
   show_me: `They said yes to the explanation. Say exactly: "${SHOW_ME_LINE}"`,
   let_go: "They are stuck or want to move on. Say that's fine, you'll come back to it, and ask about a different key idea they have not covered.",
   retell: "Most of it is covered. Thank them in a few words and ask them to explain the whole thing to you again in about 30 seconds, as simply as they can.",
+  wrap: "The call is finishing. Thank them warmly in a few words, say that's a good place to stop, and that you'll pick up the shaky bit next time. No question.",
   close: "They just gave the short version. Tell them warmly and specifically what was clear, in one short sentence, then ask which bit felt shakiest to them.",
 };
 
@@ -32,7 +33,15 @@ const FALLBACK: Partial<Record<Move, string>> = {
   show_me: SHOW_ME_LINE,
   let_go: "No worries, let's come back to that. What happens next?",
   retell: "That helped loads. Can you explain the whole thing to me again in 30 seconds, really simply?",
+  close: "That was really clear. Which bit felt shakiest to you?",
+  wrap: "Thanks, that really helped. That's a good place to stop, and we'll pick that bit up next time.",
 };
+
+/**
+ * Moves the next turn reads back from Fenny's words. Their lines must be
+ * recognisable, or the call loses its place (an accepted offer, a retell).
+ */
+const CONTROL: Move[] = ["offer_show_me", "show_me", "retell", "close", "wrap"];
 
 const PERSONA = `You are Fenny, a curious, friendly beginner. A university student is teaching you a topic out loud so they learn it properly. You know nothing about it beyond what they tell you, and you never explain or correct. You speak British English in short, natural, spoken sentences. No lists, markdown or emoji. Never ask vague questions like "what do you mean" or "which bit". Questions are always concrete and about the subject. Never bring in a fact, term or example they have not said themselves: you only know what they told you.`;
 
@@ -60,12 +69,27 @@ export interface EngineTurn {
 
 export async function engineTurn(
   cfg: ChatCfg,
-  input: { transcript: string; history: PastTurn[]; topic?: string; notes?: string; limits?: Partial<Limits>; ideas?: KeyIdea[] },
+  input: {
+    transcript: string;
+    /** Recent turns, sent to the model. */
+    history: PastTurn[];
+    /** The whole call, for working out where it is. Defaults to history. */
+    callHistory?: PastTurn[];
+    topic?: string;
+    notes?: string;
+    limits?: Partial<Limits>;
+    ideas?: KeyIdea[];
+  },
 ): Promise<EngineTurn> {
   const topic = input.topic?.trim() || "a topic of their choice";
   const usage: ChatUsage[] = [];
-  const ideas = input.ideas ?? (await keyIdeas(cfg, topic, input.notes));
-  const state = callState(input.history, input.transcript);
+  let ideas = input.ideas;
+  if (!ideas) {
+    const k = await keyIdeas(cfg, topic, input.notes);
+    ideas = k.ideas;
+    if (k.usage) usage.push(k.usage);
+  }
+  const state = callState(input.callHistory ?? input.history, input.transcript);
   const allowed = allowedMoves(state, { ...DEFAULT_LIMITS, ...input.limits });
 
   const guide = allowed.map((m) => `- ${m}: ${MOVE_GUIDE[m]}`).join("\n");
@@ -106,6 +130,9 @@ export async function engineTurn(
   const move = (allowed.includes(r.value.move as Move) ? r.value.move : allowed[0]) as Move;
   let say = r.value.say.trim();
   if (!say || (move !== "close" && isVague(say))) say = FALLBACK[move] ?? FALLBACK.next!;
+  if (move === "offer_show_me") say = FALLBACK.offer_show_me!;
+  else if (move === "show_me") say = SHOW_ME_LINE;
+  else if (CONTROL.includes(move) && moveOf(say) !== move) say = FALLBACK[move]!;
   say = oneQuestion(say);
   const stuck = ideas.find((k) => k.id === r.value.stuck_on);
   return {

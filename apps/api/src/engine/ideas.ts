@@ -1,7 +1,8 @@
 // Key ideas for a topic: the short checklist a good explanation needs. Real
 // tutors hold one of these and only nudge on what is missing (Graesser's
 // expectation-tailored dialogue). Built once per topic and kept in memory.
-import { chatJSON, type ChatCfg } from "./chat";
+import { createHash } from "node:crypto";
+import { chatJSON, type ChatCfg, type ChatUsage } from "./chat";
 
 export interface KeyIdea {
   id: string;
@@ -10,10 +11,15 @@ export interface KeyIdea {
 
 const cache = new Map<string, KeyIdea[]>();
 
-export async function keyIdeas(cfg: ChatCfg, topic: string, notes?: string): Promise<KeyIdea[]> {
-  const key = `${topic.trim().toLowerCase()}|${(notes ?? "").length}`;
+/**
+ * The key ideas, plus the model usage when they had to be built (undefined on a
+ * cache hit, so the cost is only counted once). Keyed by the full notes text, so
+ * one learner's notes never shape another learner's ideas.
+ */
+export async function keyIdeas(cfg: ChatCfg, topic: string, notes?: string): Promise<{ ideas: KeyIdea[]; usage?: ChatUsage }> {
+  const key = createHash("sha256").update(topic.trim().toLowerCase()).update("\0").update(notes?.trim() ?? "").digest("hex");
   const hit = cache.get(key);
-  if (hit) return hit;
+  if (hit) return { ideas: hit };
   const r = await chatJSON<{ ideas: { idea: string }[] }>(
     cfg,
     [
@@ -38,5 +44,5 @@ export async function keyIdeas(cfg: ChatCfg, topic: string, notes?: string): Pro
   const ideas = r.value.ideas.slice(0, 7).map((x, i) => ({ id: `k${i + 1}`, idea: x.idea }));
   if (cache.size > 500) cache.clear();
   cache.set(key, ideas);
-  return ideas;
+  return { ideas, usage: r.usage };
 }

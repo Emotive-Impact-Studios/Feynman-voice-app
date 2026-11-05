@@ -15,12 +15,13 @@ export type Move =
   | "show_me"
   | "let_go"
   | "retell"
-  | "close";
+  | "close"
+  | "wrap";
 
 /** Moves that push the learner. At most one in any two turns. */
 export const PROBES: Move[] = ["why", "what_if", "puzzled"];
 
-const STUCK = /\b(i\s*(don'?t|do not)\s*know|not sure|no idea|i forget|i can'?t remember|dunno|pass|i'?m stuck|haven'?t got a clue)\b/i;
+const STUCK = /\b(i\s*(don'?t|do not)\s*know|not sure|no idea|i forget|i can'?t remember|dunno|i'?m stuck|haven'?t got a clue)\b|^\s*(pass|skip)\b[\s.!,]*$/i;
 const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|please|go on|go on then|alright|sounds good)\b/i;
 const TELL_ME = /\b(just tell me|can you (just )?(tell|explain)|explain it to me|what('?s| is) the answer|show me)\b/i;
 const NO = /^\s*(no|nah|nope|not now|no thanks|i'?m (fine|good)|let me try)\b/i;
@@ -42,6 +43,7 @@ export function moveOf(line: string): Move {
   if (/come back to that|park that|no worries/.test(s)) return "let_go";
   if (/30 seconds|whole thing again/.test(s)) return "retell";
   if (/shakiest/.test(s)) return "close";
+  if (/next time|good place to stop/.test(s)) return "wrap";
   if (s.split(/\s+/).length <= 5) return "listen";
   return "next";
 }
@@ -55,7 +57,12 @@ export interface CallState {
   lastMove?: Move;
   probedLastTurn: boolean;
   retellAsked: boolean;
-  justRetold: boolean;
+  /** The retell was asked for and Fenny has only listened since. */
+  retellPending: boolean;
+  /** Fenny lines since the retell request (all listens). */
+  sinceRetell: number;
+  /** Words in what they just said. */
+  words: number;
   answeredOffer?: "yes" | "no";
   /** They asked to be told. */
   askedToBeTold: boolean;
@@ -68,6 +75,9 @@ export function callState(history: PastTurn[], transcript: string): CallState {
   for (let i = learner.length - 1; i >= 0 && STUCK.test(learner[i]) && learner[i].split(/\s+/).length < 25; i--) stuckStreak++;
   const lastMove = fenny.at(-1);
   const retellAsked = fenny.includes("retell");
+  const lastRetell = fenny.lastIndexOf("retell");
+  const after = lastRetell >= 0 ? fenny.slice(lastRetell + 1) : [];
+  const retellPending = lastRetell >= 0 && after.every((m) => m === "listen");
   return {
     learnerTurns: learner.length,
     recentListens: fenny.slice(-3).filter((m) => m === "listen").length,
@@ -76,7 +86,9 @@ export function callState(history: PastTurn[], transcript: string): CallState {
     lastMove,
     probedLastTurn: lastMove ? PROBES.includes(lastMove) : false,
     retellAsked,
-    justRetold: lastMove === "retell",
+    retellPending,
+    sinceRetell: after.length,
+    words: transcript.trim() ? transcript.trim().split(/\s+/).length : 0,
     askedToBeTold: TELL_ME.test(transcript),
     answeredOffer: lastMove === "offer_show_me" ? (YES.test(transcript) ? "yes" : NO.test(transcript) ? "no" : undefined) : undefined,
   };
@@ -101,7 +113,13 @@ export function allowedMoves(s: CallState, l: Limits = DEFAULT_LIMITS): Move[] {
   if (s.answeredOffer === "yes" || (s.askedToBeTold && l.canShowMe)) return ["show_me"];
   if (s.askedToBeTold) return ["let_go"];
   if (s.answeredOffer === "no") return ["let_go"];
-  if (s.justRetold) return ["close"];
+  // Close only once they have actually given the short version; a short
+  // reply ("give me a sec") gets a nudge, at most twice.
+  // After the shakiest-bit question, thank them and stop (the phone can end the
+  // call on wrap). A short reply after that ("bye!") gets a goodbye; if they
+  // really carry on explaining, follow them.
+  if (s.lastMove === "close" || (s.closed && s.lastMove === "wrap" && s.words < 12)) return ["wrap"];
+  if (s.retellPending && !s.closed) return s.words >= 8 || s.sinceRetell >= 2 ? ["close"] : ["listen"];
   const done = s.retellAsked || s.closed;
   if (s.stuckStreak >= 2) return [l.canShowMe ? "offer_show_me" : "let_go"];
   if (s.stuckStreak === 1) return ["simpler"];

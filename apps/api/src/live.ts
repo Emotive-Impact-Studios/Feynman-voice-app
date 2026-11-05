@@ -81,7 +81,10 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
   const audio = Uint8Array.from(Buffer.from(body.audioBase64, "base64"));
   const speakingSeconds = Number(body.audioSeconds) || 0;
   const recordedSeconds = wavSeconds(audio) ?? speakingSeconds;
-  const history = (body.history ?? []).slice(-20);
+  // The engine works out where the call is from the whole call; the model
+  // only sees the recent turns.
+  const callHistory = (body.history ?? []).slice(-100);
+  const history = callHistory.slice(-20);
   const f = fetchImpl ?? fetch;
 
   const stream = new ReadableStream<Uint8Array>({
@@ -146,10 +149,11 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         if (useEngine) {
           // Fenny's conversation engine: code picks the allowed moves, the model
           // picks one and says one line, the line is checked, then spoken.
-          const ideas = await ideasReady!;
+          const { ideas, usage: ideasUsage } = await ideasReady!;
           const r = await engineTurn(chatCfg, {
             transcript,
             history,
+            callHistory,
             topic: body.topic,
             notes: body.notes,
             ideas,
@@ -159,7 +163,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
           speak(question);
           send({ type: "engine", move: r.move, covered: r.covered, ideas: r.ideas });
           if (r.move === "show_me" && r.gap) send({ type: "show_me", gap: r.gap });
-          for (const u of r.usage) {
+          for (const u of ideasUsage ? [ideasUsage, ...r.usage] : r.usage) {
             const cached = u.prompt_tokens_details?.cached_tokens ?? 0;
             const freshIn = Math.max(0, (u.prompt_tokens ?? 0) - cached);
             const out = u.completion_tokens ?? 0;
