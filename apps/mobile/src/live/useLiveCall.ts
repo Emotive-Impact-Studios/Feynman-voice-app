@@ -242,6 +242,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       return;
     }
     const id = ++turnId.current;
+    nextQuiet.current = TURN_QUIET_SECONDS; // until this reply's question is heard
     setPhase("thinking");
     setIsTalking(false);
     const quietAt = Date.now();
@@ -268,6 +269,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       if (e.type === "sentence") {
         spoken = spoken ? `${spoken} ${e.text}` : e.text;
         setLiveQuestion(spoken);
+        // Known as soon as it's said, so cutting in mid-question still gets it.
+        nextQuiet.current = quietAfter(spoken);
         if (voice === "phonon") {
           voiced = voiced.then(async () => {
             if (id !== turnId.current) return;
