@@ -373,6 +373,7 @@ footer .brand { font-size: 17px; color: var(--soft); }
 .h3 + .marquee { padding-top: 0; }
 @media (max-width: 900px) { .h3 + .marquee { padding-top: 56px; } }
 @media (max-width: 1100px) { .h3-calls .c3 { display: none; } .h3-phone .phone-box { --k: .52; } }
+@media (max-height: 860px) { .h3-calls .c3 { display: none; } }
 @media (max-width: 900px) {
   .h3 { padding: 10px 10px 0; }
   .bar:not(.scrolled) { top: 10px; left: 10px; right: 10px; border-radius: 24px 24px 0 0; }
@@ -391,6 +392,42 @@ footer .brand { font-size: 17px; color: var(--soft); }
  
 }
 @media (prefers-reduced-motion: reduce) { .h3 .hero-photo, .h3-phone .phone-box, .h3-cue i, .h3-copy .eyebrow::before { animation: none; } }
+
+
+/* ---------- v3 hero, round 2: the hero as one card sitting on the page ---------- */
+.h3 { padding: 18px 18px 0; isolation: isolate; }
+/* soft silver-blue light spilling out from behind the card */
+.h3::before { content: ""; position: absolute; inset: -40px 0 -120px; z-index: -1; pointer-events: none;
+  background: radial-gradient(30% 50% at 0% 28%, rgba(96,128,205,.55), transparent 70%),
+              radial-gradient(28% 46% at 100% 72%, rgba(96,128,205,.45), transparent 70%),
+              radial-gradient(40% 30% at 50% 100%, rgba(169,190,230,.10), transparent 70%);
+  filter: blur(20px); }
+.h3-frame { border-radius: 28px; min-height: max(700px, calc(100svh - 36px));
+  box-shadow: 0 0 0 1px rgba(0,0,0,.65), 0 50px 120px -40px rgba(0,0,0,.95); }
+.h3-frame::before { border: 1.5px solid rgba(255,255,255,.16); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
+/* menu inside the card */
+.bar:not(.scrolled) { top: 18px; left: 18px; right: 18px; border-radius: 28px 28px 0 0; }
+.bar:not(.scrolled) .wrap { height: 76px; }
+.bar .btn .arr, .h3 .btn .arr { display: inline-grid; place-items: center; width: 24px; height: 24px; margin: -4px -8px -4px 8px; border-radius: 50%; background: var(--ground); color: var(--text); font-size: 13px; transition: transform .4s var(--spring); }
+.bar .btn:hover .arr { transform: rotate(45deg); }
+.bar .btn { padding-right: 14px; }
+/* callouts: plain, like captions on the photo */
+.h3-calls li { padding: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; font-size: 14px; color: rgba(236,239,244,.62); text-shadow: 0 1px 16px rgba(0,0,0,.85); }
+.h3-calls svg { width: 22px; height: 22px; margin-top: -2px; padding: 4px; border-radius: 50%; background: rgba(255,255,255,.1); stroke: var(--text); }
+.h3-calls .c1 { top: 20%; left: calc(clamp(22px, 4.5vw, 64px) + 40px); }
+.h3-calls .c2 { top: 21%; right: calc(clamp(22px, 4vw, 60px) + 10px); }
+.h3-calls .c3 { top: 33%; left: clamp(22px, 4.5vw, 64px); }
+/* phone sits on its own soft shadow, no panel behind */
+.h3-phone .phone { box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 40px 90px -20px rgba(0,0,0,.9); }
+@media (max-height: 860px) { .h3-calls .c3 { display: none; } }
+@media (max-width: 900px) {
+  .h3 { padding: 10px 10px 0; }
+  .h3::before { inset: -20px -10px -60px; }
+  .h3-frame { border-radius: 24px; }
+  .bar:not(.scrolled) { top: 10px; left: 10px; right: 10px; border-radius: 24px 24px 0 0; }
+  .bar:not(.scrolled) .wrap { height: 64px; }
+  .bar .btn .arr { display: none; }
+}
 
 /* ---------- breather band under the hero ---------- */
 .beat { position: relative; padding: 70px 0 30px; text-align: center; }
@@ -428,7 +465,7 @@ footer .brand { font-size: 17px; color: var(--soft); }
       <a href="#session">How it works</a>
       <a href="#review">Review</a>
       <a href="#pricing">Pricing</a>
-      <a class="btn btn-solid" href="#join">Join the waitlist</a>
+      <a class="btn btn-solid" href="#join">Join the waitlist <span class="arr" aria-hidden="true">↗</span></a>
     </nav>
   </div>
 </header>
