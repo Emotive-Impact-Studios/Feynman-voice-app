@@ -41,7 +41,8 @@ export function T({
   lines?: number;
 }) {
   const family = weight === "mono" ? font.mono : font[weight];
-  const tight = size >= 24 ? { letterSpacing: -size * 0.025, lineHeight: size * 1.1 } : { lineHeight: size * 1.45 };
+  // Inter tracked in a touch, as Linear does: tighter on headings than body.
+  const tight = size >= 24 ? { letterSpacing: -size * 0.022, lineHeight: size * 1.1 } : { letterSpacing: weight === "mono" ? 0 : -size * 0.011, lineHeight: size * 1.45 };
   return (
     <Text numberOfLines={lines} style={[{ fontFamily: family, fontSize: size, color: tones[tone] }, tight, style]}>
       {children}
