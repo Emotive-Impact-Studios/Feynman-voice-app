@@ -205,14 +205,21 @@ export default function Session() {
       {/* Shared top bar and view switch */}
       <View style={[styles.top, { top: insets.top + 8 }]}>
         <View style={styles.rowBetween}>
-          <View>
-            <T size={15} weight="semibold">
-              {topic}
-            </T>
-            <Label>
-              {clock(spoken)} · {minutesLeft(profile, spoken)} min left
-            </Label>
-          </View>
+          <Glass strong style={styles.switch}>
+            {VIEWS.map((v) => (
+              <Pressable
+                key={v.id}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: v.id === view }}
+                onPress={() => setView(v.id)}
+                style={[styles.switchItem, v.id === view && { backgroundColor: "rgba(255,255,255,0.14)" }]}
+              >
+                <T size={13} tone={v.id === view ? "text" : "muted"}>
+                  {v.label}
+                </T>
+              </Pressable>
+            ))}
+          </Glass>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <RoundButton label="Voice settings" size={44} onPress={() => setShowSettings((v) => !v)}>
               <Icon name="wave" size={15} />
@@ -221,6 +228,14 @@ export default function Session() {
               <Icon name="close" size={15} />
             </RoundButton>
           </View>
+        </View>
+        <View>
+          <T size={15} weight="semibold">
+            {topic}
+          </T>
+          <Label>
+            {clock(spoken)} · {minutesLeft(profile, spoken)} min left
+          </Label>
         </View>
         {showSettings && (
           <Glass strong style={styles.settings}>
@@ -233,21 +248,6 @@ export default function Session() {
             </T>
           </Glass>
         )}
-        <Glass strong style={styles.switch}>
-          {VIEWS.map((v) => (
-            <Pressable
-              key={v.id}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: v.id === view }}
-              onPress={() => setView(v.id)}
-              style={[styles.switchItem, v.id === view && { backgroundColor: "rgba(255,255,255,0.14)" }]}
-            >
-              <T size={13} tone={v.id === view ? "text" : "muted"}>
-                {v.label}
-              </T>
-            </Pressable>
-          ))}
-        </Glass>
       </View>
 
       {/* Shared controls */}
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   centre: { alignItems: "center", paddingHorizontal: 24 },
   top: { position: "absolute", left: 20, right: 20, gap: 14 },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  switch: { alignSelf: "center", flexDirection: "row", padding: 4, borderRadius: 999, gap: 2 },
+  switch: { flexDirection: "row", padding: 4, borderRadius: 999, gap: 2 },
   segment: { flexDirection: "row", gap: 2, padding: 3, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.05)", alignSelf: "flex-start" },
   settings: { padding: 14, borderRadius: 24, gap: 8 },
   switchItem: { height: 32, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center" },
