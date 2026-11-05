@@ -41,7 +41,8 @@ export class ClipQueue {
       this.settle();
       return;
     }
-    const player = createAudioPlayer(file.uri);
+    // Keep the audio session on between clips: the mic is still streaming.
+    const player = createAudioPlayer(file.uri, { keepAudioSessionActive: true });
     this.playing = { player, file };
     player.addListener("playbackStatusUpdate", (s) => {
       if (s.didJustFinish && this.playing?.player === player) this.next();

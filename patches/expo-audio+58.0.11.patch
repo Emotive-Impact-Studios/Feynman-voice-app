@@ -1,8 +1,42 @@
+diff --git a/node_modules/expo-audio/ios/AudioModule.swift b/node_modules/expo-audio/ios/AudioModule.swift
+index 42ce9e8..6430a53 100644
+--- a/node_modules/expo-audio/ios/AudioModule.swift
++++ b/node_modules/expo-audio/ios/AudioModule.swift
+@@ -994,6 +994,10 @@ public class AudioModule: Module {
+     if registry.allPlayables.contains(where: { $0.isPlaying }) {
+       return true
+     }
++    // Feynman patch: an open mic stream needs the session too.
++    if AudioStream.liveCount.current > 0 {
++      return true
++    }
+     #if os(iOS)
+     return registry.allRecorders.values.contains { $0.isRecording }
+     #else
 diff --git a/node_modules/expo-audio/ios/AudioStream.swift b/node_modules/expo-audio/ios/AudioStream.swift
-index 1534fe5..576bbdb 100644
+index 1534fe5..685de37 100644
 --- a/node_modules/expo-audio/ios/AudioStream.swift
 +++ b/node_modules/expo-audio/ios/AudioStream.swift
-@@ -34,7 +34,15 @@ class AudioStream: SharedObject {
+@@ -16,7 +16,17 @@ class AudioStream: SharedObject {
+ 
+   private(set) var sampleRate: Double = 0
+   private(set) var channels: Int = 0
+-  private(set) var isStreaming: Bool = false
++  private(set) var isStreaming: Bool = false {
++    // Feynman patch: count open mic streams, so a player finishing does not
++    // switch the audio session off underneath one (that silenced the mic
++    // after the student's first reply).
++    didSet {
++      if isStreaming != oldValue {
++        AudioStream.liveCount.withLock { $0 += isStreaming ? 1 : -1 }
++      }
++    }
++  }
++  static let liveCount = StreamCounter()
+   private var startTimestamp: AVAudioTime?
+ 
+   private var fileWriter: AudioStreamFileWriter?
+@@ -34,7 +44,15 @@ class AudioStream: SharedObject {
      guard !isStreaming else { return }
  
      let session = AVAudioSession.sharedInstance()
@@ -19,3 +53,23 @@ index 1534fe5..576bbdb 100644
      try session.setPreferredSampleRate(requestedSampleRate)
      try session.setActive(true)
  
+@@ -285,3 +303,19 @@ internal final class AudioStreamException: GenericException<String> {
+     param
+   }
+ }
++
++/// Feynman patch: a tiny thread-safe counter for open mic streams.
++final class StreamCounter: @unchecked Sendable {
++  private var value = 0
++  private let lock = NSLock()
++  func withLock(_ body: (inout Int) -> Void) {
++    lock.lock()
++    body(&value)
++    lock.unlock()
++  }
++  var current: Int {
++    lock.lock()
++    defer { lock.unlock() }
++    return value
++  }
++}
