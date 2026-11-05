@@ -68,7 +68,7 @@ describe("sttProvider", () => {
 });
 
 describe("POST /api/live-turn", () => {
-  const env = { BRAIN: "openai", OPENAI_API_KEY: "k", PROTOTYPE_TOKEN: "t" };
+  const env = { BRAIN: "openai", OPENAI_API_KEY: "k", PROTOTYPE_TOKEN: "t", FENNY_ENGINE: "off" };
 
   it("rejects a missing token", async () => {
     const res = await handleLiveTurn(request(audio, "wrong"), env);
