@@ -24,6 +24,8 @@ export const PROBES: Move[] = ["why", "what_if", "puzzled"];
 const STUCK = /\b(i\s*(don'?t|do not)\s*know|not sure|no idea|i forget|i can'?t remember|dunno|i'?m stuck|haven'?t got a clue|i'?ll (pass|skip)|pass on (that|this)|(can we |let'?s )?skip (that|this)( one)?)\b|^\s*(pass|skip)\b[\s.!,]*$/i;
 const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|please|go on|go on then|alright|sounds good)\b/i;
 const TELL_ME = /\b(just tell me|can you (just )?(tell|explain)|explain it to me|what('?s| is) the answer|show me)\b/i;
+/** "Hang on, let me think": not the retell itself. */
+const HESITATE = /\b(hang on|hold on|give me a (sec|second|moment|minute)|one (sec|second|moment)|let me think|thinking about it|bear with me|wait a (sec|second|moment))\b/i;
 const NO = /^\s*(no|nah|nope|not now|no thanks|i'?m (fine|good)|let me try)\b/i;
 
 export const OFFER_LINE = "Want a quick explanation, then you tell me in your own words?";
@@ -63,6 +65,8 @@ export interface CallState {
   sinceRetell: number;
   /** Words in what they just said. */
   words: number;
+  /** They are pausing to think, not answering yet. */
+  hesitating: boolean;
   answeredOffer?: "yes" | "no";
   /** They asked to be told. */
   askedToBeTold: boolean;
@@ -89,6 +93,7 @@ export function callState(history: PastTurn[], transcript: string): CallState {
     retellPending,
     sinceRetell: after.length,
     words: transcript.trim() ? transcript.trim().split(/\s+/).length : 0,
+    hesitating: HESITATE.test(transcript) && transcript.trim().split(/\s+/).length < 20,
     askedToBeTold: TELL_ME.test(transcript),
     answeredOffer: lastMove === "offer_show_me" ? (YES.test(transcript) ? "yes" : NO.test(transcript) ? "no" : undefined) : undefined,
   };
@@ -119,7 +124,7 @@ export function allowedMoves(s: CallState, l: Limits = DEFAULT_LIMITS): Move[] {
   // call on wrap). A short reply after that ("bye!") gets a goodbye; if they
   // really carry on explaining, follow them.
   if (s.lastMove === "close" || (s.closed && s.lastMove === "wrap" && s.words < 12)) return ["wrap"];
-  if (s.retellPending && !s.closed) return s.words >= 8 || s.sinceRetell >= 2 ? ["close"] : ["listen"];
+  if (s.retellPending && !s.closed) return (s.words >= 8 && !s.hesitating) || s.sinceRetell >= 2 ? ["close"] : ["listen"];
   const done = s.retellAsked || s.closed;
   if (s.stuckStreak >= 2) return [l.canShowMe ? "offer_show_me" : "let_go"];
   if (s.stuckStreak === 1) return ["simpler"];

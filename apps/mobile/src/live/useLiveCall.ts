@@ -255,6 +255,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     let spoken = "";
     let voiced: Promise<unknown> = Promise.resolve();
     let phononRemaining = 0;
+    let wrapped = false;
     const markStart = () => {
       if (id !== turnId.current) return;
       if (!firstWordMs) firstWordMs = Date.now() - quietAt;
@@ -293,6 +294,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
         setHeardSeconds((n) => n + speakingSeconds);
         setTurns((t) => [...t, { speaker: "learner", text: e.transcript }, { speaker: "student", text: e.question }]);
       }
+      if (e.type === "engine" && e.move === "wrap") wrapped = true;
       if (e.type === "error") throw new Error(e.error);
     };
 
@@ -324,6 +326,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
           },
         ]);
       }
+      // Fenny said goodbye: the call is over once it has finished speaking.
+      if (wrapped) return cancel();
       resumeListening(true);
     } catch (e) {
       if (id !== turnId.current) return; // cut in or ended: not an error

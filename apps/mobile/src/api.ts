@@ -54,7 +54,9 @@ export type LiveEvent =
       cost: { pence: number; usd: number; lines: { label: string; pence: number }[] };
       timingMs: { transcribe: number; brain: number; firstSentence: number; total: number };
     }
-  | { type: "error"; error: string; detail?: string };
+  | { type: "error"; error: string; detail?: string }
+  /** Fenny's conversation engine: the move it made this turn. "wrap" is the goodbye. */
+  | { type: "engine"; move: string; covered: string[]; ideas: { id: string; idea: string }[] };
 
 /** Base URL of the Phonon model bundle the API serves for iPhones to download. */
 export const PHONON_BUNDLE_URL = API_URL ? `${API_URL.replace(/\/$/, "")}/phonon/31m-en-0.6.0` : "";

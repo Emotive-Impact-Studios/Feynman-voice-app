@@ -14,7 +14,7 @@ Each turn of a live call (`apps/api/src/live.ts`, when `FENNY_ENGINE` is not `of
    to be told opens Show me; no repeated moves; listening at most once in three
    turns; the 30 second retell from turn 7 and by turn 12, then a warm close
    with "which bit felt shakiest?", then a short thank-you and goodbye (`wrap`;
-   the phone can end the call when it sees that move). The engine reads the whole
+   the phone ends the call once that line has played, in `useLiveCall`). The engine reads the whole
    call history for these counts and sends only the last 20 lines to the model.
    Lines the next turn reads back (offer, Show me, retell, close, wrap) are forced
    into recognisable wording in code.

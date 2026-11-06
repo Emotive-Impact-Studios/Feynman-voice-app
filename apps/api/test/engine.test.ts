@@ -51,6 +51,7 @@ describe("engine limits", () => {
   it("waits for the retell before closing", () => {
     const h = [L("That's it."), F("Thanks. Can you explain the whole thing again in 30 seconds, really simply?")];
     expect(allowedMoves(callState(h, "Ooh, give me a sec."))).toEqual(["listen"]);
+    expect(allowedMoves(callState(h, "Hang on, give me a moment to think about it."))).toEqual(["listen"]);
     const h2 = [...h, L("Ooh, give me a sec."), F("Mm, take your time."), L("Okay."), F("Go on.")];
     expect(allowedMoves(callState(h2, "Erm."))).toEqual(["close"]);
   });
