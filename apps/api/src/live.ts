@@ -233,7 +233,11 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
           const c = costOf(r.usage, pricesFromEnv(env));
           lines.push({ label: `Gemini (${c.audioInTokens} audio in, ${c.textInTokens} text in, ${c.outTokens} out)`, usd: c.usd });
         }
+<<<<<<< HEAD
         if (index === 0 && !waited) speak(speakable(question) || "Sorry, could you say that again?");
+=======
+        if (index === 0) speak(speakable(question) || "Sorry, could you say that again?");
+>>>>>>> origin/claude/project-thread-dh07mv
         timing.brain = Date.now() - t1;
         await voiced;
         if (sonicChars) lines.push({ label: `Cartesia Sonic (${sonicChars} characters)`, usd: sonicChars * credit });
@@ -244,7 +248,11 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         send({
           type: "done",
           transcript,
+<<<<<<< HEAD
           question: waited ? "" : speakable(question) || "Sorry, could you say that again?",
+=======
+          question: speakable(question) || "Sorry, could you say that again?",
+>>>>>>> origin/claude/project-thread-dh07mv
           voice,
           stt,
           brain,
