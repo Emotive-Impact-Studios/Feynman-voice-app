@@ -90,3 +90,21 @@ describe("things", () => {
     expect(checkPlay(play("weigh"), o)).toBeNull();
   });
 });
+
+describe("things with named parts", () => {
+  const base = { family: "things", layout: "parts", items: [{ thing: "heart", label: "Heart", size: 1 }], lit: 0 };
+  it("keeps one thing and up to four parts, each spot once", () => {
+    const s = checkScene({ ...base, items: [...base.items, { thing: "brain", label: "Brain", size: 1 }], parts: [{ label: "Right atrium", at: "top left" }, { label: "Left atrium", at: "top left" }, { label: "Left ventricle", at: "bottom right" }, { label: "Aorta", at: "top" }, { label: "Septum", at: "centre" }, { label: "Apex", at: "bottom" }] }) as any;
+    expect(s.items).toHaveLength(1);
+    expect(s.parts.map((p: any) => p.label)).toEqual(["Right atrium", "Left ventricle", "Aorta", "Septum"]);
+  });
+  it("falls back to the plain drawing with fewer than two parts", () => {
+    const s = checkScene({ ...base, parts: [{ label: "Aorta", at: "top" }] }) as any;
+    expect(s.layout).toBe("row");
+    expect(s.parts).toEqual([]);
+  });
+  it("gives other layouts no parts", () => {
+    const s = checkScene({ family: "things", layout: "versus", items: [{ thing: "virus", label: "Virus", size: 1 }, { thing: "bacterium", label: "Bacterium", size: 1 }], parts: [{ label: "x", at: "top" }], lit: 0 }) as any;
+    expect(s.parts).toEqual([]);
+  });
+});

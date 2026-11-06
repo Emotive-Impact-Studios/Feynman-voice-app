@@ -15,7 +15,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { chatJSON } from "./engine/chat";
 import { openAIPricesFromEnv, type CostLine } from "./pricing";
 import { checkFilm, checkGuess, FILM_PROMPT, FILM_SCHEMA, GUESS_SCHEMA, type FilmBeat, type Guess } from "./film";
-import { checkPlay, checkScene, PLAY_SCHEMA, SCENE_PROMPT, SCENE_SCHEMA, type Play, type Scene } from "./scene";
+import { checkPlay, checkScene, FAMILIES, PLAY_SCHEMA, SCENE_PROMPT, SCENE_SCHEMA, type Play, type Scene } from "./scene";
 
 type Env = Record<string, string | undefined>;
 
@@ -115,6 +115,9 @@ const strs = { type: "array", items: str };
 export const LESSON_SCHEMA = {
   type: "object",
   properties: {
+    // Chosen before the bites are written, so the writer plans three different
+    // pictures instead of reaching for the same device each time.
+    devices: { type: "array", items: { type: "string", enum: [...FAMILIES, "none"] } },
     bites: {
       type: "array",
       items: {
@@ -148,7 +151,7 @@ export const LESSON_SCHEMA = {
     recap: str,
     explainBack: str,
   },
-  required: ["bites", "recap", "explainBack"],
+  required: ["devices", "bites", "recap", "explainBack"],
   additionalProperties: false,
 } as const;
 

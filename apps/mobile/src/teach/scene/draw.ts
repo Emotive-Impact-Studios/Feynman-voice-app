@@ -2216,6 +2216,10 @@ function drawThings(c: SkCanvas, p: SkPaint, font: SkFont | null, s: ThingsScene
     }
     return;
   }
+  if (s.layout === "parts" && s.parts && s.parts.length >= 2) {
+    drawParts(c, p, font, s, s.parts, stepping, f);
+    return;
+  }
   if (s.layout === "scale") {
     const BASE = 140;
     const maxH = 116;
@@ -2268,6 +2272,83 @@ function drawThings(c: SkCanvas, p: SkPaint, font: SkFont | null, s: ThingsScene
       }
     }
   }
+}
+/** Where each spot sits on a thing, in its box from -1 to 1. */
+const SPOT: Record<string, [number, number]> = {
+  top: [0, -0.62], bottom: [0, 0.62], left: [-0.62, 0], right: [0.62, 0], centre: [0, 0],
+  "top left": [-0.48, -0.48], "top right": [0.48, -0.48], "bottom left": [-0.48, 0.48], "bottom right": [0.48, 0.48],
+};
+/**
+ * One thing drawn big, with its parts named: a labelled diagram. Each part gets
+ * a dot where it sits and a thin leader out to its name at the side, names never
+ * crossing. The light moves through the parts (or rests on the lit one).
+ */
+function drawParts(c: SkCanvas, p: SkPaint, font: SkFont | null, s: ThingsScene, parts: { label: string; at: string }[], stepping: boolean, f: Frame) {
+  "worklet";
+  const CX = 150;
+  const CY = 86;
+  const H = 50;
+  const n = parts.length;
+  const litI = stepping ? Math.min(n - 1, Math.floor(f.v * n)) : s.lit;
+  const kL = stepping ? 1 : beat(f, 2.6, 3);
+  drawThing(c, p, s.items[0].thing, CX, CY, H, 1, false, beat(f, 0.2, 3));
+  // Left or right by where the part is; middle ones go to the emptier side.
+  const side: number[] = [];
+  let nl = 0;
+  let nr = 0;
+  for (let i = 0; i < n; i++) {
+    const sx = (SPOT[parts[i].at] ?? SPOT.centre)[0];
+    const sd = sx < 0 ? -1 : sx > 0 ? 1 : nl <= nr ? -1 : 1;
+    side.push(sd);
+    if (sd < 0) nl++;
+    else nr++;
+  }
+  // Names on each side keep the parts' top to bottom order, at least 22 apart.
+  const ly: number[] = [];
+  for (let i = 0; i < n; i++) ly.push(0);
+  for (const sd of [-1, 1]) {
+    const idx: number[] = [];
+    for (let i = 0; i < n; i++) if (side[i] === sd) idx.push(i);
+    idx.sort((a, b) => (SPOT[parts[a].at] ?? SPOT.centre)[1] - (SPOT[parts[b].at] ?? SPOT.centre)[1]);
+    let last = -999;
+    for (const i of idx) {
+      const want = CY + (SPOT[parts[i].at] ?? SPOT.centre)[1] * H;
+      ly[i] = Math.max(want, last + 26);
+      last = ly[i];
+    }
+    // If the stack ran off the bottom, slide it all back up.
+    const over = last - 160;
+    if (over > 0) for (const i of idx) ly[i] -= over;
+  }
+  for (let i = 0; i < n; i++) {
+    const sp = SPOT[parts[i].at] ?? SPOT.centre;
+    const ax = CX + sp[0] * H;
+    const ay = CY + sp[1] * H;
+    const k = beat(f, 1 + (i / n) * 1.4, 3);
+    const lit = i === litI && kL > 0.5;
+    const ex = side[i] < 0 ? CX - H - 10 : CX + H + 10;
+    // Leader: from the part, level with its name, out past the drawing.
+    if (k > 0.01) strokePts(c, p, [ax, ay, ex, ly[i], ex + side[i] * 8, ly[i]], 0.35 * k, SIL, W0 * 0.8);
+    dot(c, p, ax, ay, lit ? 3.2 : 2.2, k, lit ? BLUE : SIL);
+    const room = side[i] < 0 ? ex - 11 - 4 : 300 - (ex + 11) - 4;
+    const al = side[i] < 0 ? "right" : "left";
+    const col = lit ? SIL : LAB;
+    const txt = parts[i].label;
+    const ws = txt.split(" ");
+    if (textW(font, txt) <= room || ws.length < 2) label(c, p, font, fitText(font, txt, room), ex + side[i] * 11, ly[i] + 3, al, col, k);
+    else {
+      // Too long for one line: two lines, the break where they are most even.
+      let best = 1;
+      let bestW = 1e9;
+      for (let j = 1; j < ws.length; j++) {
+        const w = Math.max(textW(font, ws.slice(0, j).join(" ")), textW(font, ws.slice(j).join(" ")));
+        if (w < bestW) { bestW = w; best = j; }
+      }
+      label(c, p, font, fitText(font, ws.slice(0, best).join(" "), room), ex + side[i] * 11, ly[i] - 2, al, col, k);
+      label(c, p, font, fitText(font, ws.slice(best).join(" "), room), ex + side[i] * 11, ly[i] + 9, al, col, k);
+    }
+  }
+  if (s.items[0].label) label(c, p, font, s.items[0].label, CX, 170, "center", LAB, beat(f, 0.6, 3));
 }
 /** Points round an ellipse, drawn on up to k of the way. */
 function ellipsePts(cx: number, cy: number, rx: number, ry: number, k: number) {
