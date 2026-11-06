@@ -97,7 +97,7 @@ export function TeachMode({
       <ScrollView ref={scroll} contentContainerStyle={{ paddingTop: insets.top + 84, paddingHorizontal: 24, paddingBottom: 200, flexGrow: 1 }}>
         {!lesson && !error && (
           <View style={styles.centre}>
-            <LivingLight size={90} energy={0.5} />
+            <LivingLight size={90} energy={0.5} mood="think" />
             <T size={18} weight="medium" style={{ textAlign: "center", marginTop: 26 }}>
               Making a short lesson
             </T>
@@ -159,7 +159,7 @@ export function TeachMode({
 
         {lesson && step.kind === "finish" && (
           <Animated.View entering={riseIn()} style={[styles.centre, { gap: 0 }]}>
-            <LivingLight size={110} energy={1} />
+            <LivingLight size={110} energy={1} mood="got" />
             <T size={30} weight="medium" style={{ textAlign: "center", marginTop: 28, lineHeight: 35 }}>
               You've got it.{"\n"}
               <T size={30} weight="medium" tone="student">

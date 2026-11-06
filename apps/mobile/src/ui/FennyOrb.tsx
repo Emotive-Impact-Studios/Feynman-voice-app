@@ -7,9 +7,13 @@
 // Glance (canvas board "Glance round 3"): in a call, two eyes of light rise
 // out of the bright core. The orb draws in a little and the core dims behind
 // them so the face reads, and they sink back into the core at rest. `mood`
-// sets how the eyes look; it defaults to "rest", so every other screen keeps
-// the plain orb.
-import { useEffect } from "react";
+// sets how the eyes look; it defaults to "rest", the plain orb.
+//
+// Personality outside the call: `peek` lets a resting orb open its eyes
+// now and then, glance round and sink back (the nav button, the intro).
+// `nod` (0 to 1) makes the eyes nod along while the learner is talking.
+// Small orbs get bigger eyes so the face still reads at button size.
+import { useEffect, useState } from "react";
 import { Canvas, Fill, Shader, Skia } from "@shopify/react-native-skia";
 import { Easing, useDerivedValue, useReducedMotion, useSharedValue, withRepeat, withSpring, withTiming } from "react-native-reanimated";
 import { MOODS, type FennyMood } from "./mood";
@@ -28,6 +32,8 @@ uniform float happy;    // 0..1: eyes become smiling arcs
 uniform float tilt;     // radians: the whole face leans (curious)
 uniform float core;     // brightness of the core behind the eyes
 uniform float dull;     // 0..1: greyer and dimmer (lost)
+uniform float boost;    // 0..1: small orb, so bigger eyes
+uniform float nod;      // 0..1: nodding along while the learner talks
 
 float blob(float2 p, float2 c, float r) {
   float d = length(p - c) / r;
@@ -51,7 +57,7 @@ float pill(float2 q, float2 b) {
 float arc(float2 q, float rad, float th) {
   float d = abs(length(q) - rad) - th;
   // Fade the lower half out so only the curve shows.
-  return d + smoothstep(-0.02, 0.06, q.y) * 0.2;
+  return d + smoothstep(-0.02, 0.04, q.y);
 }
 
 // One eye: a pill that can flatten, blink and turn into an arc.
@@ -68,7 +74,7 @@ half4 main(float2 xy) {
   float2 p0 = p;
   float s = 1.0 + 0.06 * sin(t * (1.3 + level * 3.0)) + 0.10 * level;
   // With eyes showing, the orb draws in so the face carries it.
-  s *= mix(1.0, 0.8, eyes);
+  s *= mix(1.0, mix(0.8, 0.92, boost), eyes);
   p /= s;
   float sp = 0.35 + level * 0.9;
   float a = blob(p, float2(-0.28 + 0.16 * sin(t * sp), -0.12 + 0.12 * cos(t * sp * 1.3)), 0.62);
@@ -93,7 +99,11 @@ half4 main(float2 xy) {
 
   // The eyes, in face space: leaned by tilt, moved by look.
   if (eyes > 0.001) {
-    float2 f = rot(p0, -tilt) - look - float2(0.0, -0.06);
+    // Alive while looking: small idle glances, and a nod while they talk.
+    float2 drift = float2(sin(t * 0.53) * 0.012, sin(t * 0.71) * 0.008);
+    float2 bob = float2(0.0, nod * 0.018 * sin(t * 5.5));
+    float grow = 1.0 + 0.3 * boost;
+    float2 f = (rot(p0, -tilt) - look - drift - bob - float2(0.0, -0.06)) / grow;
     // A blink every few seconds, quick and soft.
     float ph = fract(t / 5.2);
     float bk = (ph - 0.94) / 0.012;
@@ -102,11 +112,13 @@ half4 main(float2 xy) {
     // Inner ends lift when lost (worried, not cross).
     float dl = eye(f - float2(-0.145, 0.0), eyeL, o,  slant);
     float dr = eye(f - float2( 0.145, 0.0), eyeR, o, -slant);
-    float d = min(dl, dr);
+    // Back to orb units, so the edge below is the same width at any size.
+    float d = min(dl, dr) * grow;
     // Soft edge, like the light it came from, and a little glow round it.
     float px = 2.0 / size.x;
-    float body = 1.0 - smoothstep(-px * 2.0, px * 3.0, d);
-    float glow = exp(-max(d, 0.0) * 22.0) * 0.35;
+    // Soft on the big orb, crisper on a small one so the eyes don't blur together.
+    float body = 1.0 - smoothstep(-px * mix(2.0, 0.6, boost), px * mix(3.0, 1.0, boost), d);
+    float glow = exp(-max(d, 0.0) * 22.0) * 0.35 * (1.0 - 0.6 * boost);
     float e = eyes * clamp(body * 0.94 + glow * (1.0 - body), 0.0, 1.0);
     col = mix(col, white, e);
     alpha = max(alpha, e);
@@ -124,11 +136,28 @@ half4 main(float2 xy) {
 const SPRING = { duration: 700, dampingRatio: 0.78 } as const;
 
 /** Draws the orb in a `size` square. The visible light fills about two thirds of it. */
-export function FennyOrb({ size, energy = 0, mood = "rest" }: { size: number; energy?: number; mood?: FennyMood }) {
+export function FennyOrb({
+  size,
+  energy = 0,
+  mood = "rest",
+  peek = false,
+  nod = 0,
+}: {
+  size: number;
+  energy?: number;
+  mood?: FennyMood;
+  /** At rest, open the eyes now and then for a look round. */
+  peek?: boolean;
+  /** 0 to 1: nod along (the learner is talking). */
+  nod?: number;
+}) {
   const reduce = useReducedMotion();
+  const peekMood = usePeek(peek && mood === "rest" && !reduce);
+  const shown: FennyMood = peekMood ?? mood;
   const t = useSharedValue(0);
   const level = useSharedValue(energy);
-  const m = MOODS[mood];
+  const nodding = useSharedValue(nod);
+  const m = MOODS[shown];
   const eyes = useSharedValue(m.eyes);
   const lookX = useSharedValue(m.look[0]);
   const lookY = useSharedValue(m.look[1]);
@@ -140,6 +169,8 @@ export function FennyOrb({ size, energy = 0, mood = "rest" }: { size: number; en
   const tilt = useSharedValue(m.tilt);
   const core = useSharedValue(m.core);
   const dull = useSharedValue(m.dull);
+  // Below about 150 px of canvas the eyes grow, so a button-sized orb still has a face.
+  const boost = Math.min(1, Math.max(0, (150 - size) / 90));
   useEffect(() => {
     if (reduce) return;
     // Seconds, running for a very long time; restarts after about 11 days.
@@ -149,7 +180,10 @@ export function FennyOrb({ size, energy = 0, mood = "rest" }: { size: number; en
     level.value = withSpring(energy, { duration: 350, dampingRatio: 0.9 });
   }, [energy, level]);
   useEffect(() => {
-    const to = MOODS[mood];
+    nodding.value = reduce ? 0 : withSpring(nod, { duration: 400, dampingRatio: 0.9 });
+  }, [nod, reduce, nodding]);
+  useEffect(() => {
+    const to = MOODS[shown];
     // Reduce Motion: change mood at once, no springs.
     const go = (v: { value: number }, n: number) => {
       v.value = reduce ? n : withSpring(n, SPRING);
@@ -166,7 +200,7 @@ export function FennyOrb({ size, energy = 0, mood = "rest" }: { size: number; en
     go(tilt, to.tilt);
     go(core, to.core);
     go(dull, to.dull);
-  }, [mood, reduce, eyes, lookX, lookY, eyeL, eyeR, open, slant, happy, tilt, core, dull]);
+  }, [shown, reduce, eyes, lookX, lookY, eyeL, eyeR, open, slant, happy, tilt, core, dull]);
   const uniforms = useDerivedValue(() => ({
     size: [size, size],
     t: t.value,
@@ -181,6 +215,8 @@ export function FennyOrb({ size, energy = 0, mood = "rest" }: { size: number; en
     tilt: tilt.value,
     core: core.value,
     dull: dull.value,
+    boost,
+    nod: nodding.value,
   }));
   if (!orb) return null;
   return (
@@ -190,4 +226,36 @@ export function FennyOrb({ size, energy = 0, mood = "rest" }: { size: number; en
       </Fill>
     </Canvas>
   );
+}
+
+/**
+ * A resting orb's look round: every 8 to 14 seconds the eyes open, glance
+ * one way then the other, and sink back into the core. Null while resting.
+ */
+function usePeek(on: boolean): FennyMood | null {
+  const [stage, setStage] = useState<FennyMood | null>(null);
+  useEffect(() => {
+    if (!on) {
+      setStage(null);
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout>;
+    const steps: [FennyMood | null, number][] = [
+      ["peekRight", 900],
+      ["peekLeft", 1000],
+      [null, 0],
+    ];
+    const run = () => {
+      let i = 0;
+      const step = () => {
+        const [mood, ms] = steps[i++];
+        setStage(mood);
+        timer = mood ? setTimeout(step, ms) : setTimeout(run, 8000 + Math.random() * 6000);
+      };
+      step();
+    };
+    timer = setTimeout(run, 2500 + Math.random() * 4000);
+    return () => clearTimeout(timer);
+  }, [on]);
+  return stage;
 }

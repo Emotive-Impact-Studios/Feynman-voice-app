@@ -1,6 +1,6 @@
 // Fenny's moods, for the eyes in the orb (see FennyOrb). Values are in the
 // orb shader's units: positions where 1 is half the orb's square.
-export type FennyMood = "rest" | "listen" | "think" | "curious" | "lost" | "got";
+export type FennyMood = "rest" | "listen" | "think" | "curious" | "lost" | "got" | "peekRight" | "peekLeft";
 
 export interface MoodShape {
   /** 0 = no eyes, just the orb; 1 = eyes showing. */
@@ -32,6 +32,9 @@ export const MOODS: Record<FennyMood, MoodShape> = {
   curious: { ...BASE, look: [0.02, -0.02], eyeL: 0.88, eyeR: 1.22, tilt: -0.16 },
   lost: { ...BASE, look: [0, 0.04], open: 0.33, slant: 0.28, core: 0.18, dull: 1 },
   got: { ...BASE, happy: 1, core: 0.5 },
+  // A resting orb having a look round (nav button, intro).
+  peekRight: { ...BASE, look: [0.06, 0.0], core: 0.4 },
+  peekLeft: { ...BASE, look: [-0.05, -0.02], core: 0.4 },
 };
 
 /** The engine's moves, grouped by the face Fenny makes while saying them. */

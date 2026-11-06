@@ -70,6 +70,8 @@ export default function Session() {
   // Fenny's eyes: on you while you talk, up while it thinks, and the face for
   // what it is saying while it speaks.
   const mood = moodFor(loop.phase, loop.move);
+  // Nodding along while they talk.
+  const nod = loop.phase === "listening" && loop.isTalking ? 1 : 0;
   const voiceLevel = loop.phase === "listening" ? (loop.isTalking ? 1 : 0.25) : 0;
 
   // Gently animate the dot wave while you talk.
@@ -140,7 +142,7 @@ export default function Session() {
           {/* Calm and empty, like a voice mode: one small living light and
               one line in the middle of the screen, nothing else lit. */}
           <View style={[StyleSheet.absoluteFill, styles.centre, { justifyContent: "center", paddingBottom: 140 }]} pointerEvents="none">
-            <LivingLight size={120} energy={studentEnergy} mood={mood} />
+            <LivingLight size={120} energy={studentEnergy} mood={mood} nod={nod} />
             <T size={22} weight="medium" style={{ textAlign: "center", marginTop: 26, maxWidth: 320, lineHeight: 30 }}>
               {question}
             </T>
@@ -153,7 +155,7 @@ export default function Session() {
           <VoiceGlow level={voiceLevel} height={260} />
           <View style={{ paddingTop: insets.top + 130, paddingHorizontal: 26 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <LivingLight size={30} energy={studentEnergy} />
+              <LivingLight size={30} energy={studentEnergy} mood={mood} nod={nod} />
               <Label tone="student">Student</Label>
             </View>
             <T size={36} weight="medium" style={{ marginTop: 14, lineHeight: 40 }}>
@@ -177,7 +179,13 @@ export default function Session() {
             {(loop.turns.length ? loop.turns : [{ speaker: "student" as const, text: opening }]).map((t, i) =>
               t.speaker === "student" ? (
                 <View key={i} style={styles.studentRow}>
-                  <LivingLight size={34} energy={i === loop.turns.length - 1 ? studentEnergy : 0} />
+                  <LivingLight
+                    size={34}
+                    energy={i === loop.turns.length - 1 ? studentEnergy : 0}
+                    // Only the latest question has a face; older ones rest.
+                    mood={i === loop.turns.length - 1 || !loop.turns.length ? mood : "rest"}
+                    nod={i === loop.turns.length - 1 ? nod : 0}
+                  />
                   <View style={styles.studentBubble}>
                     <T size={16.5}>{t.text}</T>
                   </View>

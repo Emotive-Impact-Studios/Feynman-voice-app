@@ -84,7 +84,7 @@ export function Nav({ bottom, tab, onChange, onStart, width }: { bottom: number;
       </Glass>
       <Press accessibilityRole="button" accessibilityLabel="Start explaining something new" onPress={onStart}>
         <View style={[styles.navLight, styles.solidBar]}>
-          <LivingLight size={40} />
+          <LivingLight size={40} peek />
         </View>
       </Press>
     </View>

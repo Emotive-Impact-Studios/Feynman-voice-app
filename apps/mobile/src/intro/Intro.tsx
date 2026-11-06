@@ -163,7 +163,7 @@ export default function Intro() {
           <Pressable style={StyleSheet.absoluteFill} onPress={screen === "auth" ? undefined : next} accessibilityLabel="Next" accessibilityRole="button">
             <Animated.View pointerEvents="none" style={[styles.hero, heroStyle]}>
               {(screen === "splash" || screen === "s0" || screen === "s1") && <Ripples size={HERO_SIZE} />}
-              <LivingLight size={HERO_SIZE} energy={screen === "s1" ? 1 : 0} />
+              <LivingLight size={HERO_SIZE} energy={screen === "s1" ? 1 : 0} mood={screen === "s1" ? "curious" : "rest"} peek />
             </Animated.View>
 
             {screen === "splash" && <Splash bottom={insets.bottom} />}
@@ -537,7 +537,7 @@ function Step({
           {light && (
             <Rise d={0}>
               <View style={{ marginTop: 44, width: 64, height: 64 }}>
-                <LivingLight size={64} />
+                <LivingLight size={64} mood="listen" />
               </View>
             </Rise>
           )}
@@ -605,7 +605,7 @@ function Meet({ name, bottom, onDone, onReplay }: { name: string; bottom: number
       <Animated.Image source={img.glow} resizeMode="cover" style={[StyleSheet.absoluteFill, { opacity: 0.8 }]} />
       <Animated.View entering={FadeInDown.duration(1900).easing(ease)} style={{ position: "absolute", top: "20%", alignSelf: "center", width: 220, height: 220 }}>
         <Ripples size={220} />
-        <LivingLight size={220} energy={typed ? 0 : 1} />
+        <LivingLight size={220} energy={typed ? 0 : 1} mood={typed ? "listen" : "curious"} />
       </Animated.View>
       <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 26, paddingBottom: Math.max(bottom, 20) + 10, alignItems: "center" }}>
         <Animated.View entering={FadeInDown.delay(1200).duration(700)}>
