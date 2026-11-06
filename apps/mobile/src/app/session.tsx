@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { findTopic, recordSession, useProfile } from "../data/profile";
 import { colour } from "../theme";
 import { DotWave } from "../ui/Dots";
-import { Backdrop, Icon, Label, T } from "../ui/kit";
+import { Backdrop, Icon, Label, PillButton, T } from "../ui/kit";
 import { HoldButton } from "../ui/HoldButton";
 import { LivingLight } from "../ui/LivingLight";
 import { RecordDisc } from "../ui/RecordDisc";
@@ -18,6 +18,10 @@ import { VoiceGlow } from "../ui/VoiceGlow";
 import type { SessionView } from "../live/ViewMenu";
 import type { LiveEars, LiveVoice } from "../api";
 import { useLiveCall } from "../live/useLiveCall";
+import { TeachMode } from "../teach/TeachMode";
+import { Press } from "../ui/Press";
+import Animated from "react-native-reanimated";
+import { riseIn } from "../ui/motion";
 
 type View3 = SessionView;
 
@@ -97,6 +101,20 @@ export default function Session() {
     save();
     router.back();
   };
+  // Teach me: the call steps aside for a short lesson on the stuck idea.
+  const [teaching, setTeaching] = useState<{ idea: string; said?: string } | null>(null);
+  const openTeach = () => {
+    if (!loop.teach) return;
+    loop.cancel();
+    setTeaching({ idea: loop.teach.idea, said: lastYou });
+  };
+  // They said yes out loud: open it once Fenny has finished speaking.
+  useEffect(() => {
+    if (loop.teach?.open && !teaching && loop.phase === "listening") openTeach();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loop.teach, loop.phase]);
+  const offerTeach = !!loop.teach && !loop.teach.open && !teaching && (loop.phase === "listening" || loop.phase === "speaking");
+
   // Fenny said goodbye: save and leave, as if they tapped End.
   useEffect(() => {
     if (loop.finished) end();
@@ -182,6 +200,18 @@ export default function Session() {
         </View>
       </View>
 
+      {/* Teach me, when Fenny can tell this bit is new to them. */}
+      {offerTeach && (
+        <Animated.View entering={riseIn()} style={[styles.offer, { bottom: Math.max(insets.bottom, 12) + 150 }]}>
+          <PillButton label="Teach me" variant="solid" onPress={openTeach} style={{ alignSelf: "stretch" }} />
+          <Press accessibilityRole="button" accessibilityLabel="Not now, keep going" onPress={loop.dismissTeach} hitSlop={8} style={{ paddingVertical: 8 }}>
+            <T size={14} tone="soft">
+              Not now, keep going
+            </T>
+          </Press>
+        </Animated.View>
+      )}
+
       {/* One button at the bottom, with no panel: what it does sits just above it. */}
       <View pointerEvents="box-none" style={[styles.controls, { bottom: Math.max(insets.bottom, 12) + 8 }]}>
         {/* One quiet line: what is happening, or the dots while you talk. */}
@@ -205,6 +235,22 @@ export default function Session() {
         </HoldButton>
       </View>
 
+      {teaching && (
+        <TeachMode
+          topic={topic}
+          idea={teaching.idea}
+          said={teaching.said}
+          onClose={() => {
+            setTeaching(null);
+            loop.dismissTeach();
+            loop.start();
+          }}
+          onDone={(q) => {
+            setTeaching(null);
+            loop.resumeAfterLesson(q);
+          }}
+        />
+      )}
     </ScreenIn>
   );
 }
@@ -217,6 +263,7 @@ const styles = StyleSheet.create({
   side: { width: 52 },
   title: { flex: 1, minWidth: 0, alignItems: "center", gap: 4 },
   controls: { position: "absolute", left: 24, right: 24, alignItems: "center", gap: 4 },
+  offer: { position: "absolute", left: 40, right: 40, alignItems: "center", gap: 6 },
   hintLine: { height: 26, justifyContent: "center", marginBottom: 14 },
   studentRow: { alignSelf: "flex-start", flexDirection: "row", alignItems: "flex-end", gap: 10, maxWidth: 320 },
   studentBubble: {
