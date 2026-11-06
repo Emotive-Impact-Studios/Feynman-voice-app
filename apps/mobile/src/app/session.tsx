@@ -15,6 +15,8 @@ import { LivingLight } from "../ui/LivingLight";
 import { moodFor } from "../ui/mood";
 import { useFennyCue } from "../ui/FennyOrb";
 import { reactionFor } from "../ui/reactions";
+import { GotChip, IdeaBar } from "../ui/IdeaProgress";
+import * as Haptics from "expo-haptics";
 import { RecordDisc } from "../ui/RecordDisc";
 import { ScreenIn } from "../ui/ScreenIn";
 import { VoiceGlow } from "../ui/VoiceGlow";
@@ -87,6 +89,13 @@ export default function Session() {
     if (r) react(r);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loop.phase, loop.move]);
+  // The got it moment: each key idea they nail gets a hop, a buzz and a chip.
+  useEffect(() => {
+    if (!loop.got) return;
+    react("yay");
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loop.got?.n]);
 
   // Gently animate the dot wave while you talk.
   const [tick, setTick] = useState(0);
@@ -114,12 +123,13 @@ export default function Session() {
   // feedback returns with gap analysis, build step 4.)
   // Saved once, whether you tap End, close, or go back with the system.
   const saved = useRef(false);
-  const latest = useRef({ spoken, questions: 0 });
-  latest.current = { spoken, questions: loop.turns.filter((t) => t.speaker === "student").length };
+  const latest = useRef({ spoken, questions: 0, ideas: [] as { id: string; idea: string }[], covered: [] as string[] });
+  latest.current = { spoken, questions: loop.turns.filter((t) => t.speaker === "student").length, ideas: loop.ideas, covered: loop.covered };
   const save = useCallback(() => {
     if (saved.current) return;
     saved.current = true;
-    recordSession(topic, latest.current.spoken, latest.current.questions, goal);
+    const l = latest.current;
+    recordSession(topic, l.spoken, l.questions, goal, l.ideas.length ? { ideas: l.ideas, covered: l.covered } : undefined);
   }, [topic, goal]);
   useEffect(() => save, [save]);
   const end = () => {
@@ -232,6 +242,9 @@ export default function Session() {
           </View>
           <View style={styles.side} />
         </View>
+        {/* The topic's key ideas, filling as they explain each one. */}
+        <IdeaBar total={loop.ideas.length} done={loop.covered.length} />
+        <GotChip got={loop.got} />
       </View>
 
       {/* Teach me, when Fenny can tell this bit is new to them. */}

@@ -24,6 +24,7 @@ export default function RootLayout() {
         <Stack.Screen name="session" options={{ animation: "fade", gestureEnabled: false }} />
         <Stack.Screen name="intro" options={{ animation: "fade", gestureEnabled: false }} />
         <Stack.Screen name="topic" options={{ presentation: "transparentModal", animation: "none" }} />
+        <Stack.Screen name="map" />
         <Stack.Screen name="dev" options={{ presentation: "modal" }} />
       </Stack>
     </>

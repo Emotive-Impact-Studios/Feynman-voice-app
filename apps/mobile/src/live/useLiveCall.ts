@@ -67,6 +67,12 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const [teach, setTeach] = useState<{ idea: string; open: boolean } | null>(null);
   /** The engine's move for the reply being spoken ("why", "puzzled", "close"...). Sets Fenny's face. */
   const [move, setMove] = useState<string | null>(null);
+  /** The topic's key ideas (the engine's private checklist) and the ids explained so far this call. */
+  const [ideas, setIdeas] = useState<{ id: string; idea: string }[]>([]);
+  const [covered, setCovered] = useState<string[]>([]);
+  const coveredRef = useRef<string[]>([]);
+  /** The latest idea they nailed, with a counter so each one celebrates once. */
+  const [got, setGot] = useState<{ idea: string; n: number } | null>(null);
 
   const phaseRef = useRef<CallPhase>("loading");
   const setPhase = useCallback((p: CallPhase) => {
@@ -405,6 +411,18 @@ export function useLiveCall(topic: string, settings: CallSettings) {
         if (sent.current?.id === id) sent.current.recorded = true;
       }
       if (e.type === "engine" && e.move !== "wait") setMove(e.move);
+      if (e.type === "engine" && e.ideas?.length) {
+        const list = e.ideas;
+        setIdeas(list);
+        const before = coveredRef.current;
+        const fresh = (e.covered ?? []).filter((id) => !before.includes(id));
+        if (fresh.length) {
+          coveredRef.current = [...before, ...fresh];
+          setCovered(coveredRef.current);
+          const last = list.find((k) => k.id === fresh[fresh.length - 1]);
+          if (last) setGot((g) => ({ idea: last.idea, n: (g?.n ?? 0) + 1 }));
+        }
+      }
       if (e.type === "engine" && e.move === "wrap") wrapped = true;
       // The server heard them stop mid-thought: keep listening instead of asking.
       if (e.type === "engine" && e.move === "wait") waited = true;
@@ -534,6 +552,9 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     liveSpeaking,
     finished,
     move,
+    ideas,
+    covered,
+    got,
     isTalking,
     start,
     /** "Done, ask me": send now instead of waiting for the pause. */
