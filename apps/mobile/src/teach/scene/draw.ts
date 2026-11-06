@@ -642,6 +642,14 @@ function drawBalance(c: SkCanvas, p: SkPaint, font: SkFont | null, s: BalanceSce
   const cy = 56;
   const arm = 96;
   const tilt = clamp((rw - lw) / 6, -1, 1) * 0.3 * beat(f, 1, 3);
+  // Ghost (kit v6): when a slider adds weight, a faint dashed beam stays where it was before.
+  const weighing = hasKind(changes, "weigh");
+  if (weighing) {
+    const lw0 = has(changes, "left", "weigh") ? 0 : s.leftWeight;
+    const rw0 = has(changes, "right", "weigh") ? 0 : s.rightWeight;
+    const t0 = clamp((rw0 - lw0) / 6, -1, 1) * 0.3 * beat(f, 1, 3);
+    if (Math.abs(t0 - tilt) > 0.02) line(c, p, cx - Math.cos(t0) * arm, cy - Math.sin(t0) * arm, cx + Math.cos(t0) * arm, cy + Math.sin(t0) * arm, 0.25, SIL, 1, [3, 6]);
+  }
   line(c, p, cx, cy + 6, cx, 140, 0.5, SIL, beat(f, 0, 3));
   line(c, p, cx - 34, 140, cx + 34, 140, 0.35, SIL, beat(f, 0, 3));
   const lx = cx - Math.cos(tilt) * arm;
@@ -670,6 +678,8 @@ function drawBalance(c: SkCanvas, p: SkPaint, font: SkFont | null, s: BalanceSce
 }
 
 // ---- scale and comparison ----
+/** A growing item starts at a fifth of its value, so its ghost is still visible. */
+const GROW_FROM = 0.2;
 function drawCompare(c: SkCanvas, p: SkPaint, font: SkFont | null, s: CompareScene, changes: Change[], f: Frame) {
   "worklet";
   const n = s.items.length;
@@ -679,7 +689,7 @@ function drawCompare(c: SkCanvas, p: SkPaint, font: SkFont | null, s: CompareSce
   let maxI = 0;
   for (let i = 0; i < n; i++) {
     const it = s.items[i];
-    const v = has(changes, it.label.toLowerCase(), "grow") ? it.value * (0.08 + 0.92 * f.v) : it.value;
+    const v = has(changes, it.label.toLowerCase(), "grow") ? it.value * (GROW_FROM + (1 - GROW_FROM) * f.v) : it.value;
     values.push(v);
     if (v > maxV) {
       maxV = v;
@@ -690,7 +700,8 @@ function drawCompare(c: SkCanvas, p: SkPaint, font: SkFont | null, s: CompareSce
   for (let i = 0; i < n; i++) {
     const shown = stepping ? clamp(f.v * n * 1.1 - i) : beat(f, (i / n) * 2, 3);
     if (shown <= 0) continue;
-    const isLit = i === maxI || has(changes, s.items[i].label.toLowerCase(), "grow");
+    const growing = has(changes, s.items[i].label.toLowerCase(), "grow");
+    const isLit = i === maxI || growing;
     if (s.style === "circles") {
       // Area in proportion. A huge ratio still shows the small one as a dot.
       const cell = VIEW_W / n;
@@ -699,6 +710,11 @@ function drawCompare(c: SkCanvas, p: SkPaint, font: SkFont | null, s: CompareSce
       const x = cell * i + cell / 2;
       const y = 82;
       // A big lit circle is drawn as a blue outline so it never floods the panel.
+      // Ghost: where a growing circle started, once it has clearly moved on.
+      if (growing && f.v > 0.12) {
+        stroke(p, SIL, 0.25 * shown, W0, [3, 6]);
+        c.drawCircle(x, y, Math.max(1.8, maxR * Math.sqrt((s.items[i].value * GROW_FROM) / maxV)), p);
+      }
       if (isLit && r > 16) ring(c, p, x, y, r, shown, BLUE);
       else if (isLit) dot(c, p, x, y, r, shown, BLUE);
       else if (r < 6) dot(c, p, x, y, r, shown);
@@ -717,6 +733,11 @@ function drawCompare(c: SkCanvas, p: SkPaint, font: SkFont | null, s: CompareSce
       } else {
         stroke(p, SIL, shown * 0.7);
         c.drawRRect(Skia.RRectXY(Skia.XYWHRect(x, base - h, bw, h), 3, 3), p);
+      }
+      // Ghost: a faint dashed level where a growing bar started, across and beside it.
+      if (growing && f.v > 0.12) {
+        const h0 = (base - top) * ((s.items[i].value * GROW_FROM) / maxV);
+        line(c, p, x - 8, base - h0, x + bw + 8, base - h0, 0.45 * shown, SIL, 1, [3, 6]);
       }
       label(c, p, font, s.items[i].label, x + bw / 2, base + 13, "center", isLit ? SIL : LAB, shown);
     }
