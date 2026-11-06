@@ -12,7 +12,7 @@ import { DotWave } from "../ui/Dots";
 import { Backdrop, Glass, Icon, Label, RoundButton, T } from "../ui/kit";
 import { HoldButton } from "../ui/HoldButton";
 import { LivingLight } from "../ui/LivingLight";
-import { SilverRing } from "../ui/SilverRing";
+import { RecordDisc } from "../ui/RecordDisc";
 import { Press } from "../ui/Press";
 import { ScreenIn } from "../ui/ScreenIn";
 import { VoiceGlow } from "../ui/VoiceGlow";
@@ -252,12 +252,14 @@ export default function Session() {
 
       {/* Shared controls */}
       <Glass strong style={[styles.controls, { bottom: Math.max(insets.bottom, 10) }]}>
-        <HoldButton size={58} label={ringLabel} onTap={canTap ? onRing : undefined} onHold={end}>
-          <View style={{ opacity: canTap ? 1 : 0.4 }}>
-            <SilverRing width={58} height={58}>
-              <Icon name={ringIcon} />
-            </SilverRing>
-          </View>
+        <HoldButton size={62} label={ringLabel} onTap={canTap ? onRing : undefined} onHold={end}>
+          {(hold) => (
+            <View style={{ opacity: canTap ? 1 : 0.4 }}>
+              <RecordDisc size={62} listening={loop.phase === "listening"} hold={hold}>
+                <Icon name={ringIcon} />
+              </RecordDisc>
+            </View>
+          )}
         </HoldButton>
         <View style={{ flex: 1, gap: 2 }}>
           <T size={15} weight="medium" lines={1}>
