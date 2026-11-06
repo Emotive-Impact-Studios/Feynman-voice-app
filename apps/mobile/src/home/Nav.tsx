@@ -8,6 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { colour } from "../theme";
 import { Glass, T } from "../ui/kit";
 import { LivingLight } from "../ui/LivingLight";
+import { useFennyCue } from "../ui/FennyOrb";
 import { smooth } from "../ui/motion";
 import { TabLight } from "../ui/TabLight";
 import { NAV_HEIGHT, navOffset } from "./styles";
@@ -46,6 +47,8 @@ export function TopBar({ top, tab, minutes, initial, onMe }: { top: number; tab:
 }
 
 export function Nav({ bottom, tab, onChange, onStart, width }: { bottom: number; tab: HomeTab; onChange: (t: HomeTab) => void; onStart: () => void; width: number }) {
+  // Pressing the light gives Fenny a little squish.
+  const [cue, react] = useFennyCue();
   // One lit pill springs between tabs instead of each tab having its own.
   const barW = width - 32 - 10 - NAV_HEIGHT - 12;
   const slot = barW / 3;
@@ -82,9 +85,9 @@ export function Nav({ bottom, tab, onChange, onStart, width }: { bottom: number;
           </Press>
         ))}
       </Glass>
-      <Press accessibilityRole="button" accessibilityLabel="Start explaining something new" onPress={onStart}>
+      <Press accessibilityRole="button" accessibilityLabel="Start explaining something new" onPressIn={() => react("boop")} onPress={onStart}>
         <View style={[styles.navLight, styles.solidBar]}>
-          <LivingLight size={40} peek />
+          <LivingLight size={40} peek cue={cue} />
         </View>
       </Press>
     </View>

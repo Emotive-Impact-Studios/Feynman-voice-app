@@ -13,6 +13,8 @@ import { Backdrop, Icon, Label, PillButton, T } from "../ui/kit";
 import { HoldButton } from "../ui/HoldButton";
 import { LivingLight } from "../ui/LivingLight";
 import { moodFor } from "../ui/mood";
+import { useFennyCue } from "../ui/FennyOrb";
+import { reactionFor } from "../ui/reactions";
 import { RecordDisc } from "../ui/RecordDisc";
 import { ScreenIn } from "../ui/ScreenIn";
 import { VoiceGlow } from "../ui/VoiceGlow";
@@ -73,6 +75,18 @@ export default function Session() {
   // Nodding along while they talk.
   const nod = loop.phase === "listening" && loop.isTalking ? 1 : 0;
   const voiceLevel = loop.phase === "listening" ? (loop.isTalking ? 1 : 0.25) : 0;
+  // Fenny's reactions: hello as the call starts, aha when you finish a turn,
+  // hmm when it's lost, yay when it gets it. Talking while it speaks.
+  const talk = loop.phase === "speaking" ? 1 : 0;
+  const [cue, react] = useFennyCue();
+  const was = useRef({ phase: loop.phase as string, move: loop.move });
+  useEffect(() => {
+    const next = { phase: loop.phase as string, move: loop.move };
+    const r = reactionFor(was.current, next);
+    was.current = next;
+    if (r) react(r);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loop.phase, loop.move]);
 
   // Gently animate the dot wave while you talk.
   const [tick, setTick] = useState(0);
@@ -141,8 +155,8 @@ export default function Session() {
           <VoiceGlow level={voiceLevel} height={230} dim />
           {/* Calm and empty, like a voice mode: one small living light and
               one line in the middle of the screen, nothing else lit. */}
-          <View style={[StyleSheet.absoluteFill, styles.centre, { justifyContent: "center", paddingBottom: 140 }]} pointerEvents="none">
-            <LivingLight size={120} energy={studentEnergy} mood={mood} nod={nod} />
+          <View style={[StyleSheet.absoluteFill, styles.centre, { justifyContent: "center", paddingBottom: 140 }]} pointerEvents="box-none">
+            <LivingLight size={120} energy={studentEnergy} mood={mood} nod={nod} talk={talk} cue={cue} touchable />
             <T size={22} weight="medium" style={{ textAlign: "center", marginTop: 26, maxWidth: 320, lineHeight: 30 }}>
               {question}
             </T>
@@ -155,7 +169,7 @@ export default function Session() {
           <VoiceGlow level={voiceLevel} height={260} />
           <View style={{ paddingTop: insets.top + 130, paddingHorizontal: 26 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <LivingLight size={30} energy={studentEnergy} mood={mood} nod={nod} />
+              <LivingLight size={30} energy={studentEnergy} mood={mood} nod={nod} talk={talk} cue={cue} />
               <Label tone="student">Student</Label>
             </View>
             <T size={36} weight="medium" style={{ marginTop: 14, lineHeight: 40 }}>
@@ -185,6 +199,8 @@ export default function Session() {
                     // Only the latest question has a face; older ones rest.
                     mood={i === loop.turns.length - 1 || !loop.turns.length ? mood : "rest"}
                     nod={i === loop.turns.length - 1 ? nod : 0}
+                    talk={i === loop.turns.length - 1 ? talk : 0}
+                    cue={i === loop.turns.length - 1 ? cue : null}
                   />
                   <View style={styles.studentBubble}>
                     <T size={16.5}>{t.text}</T>
