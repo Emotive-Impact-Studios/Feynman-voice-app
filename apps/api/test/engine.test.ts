@@ -42,6 +42,7 @@ describe("engine limits", () => {
   it("thanks them and stops once they say which bit felt shakiest", () => {
     const h = [L("Short version."), F("That was clear. Which bit felt shakiest to you?")];
     expect(allowedMoves(callState(h, "Probably the Km part."))).toEqual(["wrap"]);
+    expect(allowedMoves(callState(h, "Can we skip that?"))).toEqual(["wrap"]);
     expect(moveOf("Thanks, that's a good place to stop. We'll pick it up next time.")).toBe("wrap");
     const h2 = [...h, L("Probably the Km part."), F("Thanks, that's a good place to stop. We'll pick it up next time.")];
     expect(allowedMoves(callState(h2, "See you next time!"))).toEqual(["wrap"]);
@@ -52,6 +53,7 @@ describe("engine limits", () => {
     const h = [L("That's it."), F("Thanks. Can you explain the whole thing again in 30 seconds, really simply?")];
     expect(allowedMoves(callState(h, "Ooh, give me a sec."))).toEqual(["listen"]);
     expect(allowedMoves(callState(h, "Hang on, give me a moment to think about it."))).toEqual(["listen"]);
+    expect(allowedMoves(callState(h, "Hang on, I need a little more time to think."))).toEqual(["listen"]);
     expect(allowedMoves(callState(h, "Hang on, electricity flows through the circuit, the switch breaks it and the bulb goes out."))).toEqual(["close"]);
     const h2 = [...h, L("Ooh, give me a sec."), F("Mm, take your time."), L("Okay."), F("Go on.")];
     expect(allowedMoves(callState(h2, "Erm."))).toEqual(["close"]);
@@ -70,7 +72,7 @@ describe("engine limits", () => {
 
   it("moves on when they ask to skip, but not when they say don't skip", () => {
     const h = [L("Valves."), F("What do the valves do?")];
-    for (const t of ["Pass.", "I'll pass on that one.", "Can we skip that?", "Let's move on.", "Skip this one please."])
+    for (const t of ["I'd like to skip this one.", "I would like to move on.", "Pass.", "I'll pass on that one.", "Can we skip that?", "Let's move on.", "Skip this one please."])
       expect(allowedMoves(callState(h, t)), t).toEqual(["let_go"]);
     expect(callState(h, "Don't skip this one, I can explain it.").skipRequested).toBe(false);
     expect(callState(h, "The heart doesn't skip a beat because the valves work.").skipRequested).toBe(false);

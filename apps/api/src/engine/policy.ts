@@ -23,11 +23,11 @@ export const PROBES: Move[] = ["why", "what_if", "puzzled"];
 
 const STUCK = /\b(i\s*(don'?t|do not)\s*know|not sure|no idea|i forget|i can'?t remember|dunno|i'?m stuck|haven'?t got a clue)\b/i;
 /** "Can we skip that?": move on, not a sign they're stuck. Not when negated ("don't skip this"). */
-const SKIP = /^(?!.*\b(don'?t|do not|not|never)\s+(skip|pass|move on)\b)\s*(\w+[,.]?\s+){0,3}?(i'?ll (pass|skip)|pass on (that|this)|(can|could) we (skip|move on)|let'?s (skip|move on)|(just )?skip (that|this)( one)?( please)?\s*[.!?]*$|next question|(pass|skip)\s*[.!,]*$)/i;
+const SKIP = /^(?!.*\b(don'?t|do not|not|never)\s+(skip|pass|move on)\b)\s*(\w+[,.]?\s+){0,3}?(i'?ll (pass|skip)|pass on (that|this)|(can|could) we (skip|move on)|(i'?d|i would|i want to|i wanna)( like to)? (skip|pass|move on)|let'?s (skip|move on)|(just )?skip (that|this)( one)?( please)?\s*[.!?]*$|next question|(pass|skip)\s*[.!,]*$)/i;
 const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|please|go on|go on then|alright|sounds good)\b/i;
 const TELL_ME = /\b(just tell me|can you (just )?(tell|explain)|explain it to me|what('?s| is) the answer|show me)\b/i;
 /** "Hang on, let me think": not the retell itself. */
-const HESITATE = /\b(hang on|hold on|give me a (sec|second|moment|minute)|one (sec|second|moment)|let me think|thinking about it|bear with me|wait a (sec|second|moment))\b/i;
+const HESITATE = /\b(hang on|hold on|(need|want|have) (a (bit|little) )?(more )?time|a (bit|little) more time|give me a (sec|second|moment|minute)|one (sec|second|moment)|let me think|thinking about it|bear with me|wait a (sec|second|moment))\b/i;
 const NO = /^\s*(no|nah|nope|not now|no thanks|i'?m (fine|good)|let me try)\b/i;
 
 export const OFFER_LINE = "Want a quick explanation, then you tell me in your own words?";
@@ -104,7 +104,7 @@ export function callState(history: PastTurn[], transcript: string): CallState {
   };
 }
 
-const FILLER = /\b(um+|uh+|erm+|er|ah+|oh+|ooh+|okay|ok|right|so|yeah|well|just|about|it|that|the|to|a|me|i|you)\b/gi;
+const FILLER = /\b(um+|uh+|erm+|er|ah+|oh+|ooh+|okay|ok|right|so|yeah|well|just|about|it|that|the|to|a|me|i|i'?m|you|need|more|time|think|thinking|little|bit|sec|second|moment|minute|still|let|go|can|could|please|sorry)\b/gi;
 
 /** Only a pause to think ("hang on, give me a moment"), with no real answer in it. */
 function isHesitation(t: string): boolean {
@@ -131,13 +131,14 @@ export const DEFAULT_LIMITS: Limits = { retellFrom: 7, retellBy: 12, canShowMe: 
 export function allowedMoves(s: CallState, l: Limits = DEFAULT_LIMITS): Move[] {
   if (s.answeredOffer === "yes" || (s.askedToBeTold && l.canShowMe)) return ["show_me"];
   if (s.askedToBeTold) return ["let_go"];
+  if (s.lastMove === "close") return ["wrap"]; // even "can we skip that?" ends the call
   if (s.answeredOffer === "no" || s.skipRequested) return ["let_go"];
   // Close only once they have actually given the short version; a short
   // reply ("give me a sec") gets a nudge, at most twice.
   // After the shakiest-bit question, thank them and stop (the phone can end the
   // call on wrap). A short reply after that ("bye!") gets a goodbye; if they
   // really carry on explaining, follow them.
-  if (s.lastMove === "close" || (s.closed && s.lastMove === "wrap" && s.words < 12)) return ["wrap"];
+  if (s.closed && s.lastMove === "wrap" && s.words < 12) return ["wrap"];
   if (s.retellPending && !s.closed) return (s.words >= 8 && !s.hesitating) || s.sinceRetell >= 2 ? ["close"] : ["listen"];
   const done = s.retellAsked || s.closed;
   if (s.stuckStreak >= 2) return [l.canShowMe ? "offer_show_me" : "let_go"];
