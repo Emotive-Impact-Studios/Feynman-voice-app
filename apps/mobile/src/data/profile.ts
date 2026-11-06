@@ -158,3 +158,43 @@ export const SUBJECTS: [string, string][] = [
   ["cs", "Computer science"],
   ["other", "Something else"],
 ];
+
+/** One run of the Today sentence; `hl` runs are the numbers that get a dotted underline. */
+export interface SentencePart {
+  text: string;
+  hl?: "num" | "gap";
+}
+
+/**
+ * Today's opening sentence, built only from what the phone really knows:
+ * "Evening, Ama. Yesterday you taught Fenny 2 topics." The gap clause
+ * ("It caught 5 gaps, and 3 are ready to explain again.") appears once gap
+ * analysis (build step 4) passes real counts in.
+ */
+export function todaySentence(p: Profile, gaps?: { caught: number; due: number }, now = Date.now()): SentencePart[] {
+  const parts: SentencePart[] = [{ text: `${greeting(new Date(now))}${p.name ? `, ${p.name}` : ""}. ` }];
+  const last = p.topics[0];
+  if (!last) {
+    parts.push({ text: "Fenny is ready for your first topic." });
+    return parts;
+  }
+  const day = dayNumber(last.at);
+  const that = p.topics.filter((t) => dayNumber(t.at) === day);
+  parts.push({ text: `${dayWord(last.at, now)} you taught Fenny ` });
+  parts.push(that.length === 1 ? { text: that[0].title, hl: "num" } : { text: `${that.length} topics`, hl: "num" });
+  if (gaps && gaps.caught > 0) {
+    parts.push({ text: ". It caught " }, { text: `${gaps.caught} ${gaps.caught === 1 ? "gap" : "gaps"}`, hl: "gap" });
+    if (gaps.due > 0) parts.push({ text: ", and " }, { text: `${gaps.due} ${gaps.due === 1 ? "is" : "are"}`, hl: "num" }, { text: " ready to explain again." });
+    else parts.push({ text: "." });
+  } else parts.push({ text: "." });
+  return parts;
+}
+
+/** "Today", "Yesterday", "On Tuesday", "On 3 Nov". */
+export function dayWord(at: number, now = Date.now()) {
+  const days = dayNumber(now) - dayNumber(at);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `On ${new Date(at).toLocaleDateString("en-GB", { weekday: "long" })}`;
+  return `On ${new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+}

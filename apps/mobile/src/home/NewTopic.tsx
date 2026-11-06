@@ -2,6 +2,7 @@
 // Uploads arrive in build step 3, so the four sources are shown but marked
 // "Soon"; for now you type (or dictate) the topic and your student asks
 // about the basics.
+import { Press } from "../ui/Press";
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
 import { router } from "expo-router";
@@ -105,11 +106,11 @@ export default function NewTopic() {
                 style={styles.input}
                 accessibilityLabel="Topic"
               />
-              <Pressable onPress={() => start(topic)} disabled={!topic.trim()} accessibilityRole="button" accessibilityLabel="Start explaining" style={{ opacity: topic.trim() ? 1 : 0.4 }}>
+              <Press onPress={() => start(topic)} disabled={!topic.trim()} accessibilityRole="button" accessibilityLabel="Start explaining" style={{ opacity: topic.trim() ? 1 : 0.4 }}>
                 <SilverRing width={50} height={50}>
                   <Icon name="mic" />
                 </SilverRing>
-              </Pressable>
+              </Press>
             </View>
             {topic.trim().length > 0 && (
               <Animated.View entering={FadeIn}>
@@ -132,13 +133,13 @@ export default function NewTopic() {
               <Label style={{ marginTop: 18 }}>Recent</Label>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
                 {recent.map((t) => (
-                  <Pressable key={t.title} onPress={() => start(t.title)} accessibilityRole="button">
+                  <Press key={t.title} onPress={() => start(t.title)} accessibilityRole="button">
                     <Glass style={{ height: 40, borderRadius: 999, paddingHorizontal: 15, justifyContent: "center" }}>
                       <T size={14} tone="soft">
                         {t.title}
                       </T>
                     </Glass>
-                  </Pressable>
+                  </Press>
                 ))}
               </View>
             </Rise>
