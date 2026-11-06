@@ -21,7 +21,9 @@ export type Move =
 /** Moves that push the learner. At most one in any two turns. */
 export const PROBES: Move[] = ["why", "what_if", "puzzled"];
 
-const STUCK = /\b(i\s*(don'?t|do not)\s*know|not sure|no idea|i forget|i can'?t remember|dunno|i'?m stuck|haven'?t got a clue|i'?ll (pass|skip)|pass on (that|this)|(can we |let'?s )?skip (that|this)( one)?)\b|^\s*(pass|skip)\b[\s.!,]*$/i;
+const STUCK = /\b(i\s*(don'?t|do not)\s*know|not sure|no idea|i forget|i can'?t remember|dunno|i'?m stuck|haven'?t got a clue)\b/i;
+/** "Can we skip that?": move on, not a sign they're stuck. Not when negated ("don't skip this"). */
+const SKIP = /^(?!.*\b(don'?t|do not|not|never)\s+(skip|pass|move on)\b)(.*\b(i'?ll (pass|skip)|pass on (that|this)|(can we|let'?s|could we) (skip|move on)|skip (that|this)( one)?|next question)\b|\s*(pass|skip)\b[\s.!,]*$)/i;
 const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|please|go on|go on then|alright|sounds good)\b/i;
 const TELL_ME = /\b(just tell me|can you (just )?(tell|explain)|explain it to me|what('?s| is) the answer|show me)\b/i;
 /** "Hang on, let me think": not the retell itself. */
@@ -70,6 +72,8 @@ export interface CallState {
   answeredOffer?: "yes" | "no";
   /** They asked to be told. */
   askedToBeTold: boolean;
+  /** They asked to skip this one. */
+  skipRequested: boolean;
 }
 
 export function callState(history: PastTurn[], transcript: string): CallState {
@@ -95,6 +99,7 @@ export function callState(history: PastTurn[], transcript: string): CallState {
     words: transcript.trim() ? transcript.trim().split(/\s+/).length : 0,
     hesitating: HESITATE.test(transcript) && transcript.trim().split(/\s+/).length < 20,
     askedToBeTold: TELL_ME.test(transcript),
+    skipRequested: SKIP.test(transcript),
     answeredOffer: lastMove === "offer_show_me" ? (YES.test(transcript) ? "yes" : NO.test(transcript) ? "no" : undefined) : undefined,
   };
 }
@@ -117,7 +122,7 @@ export const DEFAULT_LIMITS: Limits = { retellFrom: 7, retellBy: 12, canShowMe: 
 export function allowedMoves(s: CallState, l: Limits = DEFAULT_LIMITS): Move[] {
   if (s.answeredOffer === "yes" || (s.askedToBeTold && l.canShowMe)) return ["show_me"];
   if (s.askedToBeTold) return ["let_go"];
-  if (s.answeredOffer === "no") return ["let_go"];
+  if (s.answeredOffer === "no" || s.skipRequested) return ["let_go"];
   // Close only once they have actually given the short version; a short
   // reply ("give me a sec") gets a nudge, at most twice.
   // After the shakiest-bit question, thank them and stop (the phone can end the

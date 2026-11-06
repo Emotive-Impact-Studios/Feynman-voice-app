@@ -65,9 +65,14 @@ describe("engine limits", () => {
 
   it("does not mistake the word pass for being stuck", () => {
     expect(callState([], "Blood can pass through the valve.").stuckStreak).toBe(0);
-    expect(callState([], "Pass.").stuckStreak).toBe(1);
-    expect(callState([], "I'll pass on that one.").stuckStreak).toBe(1);
-    expect(callState([], "Can we skip that?").stuckStreak).toBe(1);
+  });
+
+  it("moves on when they ask to skip, but not when they say don't skip", () => {
+    const h = [L("Valves."), F("What do the valves do?")];
+    for (const t of ["Pass.", "I'll pass on that one.", "Can we skip that?", "Let's move on.", "Skip this one please."])
+      expect(allowedMoves(callState(h, t)), t).toEqual(["let_go"]);
+    expect(callState(h, "Don't skip this one, I can explain it.").skipRequested).toBe(false);
+    expect(callState(h, "The heart doesn't skip a beat because the valves work.").skipRequested).toBe(false);
   });
 
   it("does not repeat the last move and keeps listening rare", () => {
