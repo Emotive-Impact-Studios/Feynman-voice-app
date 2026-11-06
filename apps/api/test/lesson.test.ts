@@ -45,6 +45,12 @@ describe("lesson checks", () => {
     d.bites[1].puzzle.answer = ["glue"];
     expect(() => checkLesson(d as never, req)).toThrow(/not one of the options/);
   });
+
+  it("rejects a match puzzle with a repeated card", () => {
+    const d = draft();
+    (d.bites[1] as { puzzle: object }).puzzle = { kind: "match", prompt: "Match them up.", options: ["Oxygen", "Glucose", "Carbon dioxide"], answer: ["Into cells", "Into cells", "Out of cells"], why: "." };
+    expect(() => checkLesson(d as never, req)).toThrow(/repeated/);
+  });
 });
 
 function openAIFetch(replies: object[]): typeof fetch {
