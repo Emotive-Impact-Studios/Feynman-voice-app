@@ -120,7 +120,7 @@ export class EndOfTurn {
 
   constructor(
     /** Seconds of quiet that end a turn. Long enough for a breath mid-thought. */
-    private silenceSeconds = 1.2,
+    private silenceSeconds = 2,
     /** Speech needed before quiet can end a turn, so a cough does not. */
     private minSpeechSeconds = 0.6,
   ) {}
@@ -158,9 +158,9 @@ export class EndOfTurn {
 }
 
 /** Quiet that ends a turn after an ordinary question. */
-export const TURN_QUIET_SECONDS = 1.2;
+export const TURN_QUIET_SECONDS = 2;
 /** Quiet that ends a turn after a "why" or "how" question, which needs thinking time. */
-export const THINKING_QUIET_SECONDS = 2.5;
+export const THINKING_QUIET_SECONDS = 3;
 
 /**
  * How long to wait in silence before the learner's answer to this question

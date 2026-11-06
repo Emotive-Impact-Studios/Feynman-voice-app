@@ -1,6 +1,6 @@
 // The session's view menu, from the canvas board: "Show me" Light only,
 // Subtitles or Full chat, with a tick on the current one. It springs in from
-// the view button at the top right. Holding the mic ring opens it too.
+// the view button at the top right.
 import { Pressable, StyleSheet, View } from "react-native";
 import Animated, { Easing, FadeOut, withSpring, withTiming } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
@@ -84,9 +84,6 @@ export function ViewMenu({
             </Press>
           );
         })}
-        <T size={12} tone="muted" style={styles.tip}>
-          Tip: hold the mic to open this too.
-        </T>
         <View style={styles.rule} />
         <Press accessibilityRole="menuitem" onPress={onTesting} style={styles.item}>
           <T size={13} tone="muted">
@@ -117,6 +114,5 @@ const styles = StyleSheet.create({
   },
   head: { fontSize: 11, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6 },
   item: { height: 48, paddingHorizontal: 12, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 12 },
-  tip: { paddingHorizontal: 12, paddingVertical: 8 },
-  rule: { height: StyleSheet.hairlineWidth, backgroundColor: colour.hairline, marginHorizontal: 12 },
+  rule: { height: StyleSheet.hairlineWidth, backgroundColor: colour.hairline, marginHorizontal: 12, marginTop: 6 },
 });

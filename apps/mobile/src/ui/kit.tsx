@@ -2,9 +2,10 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { colour, font, radius } from "../theme";
-import { LivingPhoto } from "./LivingPhoto";
+import { FennyAura } from "./FennyAura";
 import { Press } from "./Press";
 
 export const images = {
@@ -60,18 +61,24 @@ export function Label({ children, tone = "muted", style }: { children: ReactNode
   );
 }
 
-export function Glass({ children, style, strong }: { children?: ReactNode; style?: StyleProp<ViewStyle>; strong?: boolean }) {
+/**
+ * A glass surface: a soft fill lit from the top and a one-pixel highlight
+ * along the top edge, with no outline. `strong` is the denser glass for bars.
+ */
+export function Glass({ children, style, strong, blur = 28 }: { children?: ReactNode; style?: StyleProp<ViewStyle>; strong?: boolean; blur?: number }) {
   return (
-    <View style={[styles.glass, { backgroundColor: strong ? colour.glassStrong : colour.glass }, style]}>
-      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+    <View style={[styles.glass, strong && { backgroundColor: colour.glassStrong }, style]}>
+      <BlurView intensity={blur} tint="dark" style={StyleSheet.absoluteFill} />
+      {!strong && <LinearGradient pointerEvents="none" colors={["rgba(255,255,255,0.055)", "rgba(255,255,255,0.025)"]} style={StyleSheet.absoluteFill} />}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.topLight, strong && { borderTopColor: "rgba(255,255,255,0.06)" }]} />
       {children}
     </View>
   );
 }
 
-/** A background photo, drifting slowly and shifting with tilt (see LivingPhoto). */
-export function Backdrop(props: { source: number; opacity?: number; flip?: boolean; offsetY?: number }) {
-  return <LivingPhoto {...props} />;
+/** The living background: slow blurred lights drawn in code (see FennyAura). */
+export function Backdrop() {
+  return <FennyAura />;
 }
 
 export function PillButton({
@@ -95,10 +102,12 @@ export function PillButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       onPress={onPress}
-      style={[styles.pill, solid ? { backgroundColor: colour.text } : { backgroundColor: "rgba(255,255,255,0.10)", borderWidth: 1, borderColor: colour.hairline }, style]}
+      style={[styles.pill, solid ? styles.solid : styles.ghost, style]}
     >
+      {/* The primary button is soft silver, lit from above, not flat white. */}
+      {solid && <LinearGradient pointerEvents="none" colors={["#E6E8EC", "#CDD1D8"]} style={[StyleSheet.absoluteFill, styles.solidFill]} />}
       {children ?? (
-        <T size={15} weight={solid ? "semibold" : "regular"} tone={solid ? "dark" : "text"}>
+        <T size={15} weight={solid ? "semibold" : "regular"} tone={solid ? "dark" : "text"} style={solid ? undefined : { color: "#D6D9DE" }}>
           {label}
         </T>
       )}
@@ -159,14 +168,20 @@ export function Icon({ name, size = 20, color = colour.text }: { name: IconName;
 }
 
 const styles = StyleSheet.create({
-  glass: { borderRadius: radius.card, borderWidth: 1, borderColor: colour.hairline, overflow: "hidden" },
-  pill: { height: 56, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
-  round: {
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: colour.hairlineSoft,
-    alignItems: "center",
-    justifyContent: "center",
+  glass: { borderRadius: radius.card, overflow: "hidden" },
+  // Only the top edge catches the light.
+  topLight: { borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.07)" },
+  pill: { height: 56, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", paddingHorizontal: 20, overflow: "hidden" },
+  solid: {
+    backgroundColor: "#D9DCE1",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.6)",
+    shadowColor: "#000",
+    shadowOpacity: 0.6,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 6 },
   },
+  solidFill: { borderRadius: radius.pill },
+  ghost: { backgroundColor: "rgba(255,255,255,0.06)" },
+  round: { borderRadius: 999, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
 });
