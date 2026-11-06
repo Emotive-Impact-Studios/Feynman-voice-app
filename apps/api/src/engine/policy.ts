@@ -164,3 +164,22 @@ const VAGUE = /\b(what do you mean|what did you mean|which bit|what part|which p
 export function isVague(line: string): boolean {
   return VAGUE.test(line);
 }
+
+// Words a finished thought never ends on. Speech to text often adds a full
+// stop where the learner only paused, so these count whatever follows them.
+const TRAILING = /\b(and|but|because|cos|cuz|or|um+|uh+|erm+|er|the|an?|of|to|with|which|whereas|whereby|if|when|than)\W*$/i;
+// These finish thoughts too ("I think so.", "I'd like."), so they only count
+// with no closing punctuation.
+const TRAILING_OPEN = /\b(so|like|then|that|is|are|was|were)\s*$/i;
+
+/**
+ * True when the learner clearly stopped mid-thought, so Fenny should keep
+ * listening instead of answering. Only clear cases: a trailing connective or
+ * filler, or a line that ends on a comma, dash or ellipsis.
+ */
+export function unfinished(transcript: string): boolean {
+  const t = transcript.trim();
+  if (!t) return false;
+  if (/(,|\.\.\.|…|-|–|—)\s*$/.test(t)) return true;
+  return TRAILING.test(t) || TRAILING_OPEN.test(t);
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedMoves, callState, isVague, moveOf, OFFER_LINE } from "../src/engine/policy";
+import { allowedMoves, callState, isVague, moveOf, OFFER_LINE, unfinished } from "../src/engine/policy";
 import { engineTurn, oneQuestion } from "../src/engine/engine";
 import { keyIdeas } from "../src/engine/ideas";
 import type { PastTurn } from "../src/gemini";
@@ -156,5 +156,17 @@ describe("engineTurn", () => {
     expect(a.usage).toBeDefined();
     expect(again).toEqual({ ideas: a.ideas });
     expect(calls).toBe(2);
+  });
+});
+
+describe("unfinished", () => {
+  it("spots a learner who stopped mid-thought", () => {
+    for (const t of ["It moves across the membrane and.", "Because the water, um", "It goes from high to low because", "So the cell is,", "It's like the...", "and then the", "The thing is"])
+      expect(unfinished(t), t).toBe(true);
+  });
+
+  it("lets a finished thought through", () => {
+    for (const t of ["Water moves from dilute to concentrated.", "I think so.", "I'd like that.", "It's a bit like a sponge.", "Yes", "Not sure, to be honest.", "", "What do I do then?"])
+      expect(unfinished(t), t).toBe(false);
   });
 });
