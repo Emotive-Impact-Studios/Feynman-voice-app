@@ -2162,7 +2162,8 @@ function drawThings(c: SkCanvas, p: SkPaint, font: SkFont | null, s: ThingsScene
         const mx = ex + 25 * Math.cos(tm2);
         const my = ey + 25 * Math.sin(tm2);
         drawThing(c, p, s.items[2].thing, mx, my, 6, 1, isLit(2), kOf(2), 1.3);
-        label(c, p, font, s.items[2].label, mx, my - 13, "center", isLit(2) ? SIL : LAB, kOf(2));
+        // Its name sits on the far side from what it goes round, so it never covers it.
+        label(c, p, font, s.items[2].label, mx + Math.cos(tm2) * 14, my + Math.sin(tm2) * 12, Math.cos(tm2) > 0.3 ? "left" : Math.cos(tm2) < -0.3 ? "right" : "center", isLit(2) ? SIL : LAB, kOf(2));
       }
       drawThing(c, p, s.items[1].thing, ex, ey, 13, 1, isLit(1), k1);
       label(c, p, font, s.items[1].label, ex, ey + (n > 2 ? 34 : 22), "center", isLit(1) ? SIL : LAB, k1);

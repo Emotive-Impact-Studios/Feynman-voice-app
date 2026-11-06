@@ -907,7 +907,7 @@ export function checkScene(s: unknown): Scene | null {
       let items = (Array.isArray(r.items) ? r.items : [])
         .filter((t: Record<string, unknown>) => t && isThing(t.thing))
         .slice(0, max)
-        .map((t: Record<string, unknown>) => ({ thing: t.thing as ThingName, label: short(t.label, layout === "row" ? 4 : 3, 26), size: Number(t.size) > 0 ? Number(t.size) : 1 }));
+        .map((t: Record<string, unknown>) => ({ thing: t.thing as ThingName, label: short(t.label, layout === "row" || layout === "scale" ? 4 : 3, 26), size: Number(t.size) > 0 ? Number(t.size) : 1 }));
       const min = layout === "row" ? 1 : 2;
       if (items.length < min) return null;
       if (layout === "scale") {
