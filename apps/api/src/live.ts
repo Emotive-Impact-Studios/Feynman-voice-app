@@ -16,6 +16,7 @@ import { ProviderError, transcribeOpenAI } from "./openai";
 import { costOf, openAIPricesFromEnv, pricesFromEnv, wavSeconds, type CostLine } from "./pricing";
 import { notesBlock, STUDENT_SYSTEM_PROMPT } from "./prompt";
 import { SentenceSplitter } from "./sentences";
+import { speakable } from "./speakable";
 import { toSpeechChunks } from "./speech";
 import { engineTurn } from "./engine/engine";
 import { keyIdeas } from "./engine/ideas";
@@ -121,7 +122,10 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         let voiced: Promise<void> = Promise.resolve();
         let firstSentenceMs: number | undefined;
         let sonicChars = 0;
-        const speak = (text: string) => {
+        const speak = (raw: string) => {
+          // Every voice gets the same clean line: no dashes or symbols.
+          const text = speakable(raw);
+          if (!text) return;
           const i = index++;
           firstSentenceMs ??= Date.now() - t0;
           const work =
@@ -206,7 +210,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
           const c = costOf(r.usage, pricesFromEnv(env));
           lines.push({ label: `Gemini (${c.audioInTokens} audio in, ${c.textInTokens} text in, ${c.outTokens} out)`, usd: c.usd });
         }
-        if (index === 0) speak(question || "Sorry, could you say that again?");
+        if (index === 0) speak(speakable(question) || "Sorry, could you say that again?");
         timing.brain = Date.now() - t1;
         await voiced;
         if (sonicChars) lines.push({ label: `Cartesia Sonic (${sonicChars} characters)`, usd: sonicChars * credit });
@@ -217,7 +221,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         send({
           type: "done",
           transcript,
-          question: question || "Sorry, could you say that again?",
+          question: speakable(question) || "Sorry, could you say that again?",
           voice,
           stt,
           brain,
