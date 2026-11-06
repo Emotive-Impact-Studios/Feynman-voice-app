@@ -20,7 +20,8 @@
 //   Under Reduce Motion nothing loops and only the slider changes the scene.
 // The panel is 300 x 176; the view scales it to fit the screen.
 import { Skia, type SkCanvas, type SkFont, type SkPaint } from "@shopify/react-native-skia";
-import type { BalanceScene, Change, CompareScene, CrowdScene, GraphScene, LinksScene, PairScene, PairSide, ParticlesScene, Scene, Shape, SpectrumScene, StairsScene, TestScene, ThresholdScene, TreeScene, UnitsScene, VennScene } from "./types";
+import { THINGS } from "./things";
+import type { BalanceScene, BraceScene, Change, CompareScene, CrowdScene, CutawayScene, FanScene, FunnelScene, GraphScene, GridScene, LayersScene, LinksScene, MapScene, MirrorScene, PairScene, PairSide, ParticlesScene, RadialScene, SankeyScene, Scene, Shape, SpectrumScene, SpiralScene, StackScene, StairsScene, TestScene, ThingsScene, ThresholdScene, TimelineScene, TreeScene, UnitsScene, VennScene, WaveScene, ZoomScene } from "./types";
 
 export const VIEW_W = 300;
 export const VIEW_H = 176;
@@ -36,7 +37,12 @@ export interface Frame {
   intro: number;
   /** True when Reduce Motion is on: nothing loops. */
   still: boolean;
+  /** Hand-drawn lines: a slight, steady marker wobble. */
+  hand?: boolean;
 }
+
+/** The app's drawing style. Clean by default; the demo compares both. */
+export const HAND_DRAWN = false;
 
 const SIL = "#E6E9EE";
 const BLUE = "#A9BEE6";
@@ -1116,7 +1122,9 @@ function drawUnits(c: SkCanvas, p: SkPaint, font: SkFont | null, s: UnitsScene, 
     const col = i % 10;
     const a = beat(f, (r / 10) * 1.6, 3);
     const lit = i < shown;
-    dot(c, p, X0 + col * P, Y0 + r * P, lit ? 2.9 : 2.5, lit ? a : a * 0.45, lit ? BLUE : SIL);
+    // Counted in little pictures (people, coins) when the lesson names one, as in Isotype.
+    if (s.thing && THINGS[s.thing]) drawThing(c, p, s.thing, X0 + col * P, Y0 + r * P, 5, lit ? a : a * 0.5, lit, 1, 1.1, false);
+    else dot(c, p, X0 + col * P, Y0 + r * P, lit ? 2.9 : 2.5, lit ? a : a * 0.45, lit ? BLUE : SIL);
   }
   const kLab = beat(f, 2, 3);
   label(c, p, font, `${shown} in 100`, 172, 64, "left", SIL, kLab);
@@ -1183,10 +1191,1210 @@ function drawCrowd(c: SkCanvas, p: SkPaint, font: SkFont | null, s: CrowdScene, 
   }
 }
 
-export function drawScene(c: SkCanvas, scene: Scene, changes: Change[], f: Frame, font: SkFont | null) {
+// ---- shared bits for the newer devices ----
+/** The light passing along a line: a short lit stretch with a head, k from 0 to 1. */
+function pass(c: SkCanvas, p: SkPaint, x1: number, y1: number, x2: number, y2: number, k: number) {
   "worklet";
-  const p = Skia.Paint();
-  p.setAntiAlias(true);
+  if (k <= 0 || k >= 1) return;
+  const q0 = Math.max(0, k - 0.35);
+  line(c, p, x1 + (x2 - x1) * q0, y1 + (y2 - y1) * q0, x1 + (x2 - x1) * k, y1 + (y2 - y1) * k, 1, BLUE, 1, undefined, W0 + 0.6);
+  dot(c, p, x1 + (x2 - x1) * k, y1 + (y2 - y1) * k, 2.6, 1, BLUE);
+}
+/** A polyline through points [x0, y0, x1, y1, ...]. */
+function strokePts(c: SkCanvas, p: SkPaint, pts: number[], a: number, colour = SIL, w = W0, dash?: number[]) {
+  "worklet";
+  if (a <= 0.01 || pts.length < 4) return;
+  const path = Skia.PathBuilder.Make();
+  path.moveTo(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]);
+  stroke(p, colour, a, w, dash);
+  c.drawPath(path.build(), p);
+}
+/** A filled shape through points. */
+function fillPts(c: SkCanvas, p: SkPaint, pts: number[], a: number, colour: string) {
+  "worklet";
+  if (a <= 0.01 || pts.length < 6) return;
+  const path = Skia.PathBuilder.Make();
+  path.moveTo(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]);
+  path.close();
+  fill(p, colour, a);
+  c.drawPath(path.build(), p);
+}
+/** Points round an arc, angles in radians. */
+function arcPts(cx: number, cy: number, r: number, a0: number, a1: number, n: number) {
+  "worklet";
+  const pts: number[] = [];
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + ((a1 - a0) * i) / n;
+    pts.push(cx + r * Math.cos(a), cy + r * Math.sin(a));
+  }
+  return pts;
+}
+/** A soft box: outlined, or lit with a wash of blue. */
+function box(c: SkCanvas, p: SkPaint, x: number, y: number, w: number, h: number, a: number, lit: boolean, r = 4) {
+  "worklet";
+  if (a <= 0.01 || w <= 0 || h <= 0) return;
+  const rr = Skia.RRectXY(Skia.XYWHRect(x, y, w, h), r, r);
+  if (lit) {
+    fill(p, BLUE, 0.14 * a);
+    c.drawRRect(rr, p);
+  }
+  stroke(p, lit ? BLUE : SIL, lit ? a : 0.55 * a, lit ? W0 + 0.4 : W0);
+  c.drawRRect(rr, p);
+}
+function textW(font: SkFont | null, text: string) {
+  "worklet";
+  return font ? font.getTextWidth(text) : text.length * 5;
+}
+/** 1000 as "1,000". */
+function fmt(n: number) {
+  "worklet";
+  const r = Math.round(n);
+  const s = String(Math.abs(r));
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 === 0) out += ",";
+    out += s[i];
+  }
+  return (r < 0 ? "-" : "") + out;
+}
+function pct(share: number) {
+  "worklet";
+  return `${share >= 10 ? Math.round(share) : Math.round(share * 10) / 10}%`;
+}
+/** Text alignment that keeps a label inside the panel. */
+function alignAt(x: number) {
+  "worklet";
+  return x < 46 ? "left" : x > 254 ? "right" : "center";
+}
+
+// ---- grid: where does it fall on two scales at once? ----
+// A two by two. The item travels to its place and lights its quadrant's name.
+function drawGrid(c: SkCanvas, p: SkPaint, font: SkFont | null, s: GridScene, changes: Change[], f: Frame) {
+  "worklet";
+  const sliding = hasKind(changes, "slide");
+  const L = 52;
+  const R = 248;
+  const T = 30;
+  const B = 150;
+  const MX = (L + R) / 2;
+  const MY = (T + B) / 2;
+  const k0 = beat(f, 0, 3);
+  line(c, p, L, MY, R, MY, 0.4, SIL, k0);
+  line(c, p, MX, B, MX, T, 0.4, SIL, k0);
+  label(c, p, font, s.x, R, MY + 12, "right", LAB, beat(f, 0.6, 3));
+  label(c, p, font, s.y, MX, T - 12, "center", LAB, beat(f, 0.6, 3));
+  // Keep the item clear of the corner names.
+  const X = L + s.atX * (R - L);
+  const Y = B - 22 - s.atY * (B - T - 44);
+  const fx = sliding ? L + (1 - s.atX) * (R - L) : MX;
+  const fy = sliding ? B - 22 - (1 - s.atY) * (B - T - 44) : MY;
+  const u = sliding ? f.v : beat(f, 2.4, 3);
+  const x = fx + (X - fx) * u;
+  const y = fy + (Y - fy) * u;
+  const arrived = u >= 0.999;
+  const q = (y < MY ? 0 : 2) + (x > MX ? 1 : 0);
+  const kQ = beat(f, 1.2, 3);
+  const qx = [L + 4, R - 4, L + 4, R - 4];
+  const qy = [T + 9, T + 9, B - 7, B - 7];
+  const qa: ("left" | "right")[] = ["left", "right", "left", "right"];
+  for (let i = 0; i < 4; i++) label(c, p, font, s.quadrants[i], qx[i], qy[i], qa[i], arrived && i === q ? SIL : LAB, kQ * (arrived && i !== q ? 0.7 : 1));
+  const kI = beat(f, 2, 3);
+  if (u > 0.02 && u < 0.98 && !f.still) {
+    for (let j = 1; j <= 3; j++) dot(c, p, x - (X - fx) * 0.05 * j, y - (Y - fy) * 0.05 * j, 3 - j * 0.6, (0.5 - j * 0.12) * kI);
+  }
+  dot(c, p, x, y, 5, kI, BLUE);
+  // The name sits toward the middle line, away from the corner names.
+  const right = x < R - 72;
+  label(c, p, font, s.item, right ? x + 10 : x - 10, y < MY ? y + 10 : y - 10, right ? "left" : "right", SIL, kI);
+}
+
+// ---- timeline: when, and in what order? ----
+// Events on a line. A light travels from the start to the lit event; what it
+// has passed is drawn firmer than what is still to come.
+function drawTimeline(c: SkCanvas, p: SkPaint, font: SkFont | null, s: TimelineScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.events.length;
+  const X0 = 30;
+  const X1 = 270;
+  const Y = 90;
+  const t0 = s.events[0].t;
+  const t1 = s.events[n - 1].t;
+  const xs: number[] = [];
+  for (let i = 0; i < n; i++) xs.push(s.scale === "true" && t1 > t0 ? X0 + ((s.events[i].t - t0) / (t1 - t0)) * (X1 - X0) : X0 + (i * (X1 - X0)) / Math.max(1, n - 1));
+  line(c, p, X0 - 14, Y, X1 + 14, Y, 0.35, SIL, beat(f, 0, 3));
+  const u = stepping ? 1 : beat(f, 2.4, 3);
+  const target = stepping ? X0 + (X1 - X0) * f.v : xs[s.at];
+  const lx = X0 + (target - X0) * u;
+  if (lx > X0 + 0.5) line(c, p, X0, Y, lx, Y, 0.75, SIL);
+  let litI = s.at;
+  if (stepping) {
+    litI = -1;
+    for (let i = 0; i < n; i++) if (xs[i] <= lx + 0.5) litI = i;
+  }
+  const arrived = stepping ? litI >= 0 : u >= 0.999;
+  // Rows for the labels, so none overlap: above, below, then further out with a leader.
+  const rowEnd = [-999, -999, -999, -999];
+  for (let i = 0; i < n; i++) {
+    const e = s.events[i];
+    const w = Math.max(textW(font, e.label), textW(font, e.when));
+    const align = alignAt(xs[i]);
+    const a0 = align === "left" ? xs[i] - 3 : align === "right" ? xs[i] + 3 - w : xs[i] - w / 2;
+    let row = 0;
+    while (row < 3 && a0 < rowEnd[row] + 6) row++;
+    rowEnd[row] = a0 + w;
+    const up = row % 2 === 0;
+    const far = row >= 2;
+    const ly = up ? Y - (far ? 41 : 15) : Y + (far ? 43 : 17);
+    const wy = up ? ly - 13 : ly + 13;
+    const kE = beat(f, 0.8 + (i / n) * 1.0, 3);
+    const passed = xs[i] <= lx + 0.5;
+    const lit = arrived && i === litI;
+    if (far) line(c, p, xs[i], up ? Y - 7 : Y + 7, xs[i], up ? ly + 6 : ly - 6, 0.22 * kE, SIL);
+    line(c, p, xs[i], Y - 5, xs[i], Y + 5, kE * (passed ? 0.9 : 0.5), SIL);
+    if (lit) dot(c, p, xs[i], Y, 5, 1, BLUE);
+    else dot(c, p, xs[i], Y, 2.6, kE * (passed ? 0.9 : 0.45));
+    const ax = align === "left" ? xs[i] - 3 : align === "right" ? xs[i] + 3 : xs[i];
+    label(c, p, font, e.label, ax, ly, align, lit ? SIL : LAB, kE);
+    label(c, p, font, e.when, ax, wy, align, LAB, kE * 0.75);
+  }
+  const head = stepping ? !arrived || Math.abs(lx - xs[litI]) > 3 : u > 0.01 && u < 0.999;
+  if (head) {
+    if (!f.still && !stepping) for (let j = 1; j <= 3; j++) dot(c, p, lx - j * 4.5, Y, 2.6 - j * 0.5, 0.5 - j * 0.12);
+    dot(c, p, lx, Y, 2.9, 1, BLUE);
+  }
+}
+
+// ---- layers: what is built on, or inside, what? ----
+// stack: bands built from the bottom up. nested: half rings, outermost first.
+function drawLayers(c: SkCanvas, p: SkPaint, font: SkFont | null, s: LayersScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.layers.length;
+  const litI = stepping ? Math.min(n - 1, Math.floor(f.v * n)) : s.at;
+  const kLit = stepping ? 1 : beat(f, 2.6, 3);
+  if (s.style === "nested") {
+    const CX = 150;
+    const CY = 156;
+    const R0 = 136;
+    line(c, p, CX - R0 - 6, CY, CX + R0 + 6, CY, 0.3, SIL, beat(f, 0, 3));
+    for (let i = 0; i < n; i++) {
+      const ro = (R0 * (n - i)) / n;
+      const ri = (R0 * (n - i - 1)) / n;
+      const k = beat(f, 0.2 + (i / n) * 1.6, 3);
+      const lit = i === litI && kLit > 0.01;
+      if (lit) {
+        const pts = arcPts(CX, CY, ro, Math.PI, TAU, 36);
+        const inner = ri > 0 ? arcPts(CX, CY, ri, TAU, Math.PI, 24) : [CX, CY];
+        fillPts(c, p, pts.concat(inner), 0.14 * kLit, BLUE);
+      }
+      strokePts(c, p, arcPts(CX, CY, ro, Math.PI, Math.PI + Math.PI * k, 40), lit ? kLit : 0.55, lit ? BLUE : SIL, lit ? W0 + 0.4 : W0);
+      label(c, p, font, s.layers[i], CX, CY - (ro + ri) / 2, "center", lit ? SIL : LAB, k);
+    }
+    label(c, p, font, s.whole, CX, CY + 13, "center", LAB, beat(f, 1, 3));
+    return;
+  }
+  const W = 176;
+  const X = 150 - W / 2 + 10;
+  const h = Math.min(24, (128 - (n - 1) * 4) / n);
+  const total = n * h + (n - 1) * 4;
+  const top = 88 - total / 2;
+  for (let i = 0; i < n; i++) {
+    const k = beat(f, 0.2 + ((n - 1 - i) / n) * 1.6, 3);
+    const y = top + i * (h + 4) - (1 - k) * 8;
+    const lit = i === litI && kLit > 0.5;
+    box(c, p, X, y, W, h, k, lit);
+    label(c, p, font, s.layers[i], X + W / 2, y + h / 2, "center", lit ? SIL : LAB, k);
+  }
+  if (s.whole) {
+    const kW = beat(f, 1.6, 3);
+    line(c, p, X - 12, top, X - 12, top + total, 0.3, SIL, kW);
+    c.save();
+    c.translate(X - 22, top + total / 2);
+    c.rotate(-90, 0, 0);
+    label(c, p, font, s.whole, 0, 0, "center", LAB, kW);
+    c.restore();
+  }
+}
+
+// ---- wave: what repeats as it travels? ----
+// The particles only move up and down (or to and fro); the wave moves along.
+// One particle is lit so the eye can follow it.
+function drawWave(c: SkCanvas, p: SkPaint, font: SkFont | null, s: WaveScene, changes: Change[], f: Frame) {
+  "worklet";
+  const X0 = 28;
+  const X1 = 272;
+  const Y = 90;
+  const lam = hasKind(changes, "stretch") ? 60 + 90 * f.v : 96;
+  const ampMax = hasKind(changes, "grow") ? 8 + 26 * f.v : 26;
+  const amp = ampMax * beat(f, 2, 3);
+  const tm = hasKind(changes, "speed") ? f.T : f.t;
+  const phase = tm * TAU * 0.45;
+  const kD = beat(f, 0, 3);
+  if (s.kind === "longitudinal") {
+    const N = 26;
+    const D = amp * 0.42;
+    for (let row = 0; row < 3; row++) {
+      const yy = Y - 20 + row * 20;
+      for (let i = 0; i < N; i++) {
+        const x0 = X0 + ((X1 - X0) * i) / (N - 1);
+        const kI = beat(f, 0.3 + (i / N) * 1.2, 3);
+        const x = x0 + D * Math.sin((TAU * (x0 - X0)) / lam - phase);
+        const lit = row === 1 && i === 9;
+        if (lit) {
+          line(c, p, x0 - ampMax * 0.42, yy + 9, x0 + ampMax * 0.42, yy + 9, 0.35 * kI, SIL, 1, [2, 4]);
+          dot(c, p, x, yy, 4, kI, BLUE);
+        } else dot(c, p, x, yy, 2.1, kI * 0.75);
+      }
+    }
+  } else {
+    const pts: number[] = [];
+    for (let i = 0; i <= 64; i++) {
+      const x = X0 + ((X1 - X0) * i * kD) / 64;
+      pts.push(x, Y - amp * Math.sin((TAU * (x - X0)) / lam - phase));
+    }
+    strokePts(c, p, pts, 0.22 * kD);
+    const N = 25;
+    for (let i = 0; i < N; i++) {
+      const x = X0 + ((X1 - X0) * i) / (N - 1);
+      const kI = beat(f, 0.4 + (i / N) * 1.2, 3);
+      const y = Y - amp * Math.sin((TAU * (x - X0)) / lam - phase);
+      const lit = i === 8;
+      if (lit) {
+        line(c, p, x, Y - ampMax, x, Y + ampMax, 0.3 * kI, SIL, 1, [2, 4]);
+        dot(c, p, x, y, 4.2, kI, BLUE);
+      } else dot(c, p, x, y, 2.4, kI * 0.85);
+    }
+    if (s.amplitude) {
+      const kA = beat(f, 2.4, 3);
+      line(c, p, X1 + 12, Y, X1 + 12, Y - amp, 0.6 * kA, SIL);
+      line(c, p, X1 + 8, Y - amp, X1 + 16, Y - amp, 0.6 * kA, SIL);
+      label(c, p, font, s.amplitude, X1 + 18, Y - ampMax - 12, "right", LAB, kA);
+    }
+  }
+  if (s.wavelength) {
+    const kR = beat(f, 2.6, 3);
+    const xa = 64;
+    line(c, p, xa, 26, xa + lam, 26, 0.6 * kR, SIL);
+    line(c, p, xa, 22, xa, 30, 0.6 * kR, SIL);
+    line(c, p, xa + lam, 22, xa + lam, 30, 0.6 * kR, SIL);
+    label(c, p, font, s.wavelength, xa + lam / 2, 15, "center", LAB, kR);
+  }
+  label(c, p, font, s.what, X0, Y + 62, "left", LAB, beat(f, 1, 3));
+}
+
+// ---- mirror: what is the partner of this? ----
+// Two columns across a dashed mirror. Lighting one side sends the light across
+// to its partner.
+function drawMirror(c: SkCanvas, p: SkPaint, font: SkFont | null, s: MirrorScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.pairs.length;
+  const MX = 150;
+  const LX = 120;
+  const RX = 180;
+  const T = 50;
+  const B = 140;
+  const span = Math.min(32 * (n - 1), B - T);
+  const topY = (T + B) / 2 - span / 2;
+  line(c, p, MX, topY - 26, MX, topY + span + 22, 0.35, SIL, beat(f, 0, 3), [4, 6]);
+  label(c, p, font, s.leftTitle, LX, topY - 26, "right", LAB, beat(f, 0.5, 3));
+  label(c, p, font, s.rightTitle, RX, topY - 26, "left", LAB, beat(f, 0.5, 3));
+  const litI = stepping ? Math.min(n - 1, Math.floor(f.v * n)) : s.lit;
+  const prog = stepping ? clamp((f.v * n - litI) * 1.6) : beat(f, 2.4, 3);
+  const pitch = Math.min(32, (B - T) / Math.max(1, n - 1));
+  const y0 = (T + B) / 2 - (pitch * (n - 1)) / 2;
+  for (let i = 0; i < n; i++) {
+    const y = y0 + i * pitch;
+    const k = beat(f, 1 + (i / n) * 0.8, 3);
+    const lit = i === litI;
+    line(c, p, LX + 8, y, RX - 8, y, lit ? 0.35 : 0.18, SIL, k, [2, 5]);
+    const leftOn = lit && prog > 0.01;
+    const rightOn = lit && prog >= 0.999;
+    dot(c, p, LX, y, leftOn ? 4.2 : 3, k, leftOn ? BLUE : SIL);
+    dot(c, p, RX, y, rightOn ? 4.2 : 3, k, rightOn ? BLUE : SIL);
+    label(c, p, font, s.pairs[i].left, LX - 11, y, "right", lit ? SIL : LAB, k);
+    label(c, p, font, s.pairs[i].right, RX + 11, y, "left", lit ? SIL : LAB, k);
+    if (lit) pass(c, p, LX + 5, y, RX - 5, y, prog);
+  }
+}
+
+// ---- stack: what goes on top, and what comes off first? ----
+function drawStack(c: SkCanvas, p: SkPaint, font: SkFont | null, s: StackScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.items.length;
+  const W = 116;
+  const H = 19;
+  const G = 4;
+  const X = 150 - W / 2;
+  const BOT = 150;
+  const yOf = (i: number) => BOT - (i + 1) * H - i * G;
+  line(c, p, X - 14, BOT + 3, X + W + 14, BOT + 3, 0.5, SIL, beat(f, 0, 3));
+  label(c, p, font, s.label, X - 18, BOT - 8, "right", LAB, beat(f, 0.5, 3));
+  // How far through the action: the top item drops in (push) or lifts off (pop).
+  let placed = n - 1;
+  let moving = n - 1;
+  let u = beat(f, 2.4, 3);
+  if (stepping) {
+    const m = f.v * (s.action === "push" ? n : n - 1);
+    if (s.action === "push") {
+      placed = Math.min(n, Math.floor(m));
+      moving = placed < n ? placed : n - 1;
+      u = placed < n ? m - placed : 1;
+    } else {
+      placed = n - 1 - Math.min(n - 1, Math.floor(m));
+      moving = placed;
+      u = Math.floor(m) >= n - 1 ? 1 : m - Math.floor(m);
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    const kI = stepping ? 1 : beat(f, 0.3 + (i / n) * 1.6, 3);
+    if (s.action === "push") {
+      if (i > moving) continue;
+      if (i === moving) {
+        const y = yOf(i) - (1 - ease(u)) * 46;
+        const a = clamp(u * 3);
+        box(c, p, X, y, W, H, a, true);
+        label(c, p, font, s.items[i], 150, y + H / 2, "center", SIL, a);
+        continue;
+      }
+      if (stepping && i >= placed) continue;
+    } else {
+      if (stepping && i > placed) continue;
+      if (i === moving) {
+        const y = yOf(i) - ease(u) * 40;
+        const a = (1 - u * 0.6) * kI;
+        box(c, p, X, y, W, H, a, u > 0.01);
+        label(c, p, font, s.items[i], 150, y + H / 2, "center", u > 0.01 ? SIL : LAB, a);
+        continue;
+      }
+    }
+    box(c, p, X, yOf(i), W, H, kI, false);
+    label(c, p, font, s.items[i], 150, yOf(i) + H / 2, "center", LAB, kI);
+  }
+}
+
+// ---- radial: what sits round one centre? ----
+// A hub with spokes, the light running out along the lit one; or, for a cycle,
+// stages round a rim with the light going round in order.
+function drawRadial(c: SkCanvas, p: SkPaint, font: SkFont | null, s: RadialScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.spokes.length;
+  const CX = 150;
+  const CY = 88;
+  const R = 58;
+  const RC = 21;
+  const ang = (i: number) => -Math.PI / 2 + (i * TAU) / n;
+  const litI = stepping ? Math.min(n - 1, Math.floor(f.v * n)) : s.lit;
+  const prog = stepping ? clamp((f.v * n - litI) * 1.5) : beat(f, 2.4, 3);
+  if (s.cycle) {
+    for (let i = 0; i < n; i++) {
+      const d = 9 / R;
+      const kA = beat(f, 0.8 + (i / n) * 1.2, 3);
+      strokePts(c, p, arcPts(CX, CY, R, ang(i) + d, ang(i) + d + (TAU / n - 2 * d) * kA, 16), 0.45);
+    }
+    // The light goes round the rim from the first stage to the lit one.
+    if (litI > 0 && prog > 0 && prog < 1) {
+      const a1 = ang(0) + (litI * TAU * prog) / n;
+      strokePts(c, p, arcPts(CX, CY, R, Math.max(ang(0), a1 - 0.5), a1, 10), 1, BLUE, W0 + 0.6);
+      dot(c, p, CX + R * Math.cos(a1), CY + R * Math.sin(a1), 2.6, 1, BLUE);
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    const a = ang(i);
+    const cs = Math.cos(a);
+    const sn = Math.sin(a);
+    const nx = CX + R * cs;
+    const ny = CY + R * sn;
+    const k = beat(f, 0.8 + (i / n) * 1.0, 3);
+    const lit = i === litI;
+    const arrived = lit && (prog >= 0.999 || (s.cycle && litI === 0 && prog > 0.5));
+    const x1 = CX + (RC + 3) * cs;
+    const y1 = CY + (RC + 3) * sn;
+    if (!s.cycle) {
+      line(c, p, x1, y1, nx - 6 * cs, ny - 6 * sn, arrived ? 0.8 : 0.38, SIL, k);
+      if (lit) pass(c, p, x1, y1, nx - 6 * cs, ny - 6 * sn, prog);
+    } else line(c, p, x1, y1, nx - 6 * cs, ny - 6 * sn, 0.14, SIL, k);
+    dot(c, p, nx, ny, 5, k, PANEL);
+    if (arrived) dot(c, p, nx, ny, 5, 1, BLUE);
+    else ring(c, p, nx, ny, 5, k);
+    const align = cs > 0.25 ? "left" : cs < -0.25 ? "right" : "center";
+    const lx = CX + (R + 12) * cs;
+    const ly = CY + (R + 12) * sn + (align === "center" ? (sn > 0 ? 3 : -3) : 0);
+    label(c, p, font, s.spokes[i], lx, ly, align, arrived ? SIL : LAB, k);
+  }
+  const kC = beat(f, 0, 3);
+  dot(c, p, CX, CY, RC, kC, PANEL);
+  ring(c, p, CX, CY, RC, kC);
+  label(c, p, font, s.centre, CX, CY, "center", SIL, kC);
+}
+
+// ---- cutaway: what is the whole made of? ----
+// A circle cut into its real shares, one share lit, with a key beside it.
+function drawCutaway(c: SkCanvas, p: SkPaint, font: SkFont | null, s: CutawayScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.parts.length;
+  const CX = 90;
+  const CY = 82;
+  const R = 56;
+  let total = 0;
+  for (let i = 0; i < n; i++) total += s.parts[i].share;
+  if (total <= 0) return;
+  const starts: number[] = [];
+  let acc = 0;
+  for (let i = 0; i < n; i++) {
+    starts.push(acc / total);
+    acc += s.parts[i].share;
+  }
+  starts.push(1);
+  const shown = stepping ? Math.min(n, Math.floor(f.v * n) + 1) : n;
+  const litI = stepping ? shown - 1 : s.lit;
+  const kL = stepping ? 1 : beat(f, 2.6, 3);
+  const a0 = -Math.PI / 2 + starts[litI] * TAU;
+  const a1 = -Math.PI / 2 + starts[litI + 1] * TAU;
+  if (kL > 0.01) fillPts(c, p, [CX, CY].concat(arcPts(CX, CY, R, a0, a1, Math.max(4, Math.round((a1 - a0) * 12)))), 0.16 * kL, BLUE);
+  strokePts(c, p, arcPts(CX, CY, R, -Math.PI / 2, -Math.PI / 2 + TAU * beat(f, 0, 3), 72), 0.6);
+  for (let i = 0; i < shown; i++) {
+    const kB = stepping ? 1 : beat(f, 1 + (i / n) * 0.8, 3);
+    const a = -Math.PI / 2 + starts[i] * TAU;
+    if (n > 1) line(c, p, CX, CY, CX + R * Math.cos(a), CY + R * Math.sin(a), 0.45, SIL, kB);
+  }
+  if (kL > 0.01) strokePts(c, p, arcPts(CX, CY, R, a0, a1, Math.max(4, Math.round((a1 - a0) * 12))), kL, BLUE, W0 + 0.6);
+  const pitch = Math.min(20, 120 / n);
+  const top = CY - ((n - 1) * pitch) / 2;
+  for (let i = 0; i < shown; i++) {
+    const y = top + i * pitch;
+    const k = stepping ? 1 : beat(f, 1.4 + (i / n) * 0.8, 3);
+    const lit = i === litI && kL > 0.5;
+    dot(c, p, 176, y, lit ? 3.4 : 2.4, k, lit ? BLUE : SIL);
+    label(c, p, font, s.parts[i].label, 186, y, "left", lit ? SIL : LAB, k);
+    label(c, p, font, pct(s.parts[i].share), 290, y, "right", lit ? SIL : LAB, k);
+  }
+  label(c, p, font, s.whole, CX, CY + R + 14, "center", LAB, beat(f, 0.6, 3));
+}
+
+// ---- funnel: how many drop out at each stage? ----
+function drawFunnel(c: SkCanvas, p: SkPaint, font: SkFont | null, s: FunnelScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.stages.length;
+  const CXB = 180;
+  const MAXW = 150;
+  const H = 15;
+  const pitch = Math.min(28, 128 / Math.max(1, n - 1));
+  const top = 88 - ((n - 1) * pitch) / 2;
+  const max = s.stages[0].value;
+  const shown = stepping ? Math.min(n, Math.floor(f.v * n) + 1) : n;
+  const litI = stepping ? shown - 1 : s.lit;
+  const kL = stepping ? 1 : beat(f, 2.6, 3);
+  for (let i = 0; i < shown; i++) {
+    const w = Math.max(6, (MAXW * s.stages[i].value) / max);
+    const y = top + i * pitch;
+    const k = stepping ? 1 : beat(f, 0.3 + (i / n) * 1.6, 3);
+    const lit = i === litI && kL > 0.5;
+    const ww = w * k;
+    box(c, p, CXB - ww / 2, y - H / 2, ww, H, k, lit, 3);
+    if (i + 1 < shown) {
+      const w2 = Math.max(6, (MAXW * s.stages[i + 1].value) / max);
+      const k2 = stepping ? 1 : beat(f, 0.3 + ((i + 1) / n) * 1.6, 3);
+      line(c, p, CXB - w / 2, y + H / 2, CXB - w2 / 2, y + pitch - H / 2, 0.2 * k2, SIL);
+      line(c, p, CXB + w / 2, y + H / 2, CXB + w2 / 2, y + pitch - H / 2, 0.2 * k2, SIL);
+    }
+    label(c, p, font, s.stages[i].label, 14, y, "left", lit ? SIL : LAB, k);
+    label(c, p, font, fmt(s.stages[i].value), 294, y, "right", lit ? SIL : LAB, k);
+  }
+}
+
+// ---- sankey: how does one flow split, by amount? ----
+// One band in, split into bands as thick as their shares; dots ride along them.
+function drawSankey(c: SkCanvas, p: SkPaint, font: SkFont | null, s: SankeyScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.splits.length;
+  const XS = 30;
+  const XM = 96;
+  const XE = 206;
+  const H = 96;
+  const TOP = 40;
+  const GAP = 6;
+  const kS = beat(f, 0, 3);
+  fillPts(c, p, [XS, TOP, XM, TOP, XM, TOP + H, XS, TOP + H], 0.07 * kS, SIL);
+  line(c, p, XS, TOP, XM, TOP, 0.45, SIL, kS);
+  line(c, p, XS, TOP + H, XM, TOP + H, 0.45, SIL, kS);
+  label(c, p, font, s.source, XS, TOP - 11, "left", LAB, kS);
+  const shown = stepping ? Math.min(n, Math.floor(f.v * n) + 1) : n;
+  const litI = stepping ? shown - 1 : s.lit;
+  const kL = stepping ? 1 : beat(f, 2.6, 3);
+  let total = 0;
+  for (let i = 0; i < n; i++) total += s.splits[i].share;
+  const hs: number[] = [];
+  const slots: number[] = [];
+  let need = GAP * (n - 1);
+  for (let i = 0; i < n; i++) {
+    hs.push((H * s.splits[i].share) / Math.max(1e-6, total));
+    slots.push(Math.max(hs[i], 22));
+    need += slots[i];
+  }
+  let sy = TOP;
+  let ty = 88 - need / 2;
+  const tm = f.t;
+  for (let i = 0; i < n; i++) {
+    const h = hs[i];
+    const tyb = ty + (slots[i] - h) / 2;
+    if (i < shown) {
+      const k = stepping ? 1 : beat(f, 1 + (i / n) * 1.2, 3);
+      const lit = i === litI && kL > 0.5;
+      const topPts: number[] = [];
+      const botPts: number[] = [];
+      const M = 18;
+      for (let j = 0; j <= M; j++) {
+        const u = (j / M) * k;
+        const e = u * u * (3 - 2 * u);
+        const x = XM + (XE - XM) * u;
+        topPts.push(x, sy + (tyb - sy) * e);
+        botPts.push(x, sy + h + (tyb - sy) * e);
+      }
+      const shape: number[] = topPts.slice();
+      for (let j = botPts.length - 2; j >= 0; j -= 2) shape.push(botPts[j], botPts[j + 1]);
+      fillPts(c, p, shape, lit ? 0.2 : 0.07, lit ? BLUE : SIL);
+      strokePts(c, p, topPts, lit ? 0.9 : 0.35, lit ? BLUE : SIL);
+      strokePts(c, p, botPts, lit ? 0.9 : 0.35, lit ? BLUE : SIL);
+      if (k >= 0.999 && !f.still) {
+        for (let j = 0; j < 3; j++) {
+          const u = (tm * 0.22 + j / 3 + i * 0.13) % 1;
+          const e = u * u * (3 - 2 * u);
+          dot(c, p, XM + (XE - XM) * u, sy + h / 2 + (tyb - sy) * e, 1.8, 0.55, lit ? BLUE : SIL);
+        }
+      }
+      label(c, p, font, s.splits[i].label, XE + 8, tyb + h / 2 - 5, "left", lit ? SIL : LAB, k);
+      label(c, p, font, pct(s.splits[i].share), XE + 8, tyb + h / 2 + 7, "left", LAB, k);
+    }
+    sy += h;
+    ty += slots[i] + GAP;
+  }
+}
+
+// ---- fan: how uncertain is the forecast? ----
+// The record up to now, then a fan of quiet lines that widens with time and
+// one lit central forecast.
+function drawFan(c: SkCanvas, p: SkPaint, font: SkFont | null, s: FanScene, changes: Change[], f: Frame) {
+  "worklet";
+  const L = 36;
+  const R = 262;
+  const T = 18;
+  const B = 140;
+  axes(c, p, font, f, L, T, R, B, s.x, s.y);
+  const X = (u: number) => L + 6 + u * (R - L - 12);
+  const Y = (v: number) => B - 6 - clamp(v, 0, 1) * (B - T - 14);
+  const base = (u: number) => crowdY(s.shape, u, 0) * 0.85 + 0.06;
+  const g = hasKind(changes, "grow") ? 0.25 + 0.75 * f.v : 1;
+  const kP = beat(f, 1, 3);
+  const past: number[] = [];
+  const N = 30;
+  for (let i = 0; i <= N; i++) {
+    const u = (s.now * kP * i) / N;
+    past.push(X(u), Y(base(u) + (rnd(i * 7 + 1) - 0.5) * 0.05 * (i > 0 && i < N ? 1 : 0)));
+  }
+  strokePts(c, p, past, 0.8);
+  const kN = beat(f, 1.6, 3);
+  line(c, p, X(s.now), B - 4, X(s.now), T + 8, 0.28 * kN, SIL, 1, [3, 5]);
+  const kF = beat(f, 2, 3);
+  const spreadAt = (u: number) => (0.34 * g * (u - s.now)) / Math.max(0.05, 1 - s.now);
+  const outer: number[] = [];
+  const inner: number[] = [];
+  for (let i = 0; i <= 24; i++) {
+    const u = s.now + ((1 - s.now) * kF * i) / 24;
+    outer.push(X(u), Y(base(u) + spreadAt(u)));
+    inner.push(X(u), Y(base(u) - spreadAt(u)));
+  }
+  const region = outer.slice();
+  for (let j = inner.length - 2; j >= 0; j -= 2) region.push(inner[j], inner[j + 1]);
+  fillPts(c, p, region, 0.05, SIL);
+  for (let m = 1; m <= 3; m++) {
+    for (let sgn = -1; sgn <= 1; sgn += 2) {
+      const pts: number[] = [];
+      for (let i = 0; i <= 24; i++) {
+        const u = s.now + ((1 - s.now) * kF * i) / 24;
+        pts.push(X(u), Y(base(u) + (sgn * spreadAt(u) * m) / 3));
+      }
+      strokePts(c, p, pts, 0.14 + 0.04 * (3 - m));
+    }
+  }
+  const kC = beat(f, 2.4, 3);
+  if (kC > 0.01) {
+    const pts: number[] = [];
+    for (let i = 0; i <= 24; i++) {
+      const u = s.now + ((1 - s.now) * kC * i) / 24;
+      pts.push(X(u), Y(base(u)));
+    }
+    strokePts(c, p, pts, 1, BLUE);
+    const ue = s.now + (1 - s.now) * kC;
+    dot(c, p, X(ue), Y(base(ue)), kC < 0.99 ? 2.6 : 3.4, 1, BLUE);
+    label(c, p, font, s.label, X(1), Y(base(1) + spreadAt(1)) - 10, "right", SIL, clamp((kC - 0.9) * 10));
+  }
+}
+
+// ---- spiral: a cycle that builds each time round ----
+function drawSpiral(c: SkCanvas, p: SkPaint, font: SkFont | null, s: SpiralScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.stages.length;
+  const CX = 150;
+  const CY = 80;
+  const R0 = 6;
+  const R1 = 50;
+  const TH = s.turns * TAU;
+  const rAt = (th: number) => R0 + ((R1 - R0) * th) / TH;
+  const ptAt = (th: number) => [CX + rAt(th) * Math.cos(th - Math.PI / 2), CY + rAt(th) * Math.sin(th - Math.PI / 2)];
+  const kD = beat(f, 0, 3);
+  const path: number[] = [];
+  const M = 160;
+  for (let i = 0; i <= M; i++) {
+    const q = ptAt((TH * kD * i) / M);
+    path.push(q[0], q[1]);
+  }
+  strokePts(c, p, path, 0.42);
+  for (let t = 0; t < s.turns; t++) {
+    for (let i = 0; i < n; i++) {
+      const th = t * TAU + (i * TAU) / n;
+      const q = ptAt(th);
+      dot(c, p, q[0], q[1], 2.2, beat(f, 1 + (th / TH) * 0.8, 3) * (0.35 + (0.5 * (t + 1)) / s.turns));
+    }
+  }
+  const lp = stepping ? f.v : beat(f, 2.2, 3);
+  const thL = TH * lp;
+  const cur = Math.floor((((thL % TAU) + TAU) % TAU) / (TAU / n) + 0.0001) % n;
+  for (let i = 0; i < n; i++) {
+    const a = (i * TAU) / n - Math.PI / 2;
+    const cs = Math.cos(a);
+    const sn = Math.sin(a);
+    const align = cs > 0.25 ? "left" : cs < -0.25 ? "right" : "center";
+    const lit = lp > 0.01 && i === cur;
+    // Names sit outside the last turn, so the light never runs over them.
+    const lr = R1 + 15;
+    label(c, p, font, s.stages[i], CX + lr * cs, CY + lr * sn + (align === "center" ? (sn > 0 ? 4 : -4) : 0), align, lit ? SIL : LAB, beat(f, 1.6, 3));
+  }
+  if (lp > 0.01) {
+    const tail: number[] = [];
+    for (let i = 0; i <= 12; i++) {
+      const q = ptAt(Math.max(0, thL - 0.9) + ((thL - Math.max(0, thL - 0.9)) * i) / 12);
+      tail.push(q[0], q[1]);
+    }
+    strokePts(c, p, tail, 1, BLUE, W0 + 0.6);
+    const q = ptAt(thL);
+    dot(c, p, q[0], q[1], lp >= 0.999 ? 4.2 : 2.8, 1, BLUE);
+  }
+  label(c, p, font, s.label, CX, 166, "center", LAB, beat(f, 2, 3));
+}
+
+// ---- zoom: the same thing at each scale ----
+// Circles left to right, each a closer look at a small square in the one before.
+function drawZoom(c: SkCanvas, p: SkPaint, font: SkFont | null, s: ZoomScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.levels.length;
+  const r = n <= 3 ? 30 : n === 4 ? 25 : 21;
+  const gap = Math.min(110, 236 / Math.max(1, n - 1));
+  const x0 = 150 - (gap * (n - 1)) / 2;
+  const Y = 74;
+  const litI = stepping ? Math.min(n - 1, Math.floor(f.v * n)) : s.at;
+  const kL = stepping ? 1 : beat(f, 2.6, 3);
+  for (let i = 0; i < n; i++) {
+    const x = x0 + i * gap;
+    const k = beat(f, 0.3 + (i / n) * 1.4, 3);
+    const lit = i === litI && kL > 0.5;
+    // Finer detail at each level: more, smaller marks.
+    const marks = 4 + i * 3;
+    for (let j = 0; j < marks; j++) {
+      const a = rnd(j * 3 + i * 17) * TAU;
+      const d = Math.sqrt(rnd(j * 5 + i * 11)) * r * 0.7;
+      dot(c, p, x + d * Math.cos(a), Y + d * Math.sin(a), Math.max(0.9, 2.2 - i * 0.3), k * 0.4);
+    }
+    if (lit) {
+      fill(p, BLUE, 0.1 * kL);
+      c.drawCircle(x, Y, r, p);
+    }
+    stroke(p, lit ? BLUE : SIL, lit ? kL : 0.6 * k, lit ? W0 + 0.4 : W0);
+    c.drawCircle(x, Y, r, p);
+    if (i < n - 1) {
+      const sq = r * 0.3;
+      const sx = x + r * 0.3;
+      const sy = Y - r * 0.32;
+      stroke(p, SIL, 0.6 * k);
+      c.drawRRect(Skia.RRectXY(Skia.XYWHRect(sx, sy, sq, sq), 1.5, 1.5), p);
+      const nx = x + gap;
+      const k2 = beat(f, 0.3 + ((i + 1) / n) * 1.4, 3);
+      line(c, p, sx + sq, sy, nx - r * 0.72, Y - r * 0.7, 0.22, SIL, k2);
+      line(c, p, sx + sq, sy + sq, nx - r * 0.72, Y + r * 0.7, 0.22, SIL, k2);
+      if (i === litI - 1 && !stepping) pass(c, p, sx + sq, sy + sq / 2, nx - r, Y, beat(f, 2.2, 3));
+    }
+    label(c, p, font, s.levels[i].label, x, Y + r + 13, "center", lit ? SIL : LAB, k);
+    label(c, p, font, s.levels[i].size, x, Y + r + 26, "center", LAB, k * 0.75);
+  }
+}
+
+// ---- brace: which belong together? ----
+function drawBrace(c: SkCanvas, p: SkPaint, font: SkFont | null, s: BraceScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.items.length;
+  const X0 = 34;
+  const X1 = 266;
+  const Y = 70;
+  const xs: number[] = [];
+  for (let i = 0; i < n; i++) xs.push(X0 + (i * (X1 - X0)) / (n - 1));
+  const g = s.groups.length;
+  const shown = stepping ? Math.min(g, Math.floor(f.v * g) + 1) : g;
+  const litI = stepping ? shown - 1 : s.lit;
+  const kL = stepping ? 1 : beat(f, 2.6, 3);
+  const inLit = (i: number) => kL > 0.5 && i >= s.groups[litI].from && i <= s.groups[litI].to;
+  const gapX = (X1 - X0) / Math.max(1, n - 1);
+  let crowded = false;
+  for (let i = 0; i < n; i++) if (textW(font, s.items[i]) > gapX - 8) crowded = true;
+  for (let i = 0; i < n; i++) {
+    const k = beat(f, 0.2 + (i / n) * 1.0, 3);
+    dot(c, p, xs[i], Y, inLit(i) ? 3.6 : 3.2, k * (inLit(i) ? 1 : 0.75));
+    const ly = crowded && i % 2 === 1 ? Y - 27 : Y - 14;
+    label(c, p, font, s.items[i], xs[i], ly, alignAt(xs[i]), inLit(i) ? SIL : LAB, k);
+  }
+  for (let j = 0; j < shown; j++) {
+    const gr = s.groups[j];
+    const a = xs[gr.from] - 10;
+    const b = xs[gr.to] + 10;
+    const mid = (a + b) / 2;
+    const k = stepping ? 1 : beat(f, 1.6 + (j / g) * 0.6, 3);
+    const lit = j === litI && kL > 0.5;
+    poly(c, p, [a, Y + 12, a + 4, Y + 19, mid - 6, Y + 19, mid, Y + 27, mid + 6, Y + 19, b - 4, Y + 19, b, Y + 12], lit ? 1 : 0.6, lit ? BLUE : SIL, k);
+    label(c, p, font, gr.label, mid, Y + 41, alignAt(mid), lit ? SIL : LAB, k);
+  }
+}
+
+// ---- map: where are places, and what moves between them? ----
+// A schematic map, north up: dots and routes only, never coastlines. One
+// light travels the routes in order.
+function drawMap(c: SkCanvas, p: SkPaint, font: SkFont | null, s: MapScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const L = 44;
+  const R = 256;
+  const T = 26;
+  const B = 146;
+  const px = (i: number) => L + s.places[i].x * (R - L);
+  const py = (i: number) => B - s.places[i].y * (B - T);
+  const k0 = beat(f, 0, 3);
+  stroke(p, SIL, 0.12 * k0);
+  c.drawRRect(Skia.RRectXY(Skia.XYWHRect(L - 26, T - 16, R - L + 52, B - T + 32), 14, 14), p);
+  line(c, p, R + 14, T + 4, R + 14, T - 6, 0.5 * k0, SIL);
+  label(c, p, font, "N", R + 14, T + 13, "center", LAB, k0);
+  const m = s.routes.length;
+  // A route bows a little to the left of its direction of travel.
+  const curve = (j: number, u: number) => {
+    const a = s.routes[j].from;
+    const b = s.routes[j].to;
+    const ax = px(a);
+    const ay = py(a);
+    const bx = px(b);
+    const by = py(b);
+    const mx = (ax + bx) / 2 + (ay - by) * 0.18;
+    const my = (ay + by) / 2 + (bx - ax) * 0.18;
+    const v = 1 - u;
+    return [v * v * ax + 2 * v * u * mx + u * u * bx, v * v * ay + 2 * v * u * my + u * u * by];
+  };
+  const lp = stepping ? f.v : beat(f, 2.4, 3);
+  const seg = m ? Math.min(m - 1, Math.floor(lp * m)) : 0;
+  const segU = m ? lp * m - seg : 0;
+  for (let j = 0; j < m; j++) {
+    const k = beat(f, 1.2 + (j / m) * 0.8, 3);
+    const passed = j < seg || (j === seg && lp >= 0.999);
+    const pts: number[] = [];
+    for (let i = 0; i <= 24; i++) {
+      const q = curve(j, (i / 24) * k);
+      pts.push(q[0], q[1]);
+    }
+    strokePts(c, p, pts, passed ? 0.75 : 0.35, SIL, W0, passed ? undefined : [3, 5]);
+    if (j === seg && lp > 0.01 && lp < 0.999) {
+      const tail: number[] = [];
+      for (let i = 0; i <= 10; i++) {
+        const q = curve(j, Math.max(0, segU - 0.3) + ((segU - Math.max(0, segU - 0.3)) * i) / 10);
+        tail.push(q[0], q[1]);
+      }
+      strokePts(c, p, tail, 1, BLUE, W0 + 0.6);
+      const q = curve(j, segU);
+      dot(c, p, q[0], q[1], 2.6, 1, BLUE);
+    }
+    if (lp >= 0.999 && !f.still) {
+      const q = curve(j, (f.t * 0.25 + j * 0.31) % 1);
+      dot(c, p, q[0], q[1], 1.8, 0.5);
+    }
+  }
+  const arrived = lp >= 0.999;
+  for (let i = 0; i < s.places.length; i++) {
+    const k = beat(f, 0.4 + (i / s.places.length) * 0.8, 3);
+    const lit = i === s.lit && arrived;
+    dot(c, p, px(i), py(i), 4.5, k, PANEL);
+    if (lit) dot(c, p, px(i), py(i), 4.8, 1, BLUE);
+    else ring(c, p, px(i), py(i), 4.5, k);
+    // The name goes on whichever side (right, left, above, below) crosses the
+    // fewest routes and stays on the panel.
+    const w = textW(font, s.places[i].label);
+    const cx = [px(i) + 9, px(i) - 9, px(i), px(i)];
+    const cy = [py(i), py(i), py(i) - 12, py(i) + 13];
+    const L0 = [cx[0], cx[1] - w, cx[2] - w / 2, cx[3] - w / 2];
+    let best = 0;
+    let bestCost = 1e9;
+    for (let o = 0; o < 4; o++) {
+      let cost = o === 0 ? 0 : o === 1 ? 0.5 : 1;
+      if (L0[o] < 4 || L0[o] + w > 296) cost += 50;
+      for (let j = 0; j < m; j++) {
+        for (let u = 0; u <= 12; u++) {
+          const q = curve(j, u / 12);
+          if (q[0] > L0[o] - 3 && q[0] < L0[o] + w + 3 && q[1] > cy[o] - 7 && q[1] < cy[o] + 7) cost += 3;
+        }
+      }
+      if (cost < bestCost) {
+        bestCost = cost;
+        best = o;
+      }
+    }
+    const al = best === 0 ? "left" : best === 1 ? "right" : "center";
+    label(c, p, font, s.places[i].label, cx[best], cy[best], al, lit ? SIL : LAB, k);
+  }
+}
+
+// ---- things: real objects, people and places, from the same marks ----
+/** The soft light behind a lit thing. */
+function thingHalo(c: SkCanvas, x: number, y: number, h: number, a: number) {
+  "worklet";
+  if (a <= 0.01) return;
+  const hp = Skia.Paint();
+  hp.setColor(Skia.Color(BLUE));
+  hp.setAlphaf(clamp(a) * 0.16);
+  hp.setMaskFilter(Skia.MaskFilter.MakeBlur(0, Math.min(12, 3 + h * 0.3), true));
+  c.drawCircle(x, y, h * 0.85, hp);
+}
+/** Draws a thing centred on (x, y), half its size h, built on mark by mark as k goes from 0 to 1. */
+function drawThing(c: SkCanvas, p: SkPaint, name: string, x: number, y: number, h: number, a: number, lit: boolean, k = 1, w = W0, glow = true) {
+  "worklet";
+  const marks = THINGS[name];
+  if (!marks || a <= 0.01 || k <= 0) return;
+  const colour = lit ? BLUE : SIL;
+  const al = lit ? a : a * 0.82;
+  if (lit && glow) thingHalo(c, x, y, h, a * clamp(k * 2 - 0.6));
+  const n = marks.length;
+  for (let i = 0; i < n; i++) {
+    const m = marks[i];
+    const u = clamp(k * n - i);
+    if (u <= 0) break;
+    const code = m[0] as string;
+    const v = m as number[];
+    if (code === "l") {
+      line(c, p, x + v[1] * h, y + v[2] * h, x + v[3] * h, y + v[4] * h, al, colour, u, undefined, w);
+    } else if (code === "c" || code === "a") {
+      const a0 = code === "c" ? -Math.PI / 2 : (v[4] * Math.PI) / 180;
+      const a1 = code === "c" ? a0 + TAU : (v[5] * Math.PI) / 180;
+      if (code === "c" && u >= 1) {
+        stroke(p, colour, al, w);
+        c.drawCircle(x + v[1] * h, y + v[2] * h, v[3] * h, p);
+      } else strokePts(c, p, arcPts(x + v[1] * h, y + v[2] * h, v[3] * h, a0, a0 + (a1 - a0) * u, Math.max(6, Math.round(Math.abs(a1 - a0) * 6))), al, colour, w);
+    } else if (code === "d") {
+      fill(p, colour, al * u);
+      c.drawCircle(x + v[1] * h, y + v[2] * h, Math.max(0.8, v[3] * h), p);
+    } else if (code === "b") {
+      stroke(p, colour, al * u, w);
+      c.drawRRect(Skia.RRectXY(Skia.XYWHRect(x + v[1] * h, y + v[2] * h, v[3] * h, v[4] * h), v[5] * h, v[5] * h), p);
+    } else {
+      // p open path, z closed path, q dashed path (the hidden part of something).
+      const pts = (v.length - 1) / 2;
+      const upto = u * (code === "z" ? pts : pts - 1);
+      const path = Skia.PathBuilder.Make();
+      path.moveTo(x + v[1] * h, y + v[2] * h);
+      for (let j = 1; j <= Math.ceil(upto) && j <= pts; j++) {
+        const jj = j % pts;
+        const px = x + v[1 + jj * 2] * h;
+        const py = y + v[2 + jj * 2] * h;
+        if (j > upto) {
+          const pj = j - 1;
+          const qx = x + v[1 + pj * 2] * h;
+          const qy = y + v[2 + pj * 2] * h;
+          const r = upto - pj;
+          path.lineTo(qx + (px - qx) * r, qy + (py - qy) * r);
+        } else path.lineTo(px, py);
+      }
+      stroke(p, colour, code === "q" ? al * 0.7 : al, w, code === "q" ? [3, 4] : undefined);
+      c.drawPath(path.build(), p);
+    }
+  }
+}
+
+// ---- things: what is it, who is involved, what does it look like? ----
+// row: side by side (one alone is a big single picture). versus: two set
+// against each other. chain: each becomes the next. orbit: one goes round
+// another. scale: real relative sizes on one line.
+function drawThings(c: SkCanvas, p: SkPaint, font: SkFont | null, s: ThingsScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.items.length;
+  const litI = stepping ? Math.min(n - 1, Math.floor(f.v * n)) : s.lit;
+  const kL = stepping ? 1 : beat(f, 2.6, 3);
+  const isLit = (i: number) => i === litI && kL > 0.5;
+  const kOf = (i: number) => beat(f, 0.2 + (i / Math.max(1, n)) * 1.8, 3);
+  if (s.layout === "orbit") {
+    const CX = 150;
+    const CY = 80;
+    const RX = 104;
+    const RY = 46;
+    const tm = f.still ? 1.3 : (hasKind(changes, "speed") ? f.T : f.t) * 0.45 + 1.3;
+    strokePts(c, p, ellipsePts(CX, CY, RX, RY, beat(f, 0.8, 3)), 0.22, SIL, W0, [2, 5]);
+    drawThing(c, p, s.items[0].thing, CX, CY, 25, 1, isLit(0), kOf(0));
+    label(c, p, font, s.items[0].label, CX, CY + 36, "center", isLit(0) ? SIL : LAB, kOf(0));
+    if (n > 1) {
+      const k1 = kOf(1);
+      const ex = CX + RX * Math.cos(tm);
+      const ey = CY + RY * Math.sin(tm);
+      if (n > 2) {
+        const tm2 = tm * 3.2;
+        strokePts(c, p, ellipsePts(ex, ey, 25, 25, beat(f, 1.6, 3)), 0.18, SIL, W0, [2, 4]);
+        const mx = ex + 25 * Math.cos(tm2);
+        const my = ey + 25 * Math.sin(tm2);
+        drawThing(c, p, s.items[2].thing, mx, my, 6, 1, isLit(2), kOf(2), 1.3);
+        label(c, p, font, s.items[2].label, mx, my - 13, "center", isLit(2) ? SIL : LAB, kOf(2));
+      }
+      drawThing(c, p, s.items[1].thing, ex, ey, 13, 1, isLit(1), k1);
+      label(c, p, font, s.items[1].label, ex, ey + (n > 2 ? 34 : 22), "center", isLit(1) ? SIL : LAB, k1);
+    }
+    return;
+  }
+  if (s.layout === "scale") {
+    const BASE = 140;
+    const maxH = 116;
+    const big = s.items[n - 1].size;
+    const hs: number[] = [];
+    for (let i = 0; i < n; i++) hs.push(Math.max(3, (maxH * s.items[i].size) / big / 2));
+    let total = 0;
+    for (let i = 0; i < n; i++) total += 2 * Math.max(hs[i], 16);
+    const gap = Math.min(30, (270 - total) / Math.max(1, n - 1));
+    let xx = 150 - (total + gap * (n - 1)) / 2;
+    line(c, p, 14, BASE, 286, BASE, 0.4, SIL, beat(f, 0, 3));
+    let lastEnd = -999;
+    for (let i = 0; i < n; i++) {
+      const slot = 2 * Math.max(hs[i], 16);
+      const cx = xx + slot / 2;
+      const k = kOf(i);
+      const tiny = hs[i] < 7;
+      // Too small to draw at this scale: a dot where it stands, so the scale stays honest.
+      if (tiny) dot(c, p, cx, BASE - 2.4, 2.4, k, isLit(i) ? BLUE : SIL);
+      else drawThing(c, p, s.items[i].thing, cx, BASE - hs[i] * 1.05, hs[i], 1, isLit(i), k);
+      const lw = textW(font, s.items[i].label);
+      const al = alignAt(cx);
+      const left = al === "left" ? cx : al === "right" ? cx - lw : cx - lw / 2;
+      const low = left < lastEnd + 6;
+      if (low) line(c, p, cx, BASE + 4, cx, BASE + 18, 0.3 * k, SIL);
+      label(c, p, font, s.items[i].label, cx, BASE + (low ? 25 : 12), al, isLit(i) ? SIL : LAB, k);
+      if (!low) lastEnd = left + lw;
+      xx += slot + gap;
+    }
+    return;
+  }
+  const pitch = Math.min(120, 260 / n);
+  const H = n === 1 ? 52 : s.layout === "versus" ? 36 : s.layout === "chain" ? Math.min(28, pitch / 2 - 18) : Math.min(32, pitch / 2 - 10);
+  const Y = n === 1 ? 78 : 76;
+  const xs: number[] = [];
+  if (s.layout === "versus") xs.push(80, 220);
+  else for (let i = 0; i < n; i++) xs.push(n === 1 ? 150 : 150 + (i - (n - 1) / 2) * pitch);
+  if (s.layout === "versus") line(c, p, 150, 30, 150, 140, 0.3, SIL, beat(f, 1, 3), [3, 6]);
+  for (let i = 0; i < n; i++) {
+    const k = kOf(i);
+    drawThing(c, p, s.items[i].thing, xs[i], Y, H, 1, isLit(i), k);
+    label(c, p, font, s.items[i].label, xs[i], Y + H + 16, alignAt(xs[i]), isLit(i) ? SIL : LAB, k);
+    if (s.layout === "chain" && i < n - 1) {
+      const x1 = xs[i] + H + 8;
+      const x2 = xs[i + 1] - H - 8;
+      const ka = beat(f, 0.2 + ((i + 0.6) / n) * 1.8, 3);
+      if (x2 > x1 + 6) {
+        arrow(c, p, x1, Y, x2, Y, 0.55, SIL, ka);
+        if (i + 1 === litI && !stepping) pass(c, p, x1, Y, x2, Y, beat(f, 2.3, 3));
+      }
+    }
+  }
+}
+/** Points round an ellipse, drawn on up to k of the way. */
+function ellipsePts(cx: number, cy: number, rx: number, ry: number, k: number) {
+  "worklet";
+  const pts: number[] = [];
+  const m = Math.max(2, Math.round(64 * k));
+  for (let i = 0; i <= m; i++) {
+    const a = -Math.PI / 2 + (TAU * k * i) / m;
+    pts.push(cx + rx * Math.cos(a), cy + ry * Math.sin(a));
+  }
+  return pts;
+}
+
+// ---- hand-drawn lines (Dan Koe feel) ----
+// A wrapper round the canvas and paint that gives straight lines and outlined
+// circles a slight, steady wobble, like a marker. Fills, text and curves stay
+// as they are, and the wobble never moves while a line sits still.
+function wobble(s: number, seed: number) {
+  "worklet";
+  return 0.55 * Math.sin(s * 0.085 + seed) + 0.25 * Math.sin(s * 0.21 + seed * 1.7);
+}
+function handPaint(real: SkPaint) {
+  "worklet";
+  const hp = {
+    real,
+    style: 0,
+    setStyle(v: number) {
+      hp.style = v;
+      real.setStyle(v);
+    },
+    setColor(v: unknown) {
+      real.setColor(v as never);
+    },
+    setAlphaf(v: number) {
+      real.setAlphaf(v);
+    },
+    setStrokeWidth(v: number) {
+      real.setStrokeWidth(v);
+    },
+    setStrokeCap(v: number) {
+      real.setStrokeCap(v);
+    },
+    setStrokeJoin(v: number) {
+      real.setStrokeJoin(v);
+    },
+    setPathEffect(v: unknown) {
+      real.setPathEffect(v as never);
+    },
+    setMaskFilter(v: unknown) {
+      real.setMaskFilter(v as never);
+    },
+    setAntiAlias(v: boolean) {
+      real.setAntiAlias(v);
+    },
+  };
+  return hp;
+}
+function handCanvas(c: SkCanvas) {
+  "worklet";
+  const unwrap = (p: { real?: SkPaint } | SkPaint) => ((p as { real?: SkPaint }).real ? (p as { real: SkPaint }).real : (p as SkPaint));
+  const outlined = (p: { real?: SkPaint; style?: number }) => !!p.real && p.style === 1;
+  return {
+    drawLine(x1: number, y1: number, x2: number, y2: number, p: SkPaint) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 6) {
+        c.drawLine(x1, y1, x2, y2, unwrap(p));
+        return;
+      }
+      const nx = -dy / len;
+      const ny = dx / len;
+      const seed = (x1 * 0.37 + y1 * 0.71) % TAU;
+      const steps = Math.max(3, Math.min(28, Math.round(len / 7)));
+      const path = Skia.PathBuilder.Make();
+      path.moveTo(x1, y1);
+      for (let i = 1; i <= steps; i++) {
+        const u = i / steps;
+        const d = u * len;
+        const o = wobble(d, seed) * Math.min(1, d / 8, (len - d) / 8 + 0.35);
+        path.lineTo(x1 + dx * u + nx * o, y1 + dy * u + ny * o);
+      }
+      c.drawPath(path.build(), unwrap(p));
+    },
+    drawCircle(x: number, y: number, r: number, p: SkPaint) {
+      if (!outlined(p as never) || r < 8) {
+        c.drawCircle(x, y, r, unwrap(p));
+        return;
+      }
+      // A marker circle: a little uneven, and its end runs just past its start.
+      const seed = r * 1.37;
+      const N = Math.max(18, Math.min(44, Math.round(r * 1.8)));
+      const path = Skia.PathBuilder.Make();
+      for (let i = 0; i <= N; i++) {
+        const th = -Math.PI * 0.6 + (i / N) * (TAU + 0.22);
+        const rr = r + 0.45 * Math.sin(th * 2 + seed) + 0.22 * Math.sin(th * 5 + seed * 2) + (i / N) * 0.7;
+        if (i === 0) path.moveTo(x + rr * Math.cos(th), y + rr * Math.sin(th));
+        else path.lineTo(x + rr * Math.cos(th), y + rr * Math.sin(th));
+      }
+      c.drawPath(path.build(), unwrap(p));
+    },
+    drawPath(path: unknown, p: SkPaint) {
+      c.drawPath(path as never, unwrap(p));
+    },
+    drawRRect(rr: { rect: { x: number; y: number; width: number; height: number }; rx: number }, p: SkPaint) {
+      if (!outlined(p as never) || !rr.rect || rr.rect.width < 12) {
+        c.drawRRect(rr as never, unwrap(p));
+        return;
+      }
+      // A marker box: four slightly uneven sides joined by small corner arcs.
+      const { x, y, width: w, height: h } = rr.rect;
+      const r = Math.min(rr.rx || 0, w / 2, h / 2);
+      const seed = (x * 0.53 + y * 0.29) % TAU;
+      const path = Skia.PathBuilder.Make();
+      const side = (x1: number, y1: number, x2: number, y2: number, first: boolean) => {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const steps = Math.max(2, Math.min(24, Math.round(len / 8)));
+        for (let i = 0; i <= steps; i++) {
+          const u = i / steps;
+          const o = len > 10 ? wobble(u * len, seed + x1 * 0.1) * Math.sin(Math.PI * u) : 0;
+          const px = x1 + dx * u + (-dy / Math.max(1, len)) * o;
+          const py = y1 + dy * u + (dx / Math.max(1, len)) * o;
+          if (first && i === 0) path.moveTo(px, py);
+          else path.lineTo(px, py);
+        }
+      };
+      const corner = (cx: number, cy: number, a0: number) => {
+        for (let i = 1; i <= 3; i++) {
+          const a = a0 + (i / 3) * (Math.PI / 2);
+          path.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+        }
+      };
+      side(x + r, y, x + w - r, y, true);
+      corner(x + w - r, y + r, -Math.PI / 2);
+      side(x + w, y + r, x + w, y + h - r, false);
+      corner(x + w - r, y + h - r, 0);
+      side(x + w - r, y + h, x + r, y + h, false);
+      corner(x + r, y + h - r, Math.PI / 2);
+      side(x, y + h - r, x, y + r, false);
+      corner(x + r, y + r, Math.PI);
+      // The pen runs just past where it started.
+      path.lineTo(x + r + 3, y + 0.4);
+      c.drawPath(path.build(), unwrap(p));
+    },
+    drawText(t: string, x: number, y: number, p: SkPaint, font: SkFont) {
+      c.drawText(t, x, y, unwrap(p), font);
+    },
+    save() {
+      c.save();
+    },
+    restore() {
+      c.restore();
+    },
+    translate(x: number, y: number) {
+      c.translate(x, y);
+    },
+    rotate(d: number, x: number, y: number) {
+      c.rotate(d, x, y);
+    },
+    clipPath(path: unknown, op: number, aa: boolean) {
+      c.clipPath(path as never, op as never, aa);
+    },
+  };
+}
+
+export function drawScene(canvas: SkCanvas, scene: Scene, changes: Change[], f: Frame, font: SkFont | null) {
+  "worklet";
+  const paint = Skia.Paint();
+  paint.setAntiAlias(true);
+  // Hand-drawn: the same drawing code, through a canvas that wobbles lines.
+  const c = f.hand ? (handCanvas(canvas) as unknown as SkCanvas) : canvas;
+  const p = f.hand ? (handPaint(paint) as unknown as SkPaint) : paint;
   switch (scene.family) {
     case "particles":
       drawParticles(c, p, font, scene, changes, f);
@@ -1229,6 +2437,54 @@ export function drawScene(c: SkCanvas, scene: Scene, changes: Change[], f: Frame
       break;
     case "crowd":
       drawCrowd(c, p, font, scene, changes, f);
+      break;
+    case "grid":
+      drawGrid(c, p, font, scene, changes, f);
+      break;
+    case "timeline":
+      drawTimeline(c, p, font, scene, changes, f);
+      break;
+    case "layers":
+      drawLayers(c, p, font, scene, changes, f);
+      break;
+    case "wave":
+      drawWave(c, p, font, scene, changes, f);
+      break;
+    case "mirror":
+      drawMirror(c, p, font, scene, changes, f);
+      break;
+    case "stack":
+      drawStack(c, p, font, scene, changes, f);
+      break;
+    case "radial":
+      drawRadial(c, p, font, scene, changes, f);
+      break;
+    case "cutaway":
+      drawCutaway(c, p, font, scene, changes, f);
+      break;
+    case "funnel":
+      drawFunnel(c, p, font, scene, changes, f);
+      break;
+    case "sankey":
+      drawSankey(c, p, font, scene, changes, f);
+      break;
+    case "fan":
+      drawFan(c, p, font, scene, changes, f);
+      break;
+    case "spiral":
+      drawSpiral(c, p, font, scene, changes, f);
+      break;
+    case "zoom":
+      drawZoom(c, p, font, scene, changes, f);
+      break;
+    case "brace":
+      drawBrace(c, p, font, scene, changes, f);
+      break;
+    case "map":
+      drawMap(c, p, font, scene, changes, f);
+      break;
+    case "things":
+      drawThings(c, p, font, scene, changes, f);
       break;
   }
 }

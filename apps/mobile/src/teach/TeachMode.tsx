@@ -29,6 +29,7 @@ import { riseIn, STAGGER_MS } from "../ui/motion";
 import { Picture } from "./Picture";
 import { Puzzle } from "./Puzzle";
 import { SceneView } from "./scene/SceneView";
+import { canDraw } from "./scene/types";
 import { Slider } from "./Slider";
 
 type Step = { kind: "watch" } | { kind: "read"; i: number } | { kind: "play"; i: number } | { kind: "try"; i: number } | { kind: "finish" };
@@ -116,7 +117,10 @@ export function TeachMode({
     const abort = new AbortController();
     setError(null);
     fetchLesson({ topic, idea, said, notes }, abort.signal)
-      .then((l) => {
+      .then((raw) => {
+        // A newer server may send drawings this build cannot draw yet: those
+        // bites use the simple diagram instead.
+        const l = { ...raw, bites: raw.bites.map((b) => (canDraw(b.scene) ? b : { ...b, scene: null, play: null })) };
         setLesson(l);
         setStep(stepsOf(l)[0] ?? { kind: "finish" });
       })
