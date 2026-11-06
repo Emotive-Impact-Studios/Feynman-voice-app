@@ -1,7 +1,8 @@
 // Live call mode: the microphone stays open for the whole call. When the
 // learner goes quiet, their turn is sent; the student's reply streams back
 // and is spoken sentence by sentence; when it finishes, listening starts again.
-// The learner can talk over the student (or tap) to cut in.
+// The learner taps the button to cut in (talking over the student is ignored,
+// because on the loudspeaker the mic hears the student too).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import {
@@ -19,8 +20,12 @@ import { ClipQueue } from "./clipQueue";
 
 const RATE = 16000;
 const MAX_TURN_SECONDS = 60;
-/** Talking again this soon after the student starts means the learner wasn't finished. */
-const CARRY_ON_MS = 1500;
+/**
+ * After the student stops, the room still rings with their voice for a
+ * moment. Mic audio this soon after is dropped, so the echo never counts as
+ * the learner speaking.
+ */
+const ECHO_TAIL_MS = 400;
 /** Times in a row the server may hold a turn back ("wait") before it must answer. */
 const MAX_WAITS = 2;
 const KITTEN_VOICE = "Kiki";
@@ -77,9 +82,10 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const endOfTurn = useRef(new EndOfTurn());
   // Quiet that ends the learner's next turn: longer after a "why" or "how".
   const nextQuiet = useRef(TURN_QUIET_SECONDS);
-  // The student now plays much louder out of the speaker, and the mic hears
-  // some of it. Cutting in needs a clearly louder voice than the echo.
-  const bargeIn = useRef(new BargeIn(0.09, 0.35));
+  // No talking over the student by voice: on the loudspeaker the mic hears
+  // the student, and that echo was cutting replies off after a split second
+  // (build 12). Cutting in is a tap on the button.
+  const listenFrom = useRef(0);
   // While thinking, the learner may carry on talking: then the turn was not over.
   const carryOn = useRef(new BargeIn(0.015, 0.4));
 
@@ -89,7 +95,6 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   // The turn in flight, so carrying on can take back what the server recorded.
   const sent = useRef<{ id: number; recorded: boolean; seconds: number } | null>(null);
   const waits = useRef(0);
-  const speakStart = useRef(0);
   const request = useRef<AbortController | null>(null);
   const clips = useRef(new ClipQueue());
   const phononReady = useRef(false);
@@ -110,6 +115,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     const seconds = down.length / RATE;
     const p = phaseRef.current;
     if (p === "listening") {
+      if (Date.now() < listenFrom.current) return; // the student's echo
       parts.current.push(down);
       const speech = meter.current.push(down, RATE);
       setIsTalking(speech);
@@ -120,15 +126,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       parts.current.push(down);
       const speech = meter.current.push(down, RATE);
       if (carryOn.current.push(down, RATE) && speech) continueRef.current();
-    } else if (p === "speaking") {
-      if (bargeIn.current.push(down, RATE)) {
-        // Talking again just as the student starts means they weren't
-        // finished: drop the reply and keep the whole turn. Later it's a
-        // new turn that cuts in.
-        if (Date.now() - speakStart.current < CARRY_ON_MS) continueRef.current(down);
-        else interruptRef.current(down);
-      }
     }
+    // While the student speaks, the mic is ignored (see listenFrom).
   }, []);
 
   const { stream, isStreaming } = useAudioStream({ sampleRate: RATE, channels: 1, encoding: "float32", onBuffer });
@@ -176,7 +175,6 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     if (keep) meter.current.push(keep, RATE);
     endOfTurn.current.reset();
     endOfTurn.current.setSilence(nextQuiet.current);
-    bargeIn.current.reset();
     carryOn.current.reset();
     setLiveSpeaking(meter.current.speakingSeconds);
   };
@@ -192,7 +190,9 @@ export function useLiveCall(topic: string, settings: CallSettings) {
 
   /** Back to listening. `fresh` starts a new turn; otherwise the current one continues. */
   function resumeListening(fresh: boolean) {
+    const wasSpeaking = phaseRef.current === "speaking";
     silence();
+    if (wasSpeaking) listenFrom.current = Date.now() + ECHO_TAIL_MS;
     if (fresh) freshTurn();
     else endOfTurn.current.reset();
     setLiveQuestion(null);
@@ -272,7 +272,6 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       meter.current.push(more, RATE);
     }
     endOfTurn.current.reset();
-    bargeIn.current.reset();
     carryOn.current.reset();
     setLiveQuestion(null);
     setPhase("listening");
@@ -309,7 +308,6 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       if (id !== turnId.current) return;
       if (!firstWordMs) firstWordMs = Date.now() - quietAt;
       if (phaseRef.current === "thinking") {
-        speakStart.current = Date.now();
         setPhase("speaking");
       }
     };
@@ -416,6 +414,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   /** The learner talked over the student: stop and hear them. */
   const interrupt = (heard?: Float32Array) => {
     if (phaseRef.current !== "speaking" && phaseRef.current !== "thinking") return;
+    if (phaseRef.current === "speaking") listenFrom.current = Date.now() + ECHO_TAIL_MS;
     silence();
     freshTurn(heard);
     setLiveQuestion(null);
