@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useWindowDimensions, View } from "react-native";
 import { Redirect, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, { FadeIn } from "react-native-reanimated";
 import { TELL_ME } from "../data/lastCall";
 import { minutesLeft, replayIntro, useProfile, type SavedGap } from "../data/profile";
 import { Me } from "../home/Me";
@@ -13,6 +12,7 @@ import { homeStyles } from "../home/styles";
 import { Today } from "../home/Today";
 import { Topics } from "../home/Topics";
 import { Backdrop } from "../ui/kit";
+import { ScreenIn } from "../ui/ScreenIn";
 
 const dusk = require("../../assets/images/home-dusk.webp");
 
@@ -33,7 +33,7 @@ export default function Home() {
   return (
     <View style={homeStyles.root}>
       <Backdrop source={dusk} opacity={tab === "today" ? 0.85 : 0.45} flip={tab === "topics"} />
-      <Animated.View key={tab} entering={FadeIn.duration(300)} style={{ flex: 1 }}>
+      <ScreenIn key={tab}>
         {tab === "today" && <Today {...common} onNew={onNew} onTopic={onTopic} onGap={onGap} />}
         {tab === "topics" && <Topics {...common} onNew={onNew} onTopic={onTopic} />}
         {tab === "me" && (
@@ -44,7 +44,7 @@ export default function Home() {
             }}
           />
         )}
-      </Animated.View>
+      </ScreenIn>
       <TopBar top={insets.top} tab={tab} minutes={minutesLeft(profile)} initial={(profile.name[0] ?? "?").toUpperCase()} onMe={() => setTab("me")} />
       <Nav bottom={insets.bottom} tab={tab} onChange={setTab} onStart={onNew} width={width} />
     </View>

@@ -2,7 +2,8 @@
 // Ideas mastered and gaps closed need gap analysis (build step 4), so this
 // shows only what the phone really knows. The streak is soft on purpose: it
 // forgives a missed day a week (see docs/behavioural-design.md).
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Press } from "../ui/Press";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { minutesLeft, PROTOTYPE_MINUTES, softStreak, type Profile } from "../data/profile";
 import { MinutesRing } from "../ui/Dots";
 import { Glass, Label, T } from "../ui/kit";
@@ -63,9 +64,9 @@ export function Me({ profile, top, bottom, onReplayIntro }: { profile: Profile; 
       <In d={4}>
         <Label style={{ marginTop: 28 }}>{profile.name || "You"}</Label>
         <Glass style={{ marginTop: 10, borderRadius: 24 }}>
-          <Pressable onPress={onReplayIntro} style={styles.rowBtn} accessibilityRole="button">
+          <Press onPress={onReplayIntro} style={styles.rowBtn} accessibilityRole="button">
             <T size={15}>Play the intro again</T>
-          </Pressable>
+          </Press>
         </Glass>
       </In>
     </ScrollView>

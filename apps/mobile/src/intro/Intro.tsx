@@ -3,6 +3,7 @@
 // light is a single element that springs between its spot in each moment.
 // Then name, subjects, microphone, and the student says hello.
 // Sign-in buttons carry straight on until accounts exist (build step 2).
+import { Press } from "../ui/Press";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { router } from "expo-router";
@@ -185,14 +186,14 @@ export default function Intro() {
                 ))}
               </View>
               {!last && (
-                <Pressable onPress={() => setScreen("auth")} style={{ padding: 12 }} accessibilityRole="button">
+                <Press onPress={() => setScreen("auth")} style={{ padding: 12 }} accessibilityRole="button">
                   <T size={14} tone="muted">
                     Skip
                   </T>
-                </Pressable>
+                </Press>
               )}
               <Animated.View style={[styles.morph, ctlStyle]}>
-                <Pressable onPress={next} accessibilityRole="button" accessibilityLabel={last ? "Get started" : "Next"} style={{ flex: 1 }}>
+                <Press onPress={next} accessibilityRole="button" accessibilityLabel={last ? "Get started" : "Next"} style={{ flex: 1 }}>
                   <SilverRing width={last ? width - 52 : 62} height={62}>
                     {last ? (
                       <Animated.View entering={FadeIn.delay(200)}>
@@ -204,7 +205,7 @@ export default function Intro() {
                       <Arrow />
                     )}
                   </SilverRing>
-                </Pressable>
+                </Press>
               </Animated.View>
             </Animated.View>
           )}
@@ -314,11 +315,11 @@ export default function Intro() {
               setScreen("meet");
             }}
           />
-          <Pressable onPress={() => setScreen("meet")} style={{ padding: 12, marginTop: 6 }} accessibilityRole="button">
+          <Press onPress={() => setScreen("meet")} style={{ padding: 12, marginTop: 6 }} accessibilityRole="button">
             <T size={14} tone="muted">
               Not now
             </T>
-          </Pressable>
+          </Press>
         </Step>
       )}
 
@@ -617,11 +618,11 @@ function Meet({ name, bottom, onDone, onReplay }: { name: string; bottom: number
         {typed && (
           <Animated.View entering={FadeInDown.springify()} style={{ alignSelf: "stretch", marginTop: 26 }}>
             <PillButton label="Teach me something" variant="solid" onPress={onDone} style={{ height: 58 }} />
-            <Pressable onPress={onReplay} style={{ padding: 12, marginTop: 6, alignItems: "center" }} accessibilityRole="button">
+            <Press onPress={onReplay} style={{ padding: 12, marginTop: 6, alignItems: "center" }} accessibilityRole="button">
               <T size={14} tone="muted">
                 Play the intro again
               </T>
-            </Pressable>
+            </Press>
           </Animated.View>
         )}
       </View>

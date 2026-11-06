@@ -1,5 +1,6 @@
 // Topics, from the canvas board: every topic you've explained.
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Press } from "../ui/Press";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { ago, type Profile, type TopicRecord } from "../data/profile";
 import { Glass, PillButton, T } from "../ui/kit";
 import { homeStyles } from "./styles";
@@ -23,7 +24,7 @@ export function Topics({ profile, top, bottom, onNew, onTopic }: { profile: Prof
       </In>
       {profile.topics.map((t, i) => (
         <In key={t.title} d={2 + Math.min(i, 6)}>
-          <Pressable onPress={() => onTopic(t.title)} accessibilityRole="button" accessibilityLabel={`Explain ${t.title} again`}>
+          <Press onPress={() => onTopic(t.title)} accessibilityRole="button" accessibilityLabel={`Explain ${t.title} again`}>
             <Glass style={styles.row}>
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                 <T size={17} weight="semibold" style={{ flex: 1 }} lines={1}>
@@ -45,7 +46,7 @@ export function Topics({ profile, top, bottom, onNew, onTopic }: { profile: Prof
                 {t.sessions === 1 ? "1 session" : `${t.sessions} sessions`} · {t.questions} questions asked · {ago(t.at)}
               </T>
             </Glass>
-          </Pressable>
+          </Press>
         </In>
       ))}
     </ScrollView>
