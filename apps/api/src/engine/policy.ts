@@ -23,7 +23,7 @@ export const PROBES: Move[] = ["why", "what_if", "puzzled"];
 
 const STUCK = /\b(i\s*(don'?t|do not)\s*know|not sure|no idea|i forget|i can'?t remember|dunno|i'?m stuck|haven'?t got a clue)\b/i;
 /** "Can we skip that?": move on, not a sign they're stuck. Not when negated ("don't skip this"). */
-const SKIP = /^(?!.*\b(don'?t|do not|not|never)\s+(skip|pass|move on)\b)\s*(\w+[,.]?\s+){0,3}?(i'?ll (pass|skip)|pass on (that|this)|(can|could) we (skip|move on)|(i'?d|i would|i want to|i wanna)( like to)? (skip|pass|move on)|let'?s (skip|move on)|(just )?skip (that|this)( one)?( please)?\s*[.!?]*$|next question|(pass|skip)\s*[.!,]*$)/i;
+const SKIP = /^(?!.*\b(don'?t|do not|not|never)\s+(skip|pass|move on)\b)\s*(\w+[,.]?\s+){0,3}?(i'?ll (pass|skip)|pass on (that|this)|(can|could) we (skip|move on)|(i'?d|i would|i want to|i wanna)( like to)? (skip|pass|move on)(?=\s*(on )?((this|that)( one| question| bit)?)?\s*(please)?\s*[.!?]*$)|let'?s (skip|move on)|(just )?skip (that|this)( one)?( please)?\s*[.!?]*$|next question|(pass|skip)\s*[.!,]*$)/i;
 const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|please|go on|go on then|alright|sounds good)\b/i;
 const TELL_ME = /\b(just tell me|can you (just )?(tell|explain)|explain it to me|what('?s| is) the answer|show me)\b/i;
 /** "Hang on, let me think": not the retell itself. */
@@ -104,11 +104,14 @@ export function callState(history: PastTurn[], transcript: string): CallState {
   };
 }
 
-const FILLER = /\b(um+|uh+|erm+|er|ah+|oh+|ooh+|okay|ok|right|so|yeah|well|just|about|it|that|the|to|a|me|i|i'?m|you|need|more|time|think|thinking|little|bit|sec|second|moment|minute|still|let|go|can|could|please|sorry)\b/gi;
+const FILLER = /\b(um+|uh+|erm+|er|ah+|oh+|ooh+|okay|ok|right|so|yeah|well|just|about|it|that|the|to|a|me|i|i'?m|need|more|time|think|thinking|little|bit|sec|second|moment|minute|still|let|go|can|could|please|sorry)\b/gi;
 
 /** Only a pause to think ("hang on, give me a moment"), with no real answer in it. */
 function isHesitation(t: string): boolean {
-  if (!HESITATE.test(t)) return false;
+  // The pause has to open the reply ("Hang on...", "Um, I need more time"),
+  // so "You need more time to heat the water" stays an answer.
+  const opening = new RegExp(`^[\\s,.!]*((um+|uh+|erm+|er|oh+|ooh+|okay|ok|right|so|sorry|yeah|i|i'?m|i'?ll)[\\s,.!]+)*(${HESITATE.source.slice(2, -2)})`, "i");
+  if (!opening.test(t)) return false;
   const rest = t.replace(new RegExp(HESITATE.source, "gi"), " ").replace(FILLER, " ").replace(/[^\p{L}\p{N}\s']/gu, " ");
   return rest.trim().split(/\s+/).filter(Boolean).length < 4;
 }
@@ -144,7 +147,9 @@ export function allowedMoves(s: CallState, l: Limits = DEFAULT_LIMITS): Move[] {
   if (s.stuckStreak >= 2) return [l.canShowMe ? "offer_show_me" : "let_go"];
   if (s.stuckStreak === 1) return ["simpler"];
   if (!done && s.learnerTurns >= l.retellBy) return ["retell"];
-  let moves: Move[] = ["next", "build_on_theirs", "plain_words"];
+  // let_go is always there for a request to move on that the checks above
+  // didn't spot; the model only picks it when they ask.
+  let moves: Move[] = ["next", "build_on_theirs", "plain_words", "let_go"];
   if (s.recentListens === 0) moves.push("listen");
   if (!s.probedLastTurn && s.learnerTurns > 1) moves.push(...PROBES);
   if (!done && s.learnerTurns >= l.retellFrom) moves.push("retell");

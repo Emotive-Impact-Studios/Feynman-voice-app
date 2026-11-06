@@ -19,7 +19,7 @@ const MOVE_GUIDE: Record<Move, string> = {
   simpler: "They just said they don't know. Say that's fine, then ask one smaller, more concrete question about the same thing that makes it easier to work out.",
   offer_show_me: `They are stuck on the same thing again. Say exactly: "No worries. ${OFFER_LINE}"`,
   show_me: `They said yes to the explanation. Say exactly: "${SHOW_ME_LINE}"`,
-  let_go: "They are stuck or want to move on. Say that's fine, you'll come back to it, and ask about a different key idea they have not covered.",
+  let_go: "Only if they are stuck or have asked to move on or skip this. Say that's fine, you'll come back to it, and ask about a different key idea they have not covered.",
   retell: "Most of it is covered. Thank them in a few words and ask them to explain the whole thing to you again in about 30 seconds, as simply as they can.",
   wrap: "The call is finishing. Thank them warmly in a few words, say that's a good place to stop, and that you'll pick up the shaky bit next time. No question.",
   close: "They just gave the short version. Tell them warmly and specifically what was clear, in one short sentence, then ask which bit felt shakiest to them.",
