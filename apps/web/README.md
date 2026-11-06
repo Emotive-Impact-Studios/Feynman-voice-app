@@ -1,6 +1,6 @@
 # Fenny website
 
-One static page (`index.html`) and one function (`api/waitlist.ts`) that saves emails to Neon.
+One static page (`index.html`, built from the v3 design) and one function (`api/waitlist.ts`) that saves emails to Neon.
 
 ## Deploy
 
