@@ -65,6 +65,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const [finished, setFinished] = useState(false);
   /** Fenny offered Teach me for this idea (or they said yes: then `open` is true). */
   const [teach, setTeach] = useState<{ idea: string; open: boolean } | null>(null);
+  /** The engine's move for the reply being spoken ("why", "puzzled", "close"...). Sets Fenny's face. */
+  const [move, setMove] = useState<string | null>(null);
 
   const phaseRef = useRef<CallPhase>("loading");
   const setPhase = useCallback((p: CallPhase) => {
@@ -293,6 +295,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     setTeach((t) => (t?.open ? t : null));
     setPhase("thinking");
     setIsTalking(false);
+    setMove(null);
     const quietAt = Date.now();
     const pcm = concatFloat32(parts.current).subarray(0, MAX_TURN_SECONDS * RATE);
     const speakingSeconds = meter.current.speakingSeconds;
@@ -350,6 +353,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
         setTurns((t) => [...t, { speaker: "learner", text: e.transcript }, { speaker: "student", text: e.question }]);
         if (sent.current?.id === id) sent.current.recorded = true;
       }
+      if (e.type === "engine" && e.move !== "wait") setMove(e.move);
       if (e.type === "engine" && e.move === "wrap") wrapped = true;
       // The server heard them stop mid-thought: keep listening instead of asking.
       if (e.type === "engine" && e.move === "wait") waited = true;
@@ -468,6 +472,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     liveQuestion,
     liveSpeaking,
     finished,
+    move,
     isTalking,
     start,
     /** "Done, ask me": send now instead of waiting for the pause. */
