@@ -63,6 +63,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const [isTalking, setIsTalking] = useState(false);
   /** Fenny has said goodbye and finished speaking: the call is over. */
   const [finished, setFinished] = useState(false);
+  /** Fenny offered Teach me for this idea (or they said yes: then `open` is true). */
+  const [teach, setTeach] = useState<{ idea: string; open: boolean } | null>(null);
 
   const phaseRef = useRef<CallPhase>("loading");
   const setPhase = useCallback((p: CallPhase) => {
@@ -287,6 +289,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       return;
     }
     const id = ++turnId.current;
+    // A new turn moves on from any Teach me offer they didn't take.
+    setTeach((t) => (t?.open ? t : null));
     setPhase("thinking");
     setIsTalking(false);
     const quietAt = Date.now();
@@ -349,6 +353,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       if (e.type === "engine" && e.move === "wrap") wrapped = true;
       // The server heard them stop mid-thought: keep listening instead of asking.
       if (e.type === "engine" && e.move === "wait") waited = true;
+      if (e.type === "teach_offer") setTeach({ idea: e.gap.title, open: false });
+      if (e.type === "teach") setTeach({ idea: e.gap.title, open: true });
       if (e.type === "error") throw new Error(e.error);
     };
 
@@ -364,7 +370,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
           voice,
           ears: chosen.ears,
           // After two holds in a row the server must answer.
-          features: waits.current < MAX_WAITS ? ["wait"] : [],
+          features: waits.current < MAX_WAITS ? ["wait", "teach"] : ["teach"],
         },
         onEvent,
         abort.signal,
@@ -434,8 +440,25 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   }, [setPhase]);
   useEffect(() => cancel, [cancel]);
 
+  /**
+   * Back from teach mode: Fenny's question about what they just learnt goes on
+   * the screen and into the conversation, and the call listens again.
+   */
+  const resumeAfterLesson = useCallback(
+    async (question: string) => {
+      setTeach(null);
+      setTurns((t) => [...t, { speaker: "student", text: question }]);
+      await start();
+    },
+    [start],
+  );
+
   return {
     phase,
+    teach,
+    /** Not now: hide the offer and carry on. */
+    dismissTeach: () => setTeach(null),
+    resumeAfterLesson,
     error,
     notice,
     turns,
