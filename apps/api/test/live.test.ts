@@ -123,6 +123,23 @@ describe("POST /api/live-turn", () => {
     expect(ev[3].cost.lines).toHaveLength(3);
   });
 
+  it("never sends a dash to the voice, even if the model writes one", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith("/audio/transcriptions")) return Response.json({ text: "Osmosis is water moving." });
+      const b = JSON.parse(String(init!.body));
+      const reply =
+        b.response_format.json_schema.name === "key_ideas"
+          ? { ideas: [{ idea: "Water moves from dilute to concentrated" }] }
+          : { move: "next", say: "Ooh — so which way does the water go?", covered: [], stuck_on: "" };
+      return Response.json({ choices: [{ message: { content: JSON.stringify(reply) } }], usage: { prompt_tokens: 300, completion_tokens: 20 } });
+    }) as unknown as typeof fetch;
+    const res = await handleLiveTurn(request({ ...audio, topic: "Osmosis dash test" }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
+    const ev = await events(res);
+    const sentence = ev.find((e) => e.type === "sentence")!;
+    expect(sentence.text).toBe("Ooh, so which way does the water go?");
+    expect(ev.find((e) => e.type === "done")!.question).toBe("Ooh, so which way does the water go?");
+  });
+
   it("hears with Ink and speaks with Sonic when Cartesia is set up", async () => {
     const pcm = new Uint8Array([1, 0, 2, 0]);
     const calls: string[] = [];
