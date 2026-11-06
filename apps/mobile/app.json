@@ -45,6 +45,12 @@
             "deploymentTarget": "18.0"
           }
         }
+      ],
+      [
+        "react-native-document-scanner-plugin",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to scan your notes so Fenny can learn from them."
+        }
       ]
     ],
     "scheme": "feynman",

@@ -38,6 +38,10 @@ writeFileSync(`${lesson}/.vc-config.json`, JSON.stringify({ ...config, maxDurati
 // One line spoken on its own (the call's opening question, a lesson bite).
 const speak = `${out}/functions/api/speak.func`;
 cpSync(fn, speak, { recursive: true });
+// One scanned page of notes, read by a vision model. Handwriting can take a while.
+const readPage = `${out}/functions/api/read-page.func`;
+cpSync(fn, readPage, { recursive: true });
+writeFileSync(`${readPage}/.vc-config.json`, JSON.stringify({ ...config, maxDuration: 60 }, null, 2));
 // The iPhone voice model, served as static files for the app to download.
 if (process.env.SKIP_PHONON_BUNDLE !== "1") {
   const { out: dir, files } = await writePhononBundle(`${out}/static`);

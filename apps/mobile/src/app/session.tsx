@@ -23,6 +23,7 @@ import { VoiceGlow } from "../ui/VoiceGlow";
 import type { SessionView } from "../live/ViewMenu";
 import type { LiveEars, LiveVoice } from "../api";
 import { useLiveCall } from "../live/useLiveCall";
+import { getNotes } from "../data/notes";
 import { TeachMode } from "../teach/TeachMode";
 import { Press } from "../ui/Press";
 import Animated from "react-native-reanimated";
@@ -64,7 +65,9 @@ export default function Session() {
   const [voice] = useState<LiveVoice>(() => profile.voice ?? "sonic");
   const ears: LiveEars = "auto";
   const [fast] = useState(() => !!profile.fastReplies);
-  const loop = useLiveCall(brainTopic, { voice, ears, fast });
+  // Pages they scanned for this topic: Fenny uses them to spot what they leave out.
+  const [notes] = useState(() => getNotes(topic));
+  const loop = useLiveCall(brainTopic, { voice, ears, fast, notes });
   // Faster-replies trial: how long the last reply took, so we can compare.
   const lastStats = fast ? loop.stats[loop.stats.length - 1] : undefined;
 
@@ -293,6 +296,7 @@ export default function Session() {
       {teaching && (
         <TeachMode
           topic={topic}
+          notes={notes}
           idea={teaching.idea}
           said={teaching.said}
           speak={loop.speak}
