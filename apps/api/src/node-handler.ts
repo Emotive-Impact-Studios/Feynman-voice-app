@@ -7,6 +7,7 @@ import { handleTurn } from "./turn";
 import { handleLesson } from "./lesson";
 import { handleSpeak } from "./speak";
 import { handleLook } from "./look";
+import { handleReadPage } from "./readPage";
 
 const ROUTES: Record<string, (req: Request) => Promise<Response>> = {
   "/api/turn": (r) => handleTurn(r),
@@ -14,6 +15,7 @@ const ROUTES: Record<string, (req: Request) => Promise<Response>> = {
   "/api/lesson": (r) => handleLesson(r),
   "/api/speak": (r) => handleSpeak(r),
   "/api/look": (r) => handleLook(r),
+  "/api/read-page": (r) => handleReadPage(r),
 };
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {

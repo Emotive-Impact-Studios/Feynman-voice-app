@@ -80,6 +80,8 @@ export async function streamLiveTurn(
     ears: LiveEars;
     /** What this phone can handle. "wait": the server may say the learner isn't finished. */
     features?: string[];
+    /** Their scanned notes on this topic, so Fenny can spot what they leave out. */
+    notes?: string;
   },
   onEvent: (e: LiveEvent) => void,
   signal?: AbortSignal,
@@ -105,6 +107,29 @@ export async function streamLiveTurn(
     lines.push(decoder.decode(value, { stream: true }), (e) => onEvent(e as LiveEvent));
   }
   lines.flush((e) => onEvent(e as LiveEvent));
+}
+
+// Scanned notes -----------------------------------------------------------
+
+export interface ReadPage {
+  title: string;
+  text: string;
+  readable: boolean;
+  cost: { usd: number; pence: number };
+}
+
+/** Read one scanned page (base64 JPEG) on the server: handwriting, handouts, slides. */
+export async function readPage(imageBase64: string, topic?: string, signal?: AbortSignal): Promise<ReadPage> {
+  if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in apps/mobile/.env");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/read-page`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify({ image: imageBase64, topic }),
+    signal,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((body as { error?: string }).error ?? `Server returned ${res.status}`);
+  return body as ReadPage;
 }
 
 // Teach me -----------------------------------------------------------------

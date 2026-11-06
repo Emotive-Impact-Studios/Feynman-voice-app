@@ -40,6 +40,10 @@ const speak = `${out}/functions/api/speak.func`;
 cpSync(fn, speak, { recursive: true });
 // Teach me this thing: one photo in, what it is and Fenny's question out.
 cpSync(fn, `${out}/functions/api/look.func`, { recursive: true });
+// One scanned page of notes, read by a vision model. Handwriting can take a while.
+const readPage = `${out}/functions/api/read-page.func`;
+cpSync(fn, readPage, { recursive: true });
+writeFileSync(`${readPage}/.vc-config.json`, JSON.stringify({ ...config, maxDuration: 60 }, null, 2));
 // The iPhone voice model, served as static files for the app to download.
 if (process.env.SKIP_PHONON_BUNDLE !== "1") {
   const { out: dir, files } = await writePhononBundle(`${out}/static`);

@@ -37,7 +37,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to see things you point it at, so Fenny can ask you about them.",
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to scan your notes and to see things you point it at, so Fenny can ask you about them.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
@@ -52,6 +52,12 @@
           "ios": {
             "deploymentTarget": "18.0"
           }
+        }
+      ],
+      [
+        "react-native-document-scanner-plugin",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to scan your notes and to see things you point it at, so Fenny can ask you about them."
         }
       ]
     ],
