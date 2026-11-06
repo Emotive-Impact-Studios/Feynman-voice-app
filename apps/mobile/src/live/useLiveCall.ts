@@ -75,6 +75,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const [ideas, setIdeas] = useState<{ id: string; idea: string; label?: string }[]>([]);
   const [covered, setCovered] = useState<string[]>([]);
   const coveredRef = useRef<string[]>([]);
+  const gotTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => gotTimers.current.forEach(clearTimeout), []);
   /** The latest idea they nailed, with a counter so each one celebrates once. */
   const [got, setGot] = useState<{ idea: string; n: number } | null>(null);
 
@@ -111,7 +113,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   // work checks it after each await and drops out if it has changed.
   const turnId = useRef(0);
   // The turn in flight, so carrying on can take back what the server recorded.
-  const sent = useRef<{ id: number; recorded: boolean; seconds: number } | null>(null);
+  const sent = useRef<{ id: number; recorded: boolean; seconds: number; coveredBefore: string[] } | null>(null);
   const waits = useRef(0);
   const request = useRef<AbortController | null>(null);
   const clips = useRef(new ClipQueue());
@@ -348,6 +350,11 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       setTurns((t) => t.slice(0, -2));
       setHeardSeconds((n) => Math.max(0, n - s.seconds));
     }
+    // The answer is being taken back: so are any ideas it was credited with.
+    if (s && coveredRef.current !== s.coveredBefore) {
+      coveredRef.current = s.coveredBefore;
+      setCovered(s.coveredBefore);
+    }
     sent.current = null;
     if (more) {
       parts.current.push(more);
@@ -390,7 +397,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     let phononRemaining = 0;
     let wrapped = false;
     let waited = false;
-    sent.current = { id, recorded: false, seconds: speakingSeconds };
+    sent.current = { id, recorded: false, seconds: speakingSeconds, coveredBefore: coveredRef.current };
     const markStart = () => {
       if (id !== turnId.current) return;
       if (!firstWordMs) firstWordMs = Date.now() - quietAt;
@@ -442,9 +449,15 @@ export function useLiveCall(topic: string, settings: CallSettings) {
         if (fresh.length) {
           coveredRef.current = [...before, ...fresh];
           setCovered(coveredRef.current);
-          const last = list.find((k) => k.id === fresh[fresh.length - 1]);
+          // One chip each, a few seconds apart, so every idea gets its moment.
           // The short label names the idea without giving the answer away.
-          if (last) setGot((g) => ({ idea: last.label || last.idea, n: (g?.n ?? 0) + 1 }));
+          fresh.forEach((fid, i) => {
+            const k = list.find((x) => x.id === fid);
+            if (!k) return;
+            const show = () => setGot((g) => ({ idea: k.label || k.idea, n: (g?.n ?? 0) + 1 }));
+            if (i === 0) show();
+            else gotTimers.current.push(setTimeout(show, i * 3300));
+          });
         }
       }
       if (e.type === "engine" && e.move === "wrap") wrapped = true;

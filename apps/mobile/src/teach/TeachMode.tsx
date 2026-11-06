@@ -51,6 +51,13 @@ export function TeachMode({
   const [right, setRight] = useState(0);
   // Fenny reacts to each puzzle answer, and cheers at the end.
   const [cue, react] = useFennyCue();
+  // The finish screen's Fenny mounts after the last puzzle's cue, so cheer afresh.
+  useEffect(() => {
+    if (step.kind !== "finish") return;
+    const id = setTimeout(() => react("yay"), 450);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step.kind]);
   const [attempt, setAttempt] = useState(0);
   const scroll = useRef<ScrollViewInstance>(null);
 
