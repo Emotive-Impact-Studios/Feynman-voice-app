@@ -248,7 +248,7 @@ export default function Session() {
           onClose={() => {
             setTeaching(null);
             loop.dismissTeach();
-            loop.start();
+            loop.start().catch(() => {});
           }}
           onDone={(q) => {
             setTeaching(null);
