@@ -49,6 +49,8 @@ export interface Bite {
   scene: Scene | null;
   /** A slider that changes the scene, on at most one bite. */
   play: Play | null;
+  /** One short sentence under the drawing that states its point. */
+  caption: string;
   /** Words copied from the notes that back this bite up, or "" with no notes. */
   quote: string;
   /** True when quote was found in the notes. */
@@ -117,6 +119,7 @@ export const LESSON_SCHEMA = {
           },
           scene: SCENE_SCHEMA,
           play: PLAY_SCHEMA,
+          caption: str,
           quote: str,
           puzzle: {
             type: "object",
@@ -125,7 +128,7 @@ export const LESSON_SCHEMA = {
             additionalProperties: false,
           },
         },
-        required: ["title", "text", "picture", "scene", "play", "quote", "puzzle"],
+        required: ["title", "text", "picture", "scene", "play", "caption", "quote", "puzzle"],
         additionalProperties: false,
       },
     },
@@ -136,7 +139,7 @@ export const LESSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-type Draft = { bites: (Omit<Bite, "fromNotes" | "scene" | "play"> & { scene?: unknown; play?: unknown })[]; recap: string; explainBack: string };
+type Draft = { bites: (Omit<Bite, "fromNotes" | "scene" | "play" | "caption"> & { scene?: unknown; play?: unknown; caption?: string })[]; recap: string; explainBack: string };
 
 /** Lower case, plain quotes, single spaces, no punctuation: for checking quotes against notes. */
 function flat(s: string): string {
@@ -174,7 +177,7 @@ export function checkLesson(d: Draft, req: LessonRequest): Lesson {
       if (p.options.length < 2 || p.options.length !== p.answer.length) throw new Error(`${where}: match pairs do not line up`);
     }
     const scene = checkScene(b.scene);
-    return { ...b, scene, play: checkPlay(b.play, scene), quote: req.notes?.trim() ? b.quote : "", fromNotes: quoteInNotes(b.quote, req.notes) };
+    return { ...b, scene, play: checkPlay(b.play, scene), caption: String(b.caption ?? "").trim(), quote: req.notes?.trim() ? b.quote : "", fromNotes: quoteInNotes(b.quote, req.notes) };
   });
   // One slider per lesson keeps it a moment, not a game.
   let played = false;

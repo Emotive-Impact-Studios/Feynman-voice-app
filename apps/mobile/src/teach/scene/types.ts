@@ -22,7 +22,7 @@ export interface ParticlesScene {
 
 export interface LinksScene {
   family: "links";
-  layout: "line" | "loop" | "web";
+  layout: "line" | "fork" | "loop" | "web";
   nodes: string[];
   links: { from: number; to: number; kind: "cause" | "flow" | "tie" }[];
 }
@@ -46,9 +46,39 @@ export interface BalanceScene {
   middle: string;
 }
 
-export type Scene = ParticlesScene | LinksScene | GraphScene | BalanceScene;
+export interface CompareScene {
+  family: "compare";
+  style: "circles" | "bars";
+  items: { label: string; value: number }[];
+}
 
-export type ChangeKind = "appear" | "cross" | "speed" | "grow" | "step" | "shift" | "stretch" | "ride" | "weigh";
+export interface StairsScene {
+  family: "stairs";
+  steps: string[];
+  at: number;
+}
+
+export interface SpectrumScene {
+  family: "spectrum";
+  left: string;
+  right: string;
+  min: number;
+  max: number;
+  marks: { label: string; at: number }[];
+  at: number;
+}
+
+export interface VennScene {
+  family: "venn";
+  a: string;
+  b: string;
+  both: string;
+  overlap: number;
+}
+
+export type Scene = ParticlesScene | LinksScene | GraphScene | BalanceScene | CompareScene | StairsScene | SpectrumScene | VennScene;
+
+export type ChangeKind = "appear" | "cross" | "speed" | "grow" | "step" | "shift" | "stretch" | "ride" | "weigh" | "climb" | "slide" | "overlap";
 export interface Change {
   target: string;
   does: ChangeKind;

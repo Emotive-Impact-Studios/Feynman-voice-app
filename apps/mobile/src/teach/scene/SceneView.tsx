@@ -1,4 +1,4 @@
-// A drawn scene on its soft glass panel. The clock, the build-in and the
+// A drawn scene on its soft panel, with its one-sentence caption. The clock, the build-in and the
 // smoothed slider value live on the UI thread, and each frame is recorded as
 // one Skia picture, so dozens of moving marks stay smooth. Under Reduce
 // Motion nothing loops, but the slider still changes the scene.
@@ -8,15 +8,16 @@ import { Canvas, Group, Picture, createPicture, useFont } from "@shopify/react-n
 import { useDerivedValue, useFrameCallback, useReducedMotion, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { drawScene, speedAt, VIEW_H, VIEW_W } from "./draw";
 import type { Change, Scene } from "./types";
+import { T } from "../../ui/kit";
 
-const MONO = require("@expo-google-fonts/geist-mono/400Regular/GeistMono_400Regular.ttf");
+const INTER = require("@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf");
 
-export function SceneView({ scene, changes = [], value, label }: { scene: Scene; changes?: Change[]; value?: SharedValue<number>; label?: string }) {
+export function SceneView({ scene, changes = [], value, label, caption }: { scene: Scene; changes?: Change[]; value?: SharedValue<number>; label?: string; caption?: string }) {
   const [width, setWidth] = useState(0);
-  const font = useFont(MONO, 8.6);
+  const font = useFont(INTER, 9.5);
   const reduce = useReducedMotion();
   const t = useSharedValue(reduce ? 1.2 : 0);
-  const T = useSharedValue(reduce ? 1.2 : 0);
+  const clock = useSharedValue(reduce ? 1.2 : 0);
   const v = useSharedValue(value ? value.value : 0);
   const intro = useSharedValue(reduce ? 1 : 0);
 
@@ -30,15 +31,15 @@ export function SceneView({ scene, changes = [], value, label }: { scene: Scene;
     }
     v.value += (target - v.value) * Math.min(1, dt * 5);
     t.value += dt;
-    T.value += dt * speedAt(changes, v.value);
-    if (intro.value < 1) intro.value = Math.min(1, intro.value + dt * 0.9);
+    clock.value += dt * speedAt(changes, v.value);
+    if (intro.value < 1) intro.value = Math.min(1, intro.value + dt * 0.55);
   });
 
   const k = width / VIEW_W;
   const picture = useDerivedValue(() =>
     createPicture((canvas) => {
       "worklet";
-      drawScene(canvas, scene, changes, { t: t.value, T: T.value, v: v.value, intro: intro.value, still: reduce }, font);
+      drawScene(canvas, scene, changes, { t: t.value, T: clock.value, v: v.value, intro: intro.value, still: reduce }, font);
     }),
   );
 
@@ -50,20 +51,24 @@ export function SceneView({ scene, changes = [], value, label }: { scene: Scene;
       onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}
       style={{
         borderRadius: 26,
-        backgroundColor: "rgba(255,255,255,0.035)",
+        backgroundColor: "rgba(255,255,255,0.03)",
         overflow: "hidden",
-        aspectRatio: VIEW_W / VIEW_H,
-        borderTopWidth: 1,
-        borderTopColor: "rgba(255,255,255,0.06)",
       }}
     >
-      {width > 0 && (
-        <Canvas style={{ width, height: (width * VIEW_H) / VIEW_W }}>
-          <Group transform={[{ scale: k }]}>
-            <Picture picture={picture} />
-          </Group>
-        </Canvas>
-      )}
+      <View style={{ aspectRatio: VIEW_W / VIEW_H }}>
+        {width > 0 && (
+          <Canvas style={{ width, height: (width * VIEW_H) / VIEW_W }}>
+            <Group transform={[{ scale: k }]}>
+              <Picture picture={picture} />
+            </Group>
+          </Canvas>
+        )}
+      </View>
+      {caption ? (
+        <T size={14.5} style={{ paddingHorizontal: 20, paddingBottom: 18 }}>
+          {caption}
+        </T>
+      ) : null}
     </View>
   );
 }

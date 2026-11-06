@@ -153,7 +153,7 @@ export function TeachMode({
             </T>
             <Animated.View entering={riseIn(STAGGER_MS * 3)} style={{ marginTop: 8 }}>
               {lesson.bites[step.i].scene ? (
-                <SceneView scene={lesson.bites[step.i].scene!} label={lesson.bites[step.i].title} />
+                <SceneView scene={lesson.bites[step.i].scene!} label={lesson.bites[step.i].caption || lesson.bites[step.i].title} caption={lesson.bites[step.i].caption} />
               ) : (
                 <Picture kind={lesson.bites[step.i].picture.kind} labels={lesson.bites[step.i].picture.labels} />
               )}
@@ -174,7 +174,7 @@ export function TeachMode({
             <T size={28} weight="medium" style={{ lineHeight: 33 }}>
               {lesson.bites[step.i].play!.prompt}
             </T>
-            <SceneView scene={lesson.bites[step.i].scene!} changes={lesson.bites[step.i].play!.changes} value={slider} label={lesson.bites[step.i].play!.prompt} />
+            <SceneView scene={lesson.bites[step.i].scene!} changes={lesson.bites[step.i].play!.changes} value={slider} label={lesson.bites[step.i].play!.prompt} caption={lesson.bites[step.i].caption} />
             <Slider
               value={slider}
               low={lesson.bites[step.i].play!.low}

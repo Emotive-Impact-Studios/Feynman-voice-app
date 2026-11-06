@@ -128,6 +128,8 @@ export interface LessonBite {
   scene?: Scene | null;
   /** A slider that changes the scene, on at most one bite. */
   play?: Play | null;
+  /** One short sentence under the drawing that states its point. */
+  caption?: string;
   quote: string;
   fromNotes: boolean;
   puzzle: LessonPuzzle;

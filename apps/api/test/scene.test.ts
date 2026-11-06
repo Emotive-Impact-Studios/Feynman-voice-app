@@ -59,3 +59,19 @@ describe("lessons with scenes", () => {
     expect(l.bites[1].scene?.family).toBe("balance");
   });
 });
+
+describe("the newer devices", () => {
+  it("checks compare, stairs, spectrum and venn scenes and their sliders", () => {
+    const c = checkScene({ family: "compare", style: "circles", items: [{ label: "Earth", value: 1 }, { label: "Sun", value: 109 }, { label: "", value: 3 }] });
+    expect(c?.family === "compare" && c.items).toHaveLength(2);
+    expect(checkPlay({ prompt: "p", low: "a", high: "b", readouts: ["a", "b", "c"], changes: [{ target: "Sun", does: "grow" }] }, c)?.changes[0].target).toBe("sun");
+    expect(checkPlay({ prompt: "p", low: "a", high: "b", readouts: ["a", "b", "c"], changes: [{ target: "x", does: "step" }] }, c)?.changes[0].target).toBe("");
+    const st = checkScene({ family: "stairs", steps: ["Body", "Safety", "Growth"], at: 9 });
+    expect(st?.family === "stairs" && st.at).toBe(2);
+    const sp = checkScene({ family: "spectrum", left: "Acid", right: "Alkaline", min: 0, max: 14, marks: [{ label: "Bleach", at: 99 }], at: -3 });
+    expect(sp?.family === "spectrum" && [sp.at, sp.marks[0].at]).toEqual([0, 14]);
+    const v = checkScene({ family: "venn", a: "Rain", b: "Wind", both: "Both", overlap: 3 });
+    expect(v?.family === "venn" && v.overlap).toBe(1);
+    expect(checkPlay({ prompt: "p", low: "a", high: "b", readouts: ["a", "b", "c"], changes: [{ target: "Rain", does: "overlap" }] }, v)?.changes[0]).toEqual({ target: "", does: "overlap" });
+  });
+});

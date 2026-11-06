@@ -1,12 +1,15 @@
 // Draws one scene frame onto a Skia canvas. Everything here runs on the UI
 // thread as a worklet, once a frame, so it only uses plain maths and Skia.
 //
-// The visual language (Fenny Drawing Kit): a 300 x 176 panel, steel-blue dots
-// for things that move, thin silver rings for objects, dashed boundaries,
-// coral only for something blocked, tiny grey mono capitals for labels, and
-// slow eased loops. The app scales the panel to fit the screen.
+// The visual language (Fenny Drawing Kit v2) follows the principles of
+// Visual Value, softened for Fenny:
+//   one idea per picture; soft silver lines on near-black, one line weight,
+//   rounded ends; only one thing lit (white fill, or steel blue for the thing
+//   that changes); no glows or gradients; few, small sentence-case labels;
+//   built in a few beats, then at rest with at most one slow movement.
+// The panel is 300 x 176; the view scales it to fit the screen.
 import { Skia, type SkCanvas, type SkFont, type SkPaint } from "@shopify/react-native-skia";
-import type { BalanceScene, Change, GraphScene, LinksScene, ParticlesScene, Scene, Shape } from "./types";
+import type { BalanceScene, Change, CompareScene, GraphScene, LinksScene, ParticlesScene, Scene, Shape, SpectrumScene, StairsScene, VennScene } from "./types";
 
 export const VIEW_W = 300;
 export const VIEW_H = 176;
@@ -24,14 +27,11 @@ export interface Frame {
   still: boolean;
 }
 
+const SIL = "#E6E9EE";
 const BLUE = "#A9BEE6";
-const SILVER = "#C9CDD4";
-const CORAL = "#F09A80";
-const LABEL = "#7D828B";
-const SOFT = "#A9ADB4";
-const TEXT = "#E4E6EA";
-const WHITE = "#FFFFFF";
-const PANEL = "#0E1013";
+const LAB = "#8A8F98";
+const PANEL = "#0D0E11";
+const W0 = 1.6;
 const TAU = Math.PI * 2;
 
 // ---- small maths ----
@@ -39,7 +39,13 @@ function clamp(x: number, a = 0, b = 1) {
   "worklet";
   return Math.max(a, Math.min(b, x));
 }
+/** Soft landing, no overshoot. */
 function ease(x: number) {
+  "worklet";
+  const k = clamp(x);
+  return 1 - Math.pow(1 - k, 3);
+}
+function ease2(x: number) {
   "worklet";
   const k = clamp(x);
   return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
@@ -53,6 +59,11 @@ function bounce(x: number, L: number) {
   "worklet";
   const m = ((x % (2 * L)) + 2 * L) % (2 * L);
   return m < L ? m : 2 * L - m;
+}
+/** Beat k of n: each part of the picture lands in turn as it builds. */
+function beat(f: Frame, k: number, n: number) {
+  "worklet";
+  return ease(f.intro * (n + 1) - k);
 }
 function has(changes: Change[], target: string, does: string) {
   "worklet";
@@ -68,87 +79,86 @@ function hasKind(changes: Change[], does: string) {
 // ---- marks ----
 function fill(p: SkPaint, colour: string, a: number) {
   "worklet";
-  p.setShader(null);
   p.setPathEffect(null);
   p.setStyle(0);
   p.setColor(Skia.Color(colour));
   p.setAlphaf(clamp(a));
 }
-function stroke(p: SkPaint, colour: string, a: number, w: number, dash?: number[]) {
+function stroke(p: SkPaint, colour: string, a: number, w = W0, dash?: number[]) {
   "worklet";
-  p.setShader(null);
   p.setStyle(1);
   p.setStrokeWidth(w);
   p.setStrokeCap(1);
+  p.setStrokeJoin(1);
   p.setColor(Skia.Color(colour));
   p.setAlphaf(clamp(a));
   p.setPathEffect(dash ? Skia.PathEffect.MakeDash(dash, 0) : null);
 }
-function dot(c: SkCanvas, p: SkPaint, x: number, y: number, r: number, a: number, colour = BLUE) {
-  "worklet";
-  if (a <= 0.01) return;
-  fill(p, colour, a);
-  c.drawCircle(x, y, r, p);
-}
-function ring(c: SkCanvas, p: SkPaint, x: number, y: number, r: number, a: number, colour = SILVER, w = 2) {
-  "worklet";
-  if (a <= 0.01) return;
-  stroke(p, colour, a, w);
-  c.drawCircle(x, y, r, p);
-}
-function line(c: SkCanvas, p: SkPaint, x1: number, y1: number, x2: number, y2: number, colour: string, a: number, w: number, dash?: number[]) {
-  "worklet";
-  if (a <= 0.01) return;
-  stroke(p, colour, a, w, dash);
-  c.drawLine(x1, y1, x2, y2, p);
-}
-function glow(c: SkCanvas, p: SkPaint, x: number, y: number, r: number, a: number, colour = BLUE) {
+function dot(c: SkCanvas, p: SkPaint, x: number, y: number, r: number, a: number, colour = SIL) {
   "worklet";
   if (a <= 0.01 || r <= 0) return;
-  p.setPathEffect(null);
-  p.setStyle(0);
-  p.setColor(Skia.Color(WHITE));
-  p.setAlphaf(clamp(a));
-  const inner = Skia.Color(colour);
-  const outer = Skia.Color(colour);
-  outer[3] = 0;
-  p.setShader(Skia.Shader.MakeRadialGradient({ x, y }, r, [inner, outer], null, 0));
+  fill(p, colour, a);
   c.drawCircle(x, y, r, p);
-  p.setShader(null);
 }
-function arrowHead(c: SkCanvas, p: SkPaint, x: number, y: number, ang: number, a: number) {
+function ring(c: SkCanvas, p: SkPaint, x: number, y: number, r: number, a: number, colour = SIL) {
   "worklet";
-  const s = 6;
-  line(c, p, x - Math.cos(ang - 0.5) * s, y - Math.sin(ang - 0.5) * s, x, y, BLUE, a, 1.6);
-  line(c, p, x - Math.cos(ang + 0.5) * s, y - Math.sin(ang + 0.5) * s, x, y, BLUE, a, 1.6);
+  if (a <= 0.01 || r <= 0) return;
+  stroke(p, colour, a);
+  c.drawCircle(x, y, r, p);
 }
-function label(c: SkCanvas, p: SkPaint, font: SkFont | null, text: string, x: number, y: number, align: "left" | "center" | "right", colour = LABEL, a = 1) {
+/** A line drawn on from its start: k from 0 to 1. */
+function line(c: SkCanvas, p: SkPaint, x1: number, y1: number, x2: number, y2: number, a: number, colour = SIL, k = 1, dash?: number[], w = W0) {
+  "worklet";
+  if (a <= 0.01 || k <= 0) return;
+  stroke(p, colour, a, w, dash);
+  c.drawLine(x1, y1, x1 + (x2 - x1) * k, y1 + (y2 - y1) * k, p);
+}
+function arrow(c: SkCanvas, p: SkPaint, x1: number, y1: number, x2: number, y2: number, a: number, colour = SIL, k = 1) {
+  "worklet";
+  line(c, p, x1, y1, x2, y2, a, colour, k);
+  if (k < 0.98) return;
+  const ang = Math.atan2(y2 - y1, x2 - x1);
+  const s = 6;
+  line(c, p, x2 - Math.cos(ang - 0.5) * s, y2 - Math.sin(ang - 0.5) * s, x2, y2, a, colour);
+  line(c, p, x2 - Math.cos(ang + 0.5) * s, y2 - Math.sin(ang + 0.5) * s, x2, y2, a, colour);
+}
+function label(c: SkCanvas, p: SkPaint, font: SkFont | null, text: string, x: number, y: number, align: "left" | "center" | "right", colour = LAB, a = 1) {
   "worklet";
   if (!font || !text || a <= 0.01) return;
-  const t = text.toUpperCase();
-  const w = font.getTextWidth(t);
+  const w = font.getTextWidth(text);
   const left = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
   fill(p, colour, a);
-  c.drawText(t, left, y + 3, p, font);
+  c.drawText(text, left, y + 3.3, p, font);
+}
+function axes(c: SkCanvas, p: SkPaint, font: SkFont | null, f: Frame, L: number, T: number, R: number, B: number, xl: string, yl: string) {
+  "worklet";
+  const k = beat(f, 0, 4);
+  line(c, p, L, B, L, T, 0.32, SIL, k);
+  line(c, p, L, B, R, B, 0.32, SIL, k);
+  label(c, p, font, xl, (L + R) / 2, B + 14, "center", LAB, k);
+  if (font && yl) {
+    c.save();
+    c.translate(L - 13, (T + B) / 2);
+    c.rotate(-90, 0, 0);
+    label(c, p, font, yl, 0, 0, "center", LAB, k);
+    c.restore();
+  }
 }
 
-// ---- particles: stuff moving between places ----
+// ---- container: stuff moving between places ----
 function drawParticles(c: SkCanvas, p: SkPaint, font: SkFont | null, s: ParticlesScene, changes: Change[], f: Frame) {
   "worklet";
   const n = Math.max(1, s.zones.length);
   const zw = VIEW_W / n;
   const top = 16;
   const bottom = 146;
-  const a0 = ease(f.intro);
+  const kDiv = beat(f, 0, 3);
 
   for (let k = 1; k < n; k++) {
     const x = k * zw;
-    if (s.divider === "membrane") line(c, p, x, 12, x, 148, WHITE, 0.33 * a0, 3, [7, 7]);
-    else if (s.divider === "wall") line(c, p, x, 12, x, 148, WHITE, 0.25 * a0, 2.5);
-    else if (s.divider === "sieve") {
-      fill(p, WHITE, 0.3 * a0);
-      for (let i = 0; i < 7; i++) c.drawRRect(Skia.RRectXY(Skia.XYWHRect(x - 4, 14 + i * 19, 8, 11), 4, 4), p);
-    }
+    if (s.divider === "membrane") line(c, p, x, 14, x, 150, 0.35, SIL, kDiv, [6, 7]);
+    else if (s.divider === "wall") line(c, p, x, 14, x, 150, 0.45, SIL, kDiv);
+    else if (s.divider === "sieve") for (let i = 0; i < 7; i++) line(c, p, x, 17 + i * 19, x, 25 + i * 19, 0.45 * kDiv, SIL, 1, undefined, 3);
   }
 
   for (let g = 0; g < s.things.length; g++) {
@@ -157,6 +167,7 @@ function drawParticles(c: SkCanvas, p: SkPaint, font: SkFont | null, s: Particle
     const crosses = has(changes, th.name, "cross");
     const fast = has(changes, th.name, "speed");
     const grows = has(changes, th.name, "grow");
+    const lit = crosses || fast || grows;
     const tm = fast ? f.T : f.t;
     const x0 = th.zone * zw + 16;
     const w = zw - 32;
@@ -165,7 +176,7 @@ function drawParticles(c: SkCanvas, p: SkPaint, font: SkFont | null, s: Particle
     const cx = th.zone * zw + zw / 2;
     const cy = (top + bottom) / 2;
     const dense = th.count > 10;
-    let size = th.mark === "dot" ? (dense ? 3.8 : 4.5) : dense ? 7.5 : 9.5;
+    let size = th.mark === "dot" ? (dense ? 3.2 : 3.6) : dense ? 7.5 : 9;
     if (grows) size *= 0.55 + f.v * 1.0;
 
     for (let i = 0; i < th.count; i++) {
@@ -176,55 +187,52 @@ function drawParticles(c: SkCanvas, p: SkPaint, font: SkFont | null, s: Particle
       let x = bx;
       let y = by;
       let r = size;
-      let a = clamp(a0 * 2 - i / th.count);
+      let a = beat(f, 1 + g * 0.5 + i / th.count, 3);
       if (appear) a *= clamp(f.v * th.count - i);
 
       switch (th.motion) {
         case "drift":
-          x = bx + Math.sin(tm * 0.9 + ph) * 4;
-          y = by + Math.cos(tm * 0.7 + ph) * 4;
+          x = bx + Math.sin(tm * 0.6 + ph) * 2.5;
+          y = by + Math.cos(tm * 0.5 + ph) * 2.5;
           break;
         case "jiggle": {
-          const vx = (rnd(seed + 80) - 0.5) * 2;
-          const vy = (rnd(seed + 120) - 0.5) * 2;
-          x = x0 + bounce(rnd(seed) * w + vx * tm * 24, w);
-          y = top + 4 + bounce(rnd(seed + 7) * (h - 8) + vy * tm * 24, h - 8);
+          const vx = rnd(seed + 80) - 0.5;
+          const vy = rnd(seed + 120) - 0.5;
+          x = x0 + bounce(rnd(seed) * w + vx * tm * 50, w);
+          y = top + 4 + bounce(rnd(seed + 7) * (h - 8) + vy * tm * 50, h - 8);
           break;
         }
         case "cross": {
           if (th.zone === th.to) break;
-          const q = (tm / 3.4 + rnd(seed + 3)) % 1;
+          const q = (tm / 3.6 + rnd(seed + 3)) % 1;
           if (th.mark === "blocked") {
-            // Heads for the boundary and is turned back.
             const edge = th.to > th.zone ? (th.zone + 1) * zw - 14 : th.zone * zw + 14;
             x = bx + (edge - bx) * Math.sin(q * Math.PI);
           } else {
-            const e = ease((q - 0.1) / 0.6);
-            x = bx + (tx0 + rnd(seed) * w - bx) * e;
+            x = bx + (tx0 + rnd(seed) * w - bx) * ease2((q - 0.1) / 0.6);
             a *= q < 0.08 ? q / 0.08 : q > 0.85 ? (1 - q) / 0.15 : 1;
           }
           break;
         }
         case "rise":
         case "fall": {
-          const q = (tm * 0.22 + rnd(seed + 3)) % 1;
+          const q = (tm * 0.2 + rnd(seed + 3)) % 1;
           y = th.motion === "rise" ? bottom - q * h : top + q * h;
           a *= Math.sin(q * Math.PI);
           break;
         }
         case "orbit": {
           const band = i % 3;
-          const rad = 16 + band * 14;
-          const ang = tm * 0.8 * (1 - band * 0.2) + i * 2.4;
-          x = cx + Math.cos(ang) * rad;
-          y = cy + Math.sin(ang) * rad * 0.9;
+          const ang = tm * 0.6 * (1 - band * 0.2) + i * 2.4;
+          x = cx + Math.cos(ang) * (16 + band * 14);
+          y = cy + Math.sin(ang) * (16 + band * 14) * 0.9;
           break;
         }
         case "pulse":
-          r = size * (1 + 0.18 * Math.sin(tm * 2.2 + ph));
+          r = size * (1 + 0.12 * Math.sin(tm * 1.8 + ph));
           break;
         case "flow": {
-          const q = (rnd(seed) + tm * 0.1) % 1;
+          const q = (rnd(seed) + tm * 0.08) % 1;
           x = 10 + q * (VIEW_W - 20);
           a *= Math.min(1, q / 0.08, (1 - q) / 0.08);
           break;
@@ -233,159 +241,147 @@ function drawParticles(c: SkCanvas, p: SkPaint, font: SkFont | null, s: Particle
           break;
       }
 
-      if (crosses && th.zone !== th.to) {
-        const m = ease(clamp(f.v * 0.85 * th.count - i));
-        x = x + (tx0 - x0) * m;
-      }
+      if (crosses && th.zone !== th.to) x += (tx0 - x0) * ease2(clamp(f.v * 0.85 * th.count - i));
 
-      if (th.mark === "dot") dot(c, p, x, y, r, a);
-      else if (th.mark === "ring") ring(c, p, x, y, r, a);
+      if (th.mark === "dot") dot(c, p, x, y, r, a, lit && th.count <= 6 ? BLUE : SIL);
+      else if (th.mark === "ring") ring(c, p, x, y, r, a * 0.85);
       else {
-        ring(c, p, x, y, r, a, CORAL);
+        // Something stopped: a dim ring with a cross through it.
+        ring(c, p, x, y, r, a * 0.5);
         const k = r * 0.42;
-        line(c, p, x - k, y - k, x + k, y + k, CORAL, a, 2);
-        line(c, p, x + k, y - k, x - k, y + k, CORAL, a, 2);
+        line(c, p, x - k, y - k, x + k, y + k, a * 0.5);
+        line(c, p, x + k, y - k, x - k, y + k, a * 0.5);
       }
     }
   }
-
-  for (let k = 0; k < n; k++) label(c, p, font, s.zones[k], k * zw + zw / 2, 163, "center", LABEL, a0);
+  for (let k = 0; k < n; k++) label(c, p, font, s.zones[k], k * zw + zw / 2, 164, "center", LAB, beat(f, 2.5, 3));
 }
 
-// ---- links: things joined in a chain ----
+// ---- path, fork, loop and network ----
 function nodePositions(s: LinksScene): number[][] {
   "worklet";
   const n = s.nodes.length;
   const out: number[][] = [];
   if (s.layout === "line") {
-    for (let i = 0; i < n; i++) {
-      const x = n === 1 ? 150 : 34 + (i * 232) / (n - 1);
-      const y = n > 3 ? 78 + (i % 2 === 0 ? -22 : 22) : 78;
-      out.push([x, y]);
-    }
+    for (let i = 0; i < n; i++) out.push([n === 1 ? 150 : 34 + (i * 232) / (n - 1), n > 3 ? 80 + (i % 2 === 0 ? -20 : 20) : 80]);
+  } else if (s.layout === "fork") {
+    out.push([56, 84]);
+    const m = n - 1;
+    for (let i = 0; i < m; i++) out.push([236, m === 1 ? 84 : 30 + (i * 110) / (m - 1)]);
   } else if (s.layout === "loop") {
-    if (n === 2) {
-      out.push([52, 84], [248, 84]);
-    } else {
-      for (let i = 0; i < n; i++) {
-        const ang = -Math.PI / 2 + (i / n) * TAU;
-        out.push([150 + Math.cos(ang) * 100, 80 + Math.sin(ang) * 50]);
-      }
+    if (n === 2) out.push([52, 84], [248, 84]);
+    else for (let i = 0; i < n; i++) {
+      const ang = -Math.PI / 2 + (i / n) * TAU;
+      out.push([150 + Math.cos(ang) * 96, 80 + Math.sin(ang) * 52]);
     }
   } else {
-    const spots = [
-      [72, 42],
-      [210, 128],
-      [236, 46],
-      [150, 84],
-      [70, 122],
-      [150, 26],
-      [262, 100],
-    ];
+    const spots = [[64, 40], [216, 130], [244, 44], [150, 76], [64, 124], [150, 24], [266, 98]];
     for (let i = 0; i < n; i++) out.push(spots[i]);
   }
   return out;
 }
 
+/** A point at distance d round a rounded rectangle, clockwise from the top left. */
+function aroundLoop(d0: number, L: number, R: number, T: number, B: number, cr: number): number[] {
+  "worklet";
+  const wSeg = R - L - 2 * cr;
+  const hSeg = B - T - 2 * cr;
+  const q = (Math.PI / 2) * cr;
+  const per = 2 * wSeg + 2 * hSeg + 4 * q;
+  let d = ((d0 % per) + per) % per;
+  if (d <= wSeg) return [L + cr + d, T];
+  if ((d -= wSeg) <= q) { const an = -Math.PI / 2 + d / cr; return [R - cr + Math.cos(an) * cr, T + cr + Math.sin(an) * cr]; }
+  if ((d -= q) <= hSeg) return [R, T + cr + d];
+  if ((d -= hSeg) <= q) { const an = d / cr; return [R - cr + Math.cos(an) * cr, B - cr + Math.sin(an) * cr]; }
+  if ((d -= q) <= wSeg) return [R - cr - d, B];
+  if ((d -= wSeg) <= q) { const an = Math.PI / 2 + d / cr; return [L + cr + Math.cos(an) * cr, B - cr + Math.sin(an) * cr]; }
+  if ((d -= q) <= hSeg) return [L, B - cr - d];
+  d -= hSeg;
+  const an = Math.PI + d / cr;
+  return [L + cr + Math.cos(an) * cr, T + cr + Math.sin(an) * cr];
+}
+
 function drawLinks(c: SkCanvas, p: SkPaint, font: SkFont | null, s: LinksScene, changes: Change[], f: Frame) {
   "worklet";
   const pos = nodePositions(s);
-  const a0 = ease(f.intro);
   const stepping = hasKind(changes, "step");
   const tm = hasKind(changes, "speed") ? f.T : f.t;
   const m = s.links.length;
   const lit: boolean[] = [];
   for (let i = 0; i < s.nodes.length; i++) lit.push(false);
-  const R = 11;
+  const R = 10;
 
-  // A circuit: two nodes on a loop with a stream running round.
-  const circuit = s.layout === "loop" && s.nodes.length === 2;
-  if (circuit) {
+  if (s.layout === "loop" && s.nodes.length === 2) {
+    // A circuit: a soft loop with charge running round.
     const L = 52;
     const Rr = 248;
     const T = 30;
     const B = 138;
-    const cr = 22;
-    stroke(p, WHITE, 0.16 * a0, 2);
-    c.drawRRect(Skia.RRectXY(Skia.XYWHRect(L, T, Rr - L, B - T, ), cr, cr), p);
+    const cr = 20;
+    stroke(p, SIL, 0.3 * beat(f, 0, 3));
+    c.drawRRect(Skia.RRectXY(Skia.XYWHRect(L, T, Rr - L, B - T), cr, cr), p);
     const per = 2 * (Rr - L - 2 * cr) + 2 * (B - T - 2 * cr) + TAU * cr;
-    const count = 22;
-    const flowOn = stepping ? clamp(f.v * 1.3) : 1;
-    for (let i = 0; i < count; i++) {
-      let d = (((i / count) * per + tm * 60) % per + per) % per;
-      // walk the rounded rectangle
-      const wSeg = Rr - L - 2 * cr;
-      const hSeg = B - T - 2 * cr;
-      const q = (Math.PI / 2) * cr;
-      let x = L + cr;
-      let y = T;
-      if (d <= wSeg) { x = L + cr + d; y = T; }
-      else if ((d -= wSeg) <= q) { const an = -Math.PI / 2 + d / cr; x = Rr - cr + Math.cos(an) * cr; y = T + cr + Math.sin(an) * cr; }
-      else if ((d -= q) <= hSeg) { x = Rr; y = T + cr + d; }
-      else if ((d -= hSeg) <= q) { const an = d / cr; x = Rr - cr + Math.cos(an) * cr; y = B - cr + Math.sin(an) * cr; }
-      else if ((d -= q) <= wSeg) { x = Rr - cr - d; y = B; }
-      else if ((d -= wSeg) <= q) { const an = Math.PI / 2 + d / cr; x = L + cr + Math.cos(an) * cr; y = B - cr + Math.sin(an) * cr; }
-      else if ((d -= q) <= hSeg) { x = L; y = B - cr - d; }
-      else { d -= hSeg; const an = Math.PI + d / cr; x = L + cr + Math.cos(an) * cr; y = T + cr + Math.sin(an) * cr; }
+    const on = stepping ? clamp(f.v * 1.3) : 1;
+    for (let i = 0; i < 20; i++) {
+      const pt = aroundLoop((i / 20) * per + tm * 60, L, Rr, T, B, cr);
       let near = false;
-      for (let k = 0; k < 2; k++) if (Math.abs(x - pos[k][0]) < 15 && Math.abs(y - pos[k][1]) < 15) near = true;
-      if (!near) dot(c, p, x, y, 3.2, clamp(a0 * 2 - i / count) * 0.95 * flowOn);
+      for (let k = 0; k < 2; k++) if (Math.abs(pt[0] - pos[k][0]) < 15 && Math.abs(pt[1] - pos[k][1]) < 15) near = true;
+      if (!near) dot(c, p, pt[0], pt[1], 2.8, beat(f, 2 + i / 20, 3) * 0.9 * on);
     }
-    lit[0] = true;
-    lit[1] = flowOn > 0.3;
+    lit[1] = on > 0.3;
   } else {
     for (let i = 0; i < m; i++) {
       const l = s.links[i];
-      const k = stepping ? clamp(f.v * m * 1.15 - i) : clamp(a0 * (m + 1) - i);
+      const k = stepping ? clamp(f.v * m * 1.15 - i) : beat(f, 1 + (i / Math.max(1, m)) * 1.5, 3);
       if (k <= 0) continue;
-      const [x1, y1] = pos[l.from];
-      const [x2, y2] = pos[l.to];
-      const ang = Math.atan2(y2 - y1, x2 - x1);
-      const sx = x1 + Math.cos(ang) * (R + 4);
-      const sy = y1 + Math.sin(ang) * (R + 4);
-      const ex = x2 - Math.cos(ang) * (R + 4);
-      const ey = y2 - Math.sin(ang) * (R + 4);
+      const a1 = pos[l.from];
+      const a2 = pos[l.to];
+      const ang = Math.atan2(a2[1] - a1[1], a2[0] - a1[0]);
+      const sx = a1[0] + Math.cos(ang) * (R + 5);
+      const sy = a1[1] + Math.sin(ang) * (R + 5);
+      const ex = a2[0] - Math.cos(ang) * (R + 5);
+      const ey = a2[1] - Math.sin(ang) * (R + 5);
+      // In a fork, the first outcome is the one that's lit.
+      const main = s.layout !== "fork" || l.to === s.links[0].to;
       if (l.kind === "tie") {
-        line(c, p, sx, sy, sx + (ex - sx) * k, sy + (ey - sy) * k, SILVER, 0.35, 1.3, [3, 5]);
+        line(c, p, sx, sy, ex, ey, 0.25, SIL, k, [2, 5]);
         continue;
       }
       if (l.kind === "cause") {
-        line(c, p, sx, sy, sx + (ex - sx) * k, sy + (ey - sy) * k, BLUE, 0.7, 1.6);
-        if (k >= 1) {
-          arrowHead(c, p, ex, ey, ang, 0.85);
-          if (!f.still) {
-            const q = (tm * 0.45 + i * 0.37) % 1;
-            dot(c, p, sx + (ex - sx) * q, sy + (ey - sy) * q, 2.4, 0.9 * Math.sin(q * Math.PI));
-          }
+        arrow(c, p, sx, sy, ex, ey, main ? 0.85 : 0.35, main ? BLUE : SIL, k);
+        if (k >= 1 && main && !f.still) {
+          const q = (tm * 0.4 + i * 0.37) % 1;
+          dot(c, p, sx + (ex - sx) * q, sy + (ey - sy) * q, 2.2, Math.sin(q * Math.PI), BLUE);
         }
       } else {
-        line(c, p, sx, sy, ex, ey, WHITE, 0.12 * k, 1.2);
-        for (let d = 0; d < 6; d++) {
-          const q = (d / 6 + tm * 0.25) % 1;
-          dot(c, p, sx + (ex - sx) * q, sy + (ey - sy) * q, 2.8, k * Math.sin(q * Math.PI));
+        line(c, p, sx, sy, ex, ey, 0.15 * k);
+        for (let d = 0; d < 5; d++) {
+          const q = (d / 5 + tm * 0.2) % 1;
+          dot(c, p, sx + (ex - sx) * q, sy + (ey - sy) * q, 2.4, k * Math.sin(q * Math.PI));
         }
       }
-      if (k > 0.5) {
-        lit[l.from] = true;
+      if (k > 0.5 && main) {
         lit[l.to] = true;
+        if (stepping) lit[l.from] = true;
       }
     }
   }
 
   for (let i = 0; i < s.nodes.length; i++) {
-    const [x, y] = pos[i];
-    const on = lit[i];
-    if (on) glow(c, p, x, y, 24, 0.32 + (f.still ? 0 : 0.08 * Math.sin(f.t * 1.6 + i)));
-    fill(p, PANEL, a0);
-    c.drawCircle(x, y, R, p);
-    if (on) dot(c, p, x, y, R, 0.2 * a0);
-    ring(c, p, x, y, R, a0 * (on ? 1 : 0.55), on ? BLUE : SILVER, 1.6);
-    const below = y < 120;
-    label(c, p, font, s.nodes[i], x, below ? y + 22 : y - 22, x < 40 ? "left" : x > 260 ? "right" : "center", on ? SOFT : LABEL, a0);
+    const x = pos[i][0];
+    const y = pos[i][1];
+    const a = beat(f, (i / s.nodes.length) * 0.8, 3);
+    dot(c, p, x, y, R, a, PANEL);
+    if (lit[i]) dot(c, p, x, y, R, a, BLUE);
+    else ring(c, p, x, y, R, a * 0.7);
+    // Labels sit outside the shape: under a line, away from the middle of a loop, fork or web.
+    const below = s.layout === "line" ? true : y >= 80;
+    const ly = below ? (y > 140 ? y - 20 : y + 20) : y < 30 ? y - 15 : y - 20;
+    label(c, p, font, s.nodes[i], x, ly, x < 40 ? "left" : x > 260 ? "right" : "center", lit[i] ? SIL : LAB, a);
   }
 }
 
-// ---- graph: one thing changes with another ----
+// ---- plot: one thing changes with another ----
 function shapeY(shape: Shape, x: number, shift: number, stretch: number) {
   "worklet";
   const X = x - shift;
@@ -415,76 +411,58 @@ function shapeY(shape: Shape, x: number, shift: number, stretch: number) {
 function drawGraph(c: SkCanvas, p: SkPaint, font: SkFont | null, s: GraphScene, changes: Change[], f: Frame) {
   "worklet";
   const L = 36;
-  const R = 284;
-  const T = 16;
+  const R = 280;
+  const T = 18;
   const B = 144;
   const X = (x: number) => L + x * (R - L);
   const Y = (y: number) => B - clamp(y, -0.02, 1.02) * (B - T);
-  const a0 = ease(f.intro);
-  line(c, p, L, T, L, B, WHITE, 0.22, 1.3);
-  line(c, p, L, B, R, B, WHITE, 0.22, 1.3);
-  label(c, p, font, s.x, (L + R) / 2, B + 14, "center");
-  if (font && s.y) {
-    c.save();
-    c.translate(L - 13, (T + B) / 2);
-    c.rotate(-90, 0, 0);
-    label(c, p, font, s.y, 0, 0, "center");
-    c.restore();
-  }
+  axes(c, p, font, f, L, T, R, B, s.x, s.y);
 
-  // Which curve is lit: the one the slider moves, else the second of two.
+  // The lit curve: the one the slider moves, else the second of two.
   let litIndex = s.curves.length > 1 ? 1 : 0;
   for (let i = 0; i < s.curves.length; i++) {
     const n = s.curves[i].name;
     if (has(changes, n, "shift") || has(changes, n, "stretch") || has(changes, n, "ride")) litIndex = i;
   }
-
   const shifts: number[] = [];
   const stretches: number[] = [];
   for (let i = 0; i < s.curves.length; i++) {
-    const cv = s.curves[i];
-    shifts.push(has(changes, cv.name, "shift") ? f.v * 0.28 : 0);
-    stretches.push(has(changes, cv.name, "stretch") ? 0.12 + f.v * 0.88 : 0.35);
+    shifts.push(has(changes, s.curves[i].name, "shift") ? f.v * 0.28 : 0);
+    stretches.push(has(changes, s.curves[i].name, "stretch") ? 0.12 + f.v * 0.88 : 0.35);
   }
 
   for (let i = 0; i < s.curves.length; i++) {
     const cv = s.curves[i];
-    const colour = i === litIndex ? BLUE : SILVER;
-    const moved = shifts[i] > 0.005 || Math.abs(stretches[i] - 0.35) > 0.02 && has(changes, cv.name, "stretch");
-    const paths = moved ? 2 : 1;
-    for (let pass = 0; pass < paths; pass++) {
-      const ghost = moved && pass === 0;
+    const isLit = i === litIndex;
+    const stretched = has(changes, cv.name, "stretch");
+    const moved = shifts[i] > 0.005 || (stretched && f.v > 0.02);
+    for (let pass = moved ? 0 : 1; pass < 2; pass++) {
+      const ghost = pass === 0;
       const sh = ghost ? 0 : shifts[i];
-      const st = ghost ? (has(changes, cv.name, "stretch") ? 0.12 : 0.35) : stretches[i];
+      const st = ghost ? (stretched ? 0.12 : 0.35) : stretches[i];
+      const k = ghost ? 1 : beat(f, 1 + i, 4);
       const path = Skia.PathBuilder.Make();
-      const end = 0.03 + 0.94 * a0;
-      for (let k = 0; k <= 80; k++) {
-        const x = 0.03 + ((end - 0.03) * k) / 80;
-        const px = X(x);
-        const py = Y(shapeY(cv.shape, x, sh, st));
-        if (k === 0) path.moveTo(px, py);
-        else path.lineTo(px, py);
+      const end = 0.03 + 0.94 * k;
+      for (let j = 0; j <= 80; j++) {
+        const x = 0.03 + ((end - 0.03) * j) / 80;
+        if (j === 0) path.moveTo(X(x), Y(shapeY(cv.shape, x, sh, st)));
+        else path.lineTo(X(x), Y(shapeY(cv.shape, x, sh, st)));
       }
-      stroke(p, colour, ghost ? 0.28 : i === litIndex ? 1 : 0.75, 2, ghost ? [4, 6] : undefined);
+      stroke(p, isLit && !ghost ? BLUE : SIL, ghost ? 0.25 : isLit ? 1 : 0.55, W0, ghost ? [3, 6] : undefined);
       c.drawPath(path.build(), p);
     }
-    if (cv.label) {
-      const yEnd = shapeY(cv.shape, 0.97, shifts[i], stretches[i]);
-      label(c, p, font, cv.label, X(0.97) + 6, Y(yEnd), "left", colour, a0);
-    }
+    if (cv.label) label(c, p, font, cv.label, X(0.97) + 6, Y(shapeY(cv.shape, 0.97, shifts[i], stretches[i])), "left", isLit ? BLUE : LAB, beat(f, 3, 4));
   }
 
   const lit = s.curves[litIndex];
-  const pulse = f.still ? 0 : 0.15 * Math.sin(f.t * 2);
+  const kH = beat(f, 3, 4);
   if (s.highlight === "crossing" && s.curves.length > 1) {
-    const a = s.curves[0];
-    const b = s.curves[1];
     let prev = 0;
     let found = -1;
     for (let k = 0; k <= 200; k++) {
       const x = k / 200;
-      const d = shapeY(a.shape, x, shifts[0], stretches[0]) - shapeY(b.shape, x, shifts[1], stretches[1]);
-      if (k > 0 && (d === 0 || (d > 0) !== (prev > 0))) {
+      const d = shapeY(s.curves[0].shape, x, shifts[0], stretches[0]) - shapeY(s.curves[1].shape, x, shifts[1], stretches[1]);
+      if (k > 0 && (d === 0 || d > 0 !== prev > 0)) {
         found = x;
         break;
       }
@@ -492,83 +470,197 @@ function drawGraph(c: SkCanvas, p: SkPaint, font: SkFont | null, s: GraphScene, 
     }
     if (found >= 0) {
       const px = X(found);
-      const py = Y(shapeY(a.shape, found, shifts[0], stretches[0]));
-      line(c, p, px, py, px, B, WHITE, 0.22 * a0, 1.2, [3, 5]);
-      line(c, p, px, py, L, py, WHITE, 0.22 * a0, 1.2, [3, 5]);
-      glow(c, p, px, py, 16, (0.5 + pulse) * a0);
-      dot(c, p, px, py, 5, a0, TEXT);
+      const py = Y(shapeY(s.curves[0].shape, found, shifts[0], stretches[0]));
+      line(c, p, px, py, px, B, 0.3, SIL, kH, [2, 5]);
+      line(c, p, px, py, L, py, 0.3, SIL, kH, [2, 5]);
+      dot(c, p, px, py, 4.5, kH);
     }
   } else if (s.highlight === "half") {
     let idx = 0;
     for (let i = 0; i < s.curves.length; i++) if (s.curves[i].shape === "saturate") idx = i;
-    const km = 0.05 + stretches[idx] * 0.5;
-    const kx = shifts[idx] + km;
-    line(c, p, L, Y(0.85), R, Y(0.85), WHITE, 0.2 * a0, 1.2, [3, 5]);
-    label(c, p, font, "Max", R - 2, Y(0.85) - 8, "right", LABEL, a0);
-    line(c, p, L, Y(0.425), X(kx), Y(0.425), WHITE, 0.2 * a0, 1.2, [3, 5]);
-    label(c, p, font, "Half", L + 6, Y(0.425) - 8, "left", LABEL, a0);
-    line(c, p, X(kx), Y(0.425), X(kx), B, BLUE, 0.45 * a0, 1.2, [3, 5]);
-    dot(c, p, X(kx), Y(0.425), 4.5, a0, TEXT);
+    const kx = shifts[idx] + 0.05 + stretches[idx] * 0.5;
+    line(c, p, L, Y(0.85), R, Y(0.85), 0.25, SIL, beat(f, 1, 4), [2, 5]);
+    label(c, p, font, "Max", R, Y(0.85) - 9, "right", LAB, beat(f, 1, 4));
+    line(c, p, L, Y(0.425), X(kx), Y(0.425), 0.3, SIL, kH, [2, 5]);
+    line(c, p, X(kx), Y(0.425), X(kx), B, 0.3, SIL, kH, [2, 5]);
+    label(c, p, font, "Half", L + 4, Y(0.425) - 9, "left", LAB, kH);
+    dot(c, p, X(kx), Y(0.425), 4.5, kH);
   } else if (s.highlight === "end") {
-    const yE = shapeY(lit.shape, 0.97, shifts[litIndex], stretches[litIndex]);
-    glow(c, p, X(0.97), Y(yE), 14, (0.5 + pulse) * a0);
-    dot(c, p, X(0.97), Y(yE), 4.5, a0, TEXT);
+    dot(c, p, X(0.97), Y(shapeY(lit.shape, 0.97, shifts[litIndex], stretches[litIndex])), 4.5, kH);
   }
 
-  // The lit point that rides the curve: the slider moves it, or it travels slowly.
   const rides = has(changes, lit.name, "ride");
   if (rides || s.highlight === "ride") {
-    const q = rides ? 0.05 + f.v * 0.9 : f.still ? 0.4 : 0.05 + ((f.t * 0.12) % 1) * 0.9;
+    const q = rides ? 0.05 + f.v * 0.9 : f.still ? 0.4 : 0.05 + ((f.t * 0.1) % 1) * 0.9;
     const yq = shapeY(lit.shape, q, shifts[litIndex], stretches[litIndex]);
     if (rides) {
-      line(c, p, X(q), Y(yq), X(q), B, WHITE, 0.2 * a0, 1.2, [3, 5]);
-      line(c, p, X(q), Y(yq), L, Y(yq), WHITE, 0.2 * a0, 1.2, [3, 5]);
+      line(c, p, X(q), Y(yq), X(q), B, 0.3, SIL, kH, [2, 5]);
+      line(c, p, X(q), Y(yq), L, Y(yq), 0.3, SIL, kH, [2, 5]);
     }
-    glow(c, p, X(q), Y(yq), 13, (rides ? 0.6 : 0.6 * Math.sin(((q - 0.05) / 0.9) * Math.PI)) * a0);
-    dot(c, p, X(q), Y(yq), 4, a0, TEXT);
+    dot(c, p, X(q), Y(yq), 4.2, kH * (rides || f.still ? 1 : Math.sin(((q - 0.05) / 0.9) * Math.PI)), BLUE);
   }
 }
 
 // ---- balance: two sides being weighed ----
 function drawBalance(c: SkCanvas, p: SkPaint, font: SkFont | null, s: BalanceScene, changes: Change[], f: Frame) {
   "worklet";
-  const a0 = ease(f.intro);
   const lw = has(changes, "left", "weigh") ? Math.round(f.v * 6) : s.leftWeight;
   const rw = has(changes, "right", "weigh") ? Math.round(f.v * 6) : s.rightWeight;
   const cx = 150;
-  const cy = 58;
-  const arm = 98;
-  const tilt = clamp((rw - lw) / 6, -1, 1) * 0.3 * a0;
-  const stand = Skia.PathBuilder.Make();
-  stand.moveTo(cx, cy + 4);
-  stand.lineTo(cx - 14, 140);
-  stand.lineTo(cx + 14, 140);
-  stand.close();
-  fill(p, WHITE, 0.16 * a0);
-  c.drawPath(stand.build(), p);
-  line(c, p, cx - 40, 141, cx + 40, 141, WHITE, 0.2 * a0, 2);
+  const cy = 56;
+  const arm = 96;
+  const tilt = clamp((rw - lw) / 6, -1, 1) * 0.3 * beat(f, 1, 3);
+  line(c, p, cx, cy + 6, cx, 140, 0.5, SIL, beat(f, 0, 3));
+  line(c, p, cx - 34, 140, cx + 34, 140, 0.35, SIL, beat(f, 0, 3));
   const lx = cx - Math.cos(tilt) * arm;
   const ly = cy - Math.sin(tilt) * arm;
   const rx = cx + Math.cos(tilt) * arm;
   const ry = cy + Math.sin(tilt) * arm;
-  line(c, p, lx, ly, rx, ry, SILVER, 0.8 * a0, 2.4);
-  dot(c, p, cx, cy, 4, a0, SILVER);
-  const pan = (x: number, y: number, n: number, colour: string, name: string) => {
-    "worklet";
-    line(c, p, x, y, x - 22, y + 34, WHITE, 0.2 * a0, 1);
-    line(c, p, x, y, x + 22, y + 34, WHITE, 0.2 * a0, 1);
-    line(c, p, x - 26, y + 34, x + 26, y + 34, SILVER, 0.7 * a0, 2);
+  line(c, p, lx, ly, rx, ry, 0.9, SIL, beat(f, 1, 3));
+  ring(c, p, cx, cy, 4, beat(f, 1, 3));
+  const heavier = rw > lw ? 1 : lw > rw ? -1 : 0;
+  for (let side = 0; side < 2; side++) {
+    const x = side === 0 ? lx : rx;
+    const y = side === 0 ? ly : ry;
+    const n = side === 0 ? lw : rw;
+    const colour = (side === 0 && heavier < 0) || (side === 1 && heavier > 0) ? BLUE : SIL;
+    const a = beat(f, 2, 3);
+    line(c, p, x, y, x - 20, y + 32, 0.3 * a);
+    line(c, p, x, y, x + 20, y + 32, 0.3 * a);
+    line(c, p, x - 24, y + 32, x + 24, y + 32, 0.7 * a);
     for (let i = 0; i < n; i++) {
       const row = Math.floor(i / 3);
-      const col = i % 3;
-      ring(c, p, x - 13 + col * 13 + (row % 2) * 6, y + 27 - row * 11, 5, a0, colour, 1.6);
+      ring(c, p, x - 12 + (i % 3) * 12 + (row % 2) * 6, y + 25 - row * 10, 4.6, a, colour);
     }
-    label(c, p, font, name, x, y + 50, "center", LABEL, a0);
-  };
-  const heavier = rw > lw ? 1 : lw > rw ? -1 : 0;
-  pan(lx, ly, lw, heavier < 0 ? BLUE : SILVER, s.left);
-  pan(rx, ry, rw, heavier > 0 ? BLUE : SILVER, s.right);
-  label(c, p, font, s.middle, cx, 160, "center", heavier !== 0 ? BLUE : LABEL, a0);
+    label(c, p, font, side === 0 ? s.left : s.right, x, y + 48, "center", LAB, a);
+  }
+  label(c, p, font, s.middle, cx, 162, "center", heavier !== 0 ? BLUE : LAB, beat(f, 2, 3));
+}
+
+// ---- scale and comparison ----
+function drawCompare(c: SkCanvas, p: SkPaint, font: SkFont | null, s: CompareScene, changes: Change[], f: Frame) {
+  "worklet";
+  const n = s.items.length;
+  const stepping = hasKind(changes, "step");
+  const values: number[] = [];
+  let maxV = 0;
+  let maxI = 0;
+  for (let i = 0; i < n; i++) {
+    const it = s.items[i];
+    const v = has(changes, it.label.toLowerCase(), "grow") ? it.value * (0.08 + 0.92 * f.v) : it.value;
+    values.push(v);
+    if (v > maxV) {
+      maxV = v;
+      maxI = i;
+    }
+  }
+  if (maxV <= 0) return;
+  for (let i = 0; i < n; i++) {
+    const shown = stepping ? clamp(f.v * n * 1.1 - i) : beat(f, (i / n) * 2, 3);
+    if (shown <= 0) continue;
+    const isLit = i === maxI || has(changes, s.items[i].label.toLowerCase(), "grow");
+    if (s.style === "circles") {
+      // Area in proportion. A huge ratio still shows the small one as a dot.
+      const cell = VIEW_W / n;
+      const maxR = Math.min(cell / 2 - 8, 62);
+      const r = Math.max(1.8, maxR * Math.sqrt(values[i] / maxV));
+      const x = cell * i + cell / 2;
+      const y = 82;
+      // A big lit circle is drawn as a blue outline so it never floods the panel.
+      if (isLit && r > 16) ring(c, p, x, y, r, shown, BLUE);
+      else if (isLit) dot(c, p, x, y, r, shown, BLUE);
+      else if (r < 6) dot(c, p, x, y, r, shown);
+      else ring(c, p, x, y, r, shown * 0.85);
+      label(c, p, font, s.items[i].label, x, Math.max(y + r + 14, 104), "center", isLit ? SIL : LAB, shown);
+    } else {
+      const base = 146;
+      const top = 22;
+      const bw = Math.min(30, (240 / n) * 0.55);
+      const gap = 240 / n;
+      const x = 30 + gap * i + (gap - bw) / 2;
+      const h = (base - top) * (values[i] / maxV) * ease(shown);
+      if (isLit) {
+        fill(p, BLUE, shown);
+        c.drawRRect(Skia.RRectXY(Skia.XYWHRect(x, base - h, bw, h), 3, 3), p);
+      } else {
+        stroke(p, SIL, shown * 0.7);
+        c.drawRRect(Skia.RRectXY(Skia.XYWHRect(x, base - h, bw, h), 3, 3), p);
+      }
+      label(c, p, font, s.items[i].label, x + bw / 2, base + 13, "center", isLit ? SIL : LAB, shown);
+    }
+  }
+  if (s.style === "bars") line(c, p, 24, 146, 276, 146, 0.3, SIL, beat(f, 0, 3));
+}
+
+// ---- stairs: levels climbed in order ----
+function drawStairs(c: SkCanvas, p: SkPaint, font: SkFont | null, s: StairsScene, changes: Change[], f: Frame) {
+  "worklet";
+  const n = s.steps.length;
+  const lvl = hasKind(changes, "climb") ? Math.round(f.v * (n - 1)) : s.at;
+  const w = Math.min(56, 250 / n);
+  const h = Math.min(26, 120 / n);
+  const x0 = (VIEW_W - w * n) / 2;
+  const base = 148;
+  line(c, p, x0, base, x0 + n * w, base, 0.3, SIL, beat(f, 0, 3));
+  for (let i = 0; i < n; i++) {
+    const k = beat(f, (i / n) * 2, 3);
+    const x = x0 + i * w;
+    const y = base - (i + 1) * h;
+    const on = i <= lvl;
+    line(c, p, x, base - i * h, x, y, on ? 0.85 : 0.25, SIL, k);
+    line(c, p, x, y, x + w, y, on ? 0.85 : 0.25, SIL, k);
+    label(c, p, font, s.steps[i], x + w / 2, y + 12, "center", on ? SIL : LAB, k);
+  }
+  const px = x0 + lvl * w + w / 2;
+  const py = base - (lvl + 1) * h - 9;
+  dot(c, p, px, py + (f.still ? 0 : Math.sin(f.t * 1.4) * 1.2), 5, beat(f, 3, 3), BLUE);
+}
+
+// ---- spectrum: where something sits between two ends ----
+function drawSpectrum(c: SkCanvas, p: SkPaint, font: SkFont | null, s: SpectrumScene, changes: Change[], f: Frame) {
+  "worklet";
+  const L = 26;
+  const R = 274;
+  const Y = 92;
+  const X = (v: number) => L + ((v - s.min) / (s.max - s.min)) * (R - L);
+  line(c, p, L, Y, R, Y, 0.5, SIL, beat(f, 0, 3));
+  for (let i = 0; i <= 10; i++) line(c, p, L + (i * (R - L)) / 10, Y - 4, L + (i * (R - L)) / 10, Y + 4, 0.3, SIL, beat(f, 1, 3));
+  label(c, p, font, s.left, L, Y + 24, "left", LAB, beat(f, 1, 3));
+  label(c, p, font, s.right, R, Y + 24, "right", LAB, beat(f, 1, 3));
+  for (let i = 0; i < s.marks.length; i++) {
+    const mx = X(s.marks[i].at);
+    line(c, p, mx, Y - 10, mx, Y - 22, 0.25, SIL, beat(f, 2, 3));
+    label(c, p, font, s.marks[i].label, mx, Y - 30, "center", LAB, beat(f, 2, 3));
+  }
+  const at = hasKind(changes, "slide") ? s.min + f.v * (s.max - s.min) : s.at;
+  const k = beat(f, 3, 3);
+  dot(c, p, X(at), Y, 6.5, k, BLUE);
+  const span = s.max - s.min;
+  label(c, p, font, span <= 20 ? at.toFixed(1) : String(Math.round(at)), X(at), Y - 52, "center", SIL, k);
+}
+
+// ---- Venn: what two things share ----
+function drawVenn(c: SkCanvas, p: SkPaint, font: SkFont | null, s: VennScene, changes: Change[], f: Frame) {
+  "worklet";
+  const o = hasKind(changes, "overlap") ? f.v : s.overlap;
+  const r = 48;
+  const d = 120 - o * 80;
+  const cy = 80;
+  const ax = 150 - d / 2;
+  const bx = 150 + d / 2;
+  if (d < 2 * r) {
+    c.save();
+    const clip = Skia.PathBuilder.Make();
+    clip.addCircle(ax, cy, r);
+    c.clipPath(clip.build(), 1, true);
+    dot(c, p, bx, cy, r, 0.85 * beat(f, 2, 3), BLUE);
+    c.restore();
+  }
+  ring(c, p, ax, cy, r, beat(f, 0, 3));
+  ring(c, p, bx, cy, r, beat(f, 1, 3));
+  label(c, p, font, s.a, ax - r * 0.55, cy, "center", SIL, beat(f, 0, 3));
+  label(c, p, font, s.b, bx + r * 0.55, cy, "center", SIL, beat(f, 1, 3));
+  if (d < 2 * r - 10) label(c, p, font, s.both, 150, cy + r + 18, "center", BLUE, beat(f, 2, 3));
 }
 
 /** Draws one frame of a scene in the 300 x 176 view. */
@@ -576,14 +668,36 @@ export function drawScene(c: SkCanvas, scene: Scene, changes: Change[], f: Frame
   "worklet";
   const p = Skia.Paint();
   p.setAntiAlias(true);
-  if (scene.family === "particles") drawParticles(c, p, font, scene, changes, f);
-  else if (scene.family === "links") drawLinks(c, p, font, scene, changes, f);
-  else if (scene.family === "graph") drawGraph(c, p, font, scene, changes, f);
-  else drawBalance(c, p, font, scene, changes, f);
+  switch (scene.family) {
+    case "particles":
+      drawParticles(c, p, font, scene, changes, f);
+      break;
+    case "links":
+      drawLinks(c, p, font, scene, changes, f);
+      break;
+    case "graph":
+      drawGraph(c, p, font, scene, changes, f);
+      break;
+    case "balance":
+      drawBalance(c, p, font, scene, changes, f);
+      break;
+    case "compare":
+      drawCompare(c, p, font, scene, changes, f);
+      break;
+    case "stairs":
+      drawStairs(c, p, font, scene, changes, f);
+      break;
+    case "spectrum":
+      drawSpectrum(c, p, font, scene, changes, f);
+      break;
+    case "venn":
+      drawVenn(c, p, font, scene, changes, f);
+      break;
+  }
 }
 
 /** How fast the scene's clock runs at slider value v, when the slider changes speed. */
 export function speedAt(changes: Change[], v: number) {
   "worklet";
-  return hasKind(changes, "speed") ? 0.25 + v * 3.2 : 1;
+  return hasKind(changes, "speed") ? 0.2 + v * 3 : 1;
 }
