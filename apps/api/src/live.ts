@@ -204,7 +204,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
           // Even a short reaction gets its own piece here, so it lands on its own.
           const lineSplitter = new SentenceSplitter(4);
           [...lineSplitter.push(question + " "), ...lineSplitter.flush()].forEach(speak);
-          send({ type: "engine", move: r.move, covered: r.covered, ideas: r.ideas });
+          send({ type: "engine", move: r.move, covered: r.covered, ideas: r.ideas, verdict: r.verdict });
           if (r.move === "show_me" && r.gap) send({ type: "show_me", gap: r.gap });
           // Teach me: the phone shows the button on an offer, and opens teach mode on "teach".
           if ((r.move === "offer_teach" || r.move === "teach") && r.gap) send({ type: r.move === "teach" ? "teach" : "teach_offer", gap: r.gap });

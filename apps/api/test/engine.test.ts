@@ -1,12 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { allowedMoves, callState, DEFAULT_LIMITS, isVague, LEARN_FIRST_LINE, moveOf, OFFER_LINE, OFFER_TEACH_LINE, TEACH_LINE, unfinished } from "../src/engine/policy";
-import { engineTurn, oneQuestion } from "../src/engine/engine";
+import { engineTurn, freshReaction, lastProgress, oneQuestion, withProgress } from "../src/engine/engine";
 import { keyIdeas } from "../src/engine/ideas";
 import type { PastTurn } from "../src/gemini";
 
 const L = (text: string): PastTurn => ({ speaker: "learner", text });
 const F = (text: string): PastTurn => ({ speaker: "student", text });
-const ideas = [{ id: "k1", idea: "The heart pumps blood" }, { id: "k2", idea: "Valves stop backflow" }];
+function fakeChat(reply: object) {
+  return (async () =>
+    new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(reply) } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }), {
+      status: 200,
+    })) as unknown as typeof fetch;
+}
+const cfg = (reply: object) => ({ apiKey: "k", model: "m", fetchImpl: fakeChat(reply) });
+const ideas = [
+  { id: "k1", idea: "The heart pumps blood", label: "what the heart does" },
+  { id: "k2", idea: "Valves stop backflow", label: "why the heart has valves" },
+];
 
 describe("engine limits", () => {
   it("never probes two turns running", () => {
@@ -125,13 +135,6 @@ describe("engine limits", () => {
 });
 
 describe("engineTurn", () => {
-  function fakeChat(reply: object) {
-    return (async () =>
-      new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(reply) } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }), {
-        status: 200,
-      })) as unknown as typeof fetch;
-  }
-  const cfg = (reply: object) => ({ apiKey: "k", model: "m", fetchImpl: fakeChat(reply) });
 
   it("replaces a vague line with a safe one for the move", async () => {
     const r = await engineTurn(cfg({ move: "next", say: "What do you mean by pumps?", covered: ["k1", "zz"], stuck_on: "" }), {
@@ -208,5 +211,51 @@ describe("unfinished", () => {
   it("lets a finished thought through", () => {
     for (const t of ["Water moves from dilute to concentrated.", "I think so.", "I'd like that.", "It's a bit like a sponge.", "Yes", "Not sure, to be honest.", "", "What do I do then?"])
       expect(unfinished(t), t).toBe(false);
+  });
+
+  it("heads for the retell as soon as every key idea is covered", async () => {
+    const r = await engineTurn(cfg({ move: "why", verdict: "right", say: "Why do valves matter?", covered: ["k1", "k2"], stuck_on: "" }), {
+      transcript: "Valves stop the blood flowing backwards.",
+      history: [L("The heart pumps blood."), F("Ooh, what keeps it going one way?")],
+      topic: "Circulation",
+      ideas,
+    });
+    expect(r.move).toBe("retell");
+    expect(r.say).toBe("That's all two things I wanted to understand. Can you explain the whole thing to me again in 30 seconds, really simply?");
+    expect(r.verdict).toBe("right");
+    expect(moveOf(r.say)).toBe("retell");
+  });
+
+  it("ends with what they explained well and the shaky bit", async () => {
+    const h = [L("The heart pumps blood."), F("That was really clear. Which bit felt shakiest to you?")];
+    const r = await engineTurn(cfg({ move: "wrap", verdict: "none", say: "Bye!", covered: ["k1"], stuck_on: "" }), { transcript: "The valves bit.", history: h, topic: "Circulation", ideas });
+    expect(r.move).toBe("wrap");
+    expect(r.say).toBe("Thanks, that really helped. You explained what the heart does really well. Why the heart has valves was the shaky bit, so we'll pick it up next time.");
+    // Read back as the goodbye, even though it names a "why".
+    expect(moveOf(r.say)).toBe("wrap");
+  });
+
+  it("says the goal up front on their first turn, and treats a missing verdict as none", async () => {
+    const r = await engineTurn(cfg({ move: "next", say: "Ooh, and where does it go next?", covered: [], stuck_on: "" }), { transcript: "The heart pumps blood.", history: [], topic: "Circulation", ideas });
+    expect(r.say).toBe("Ooh, OK. By the end I want to understand two things: what the heart does and why the heart has valves. Ooh, and where does it go next?");
+    expect(r.verdict).toBe("none");
+  });
+
+  it("swaps a repeated reaction for a fresh one with the same verdict", () => {
+    const recent = ["That makes sense to me now. Why do valves shut?"];
+    const r = freshReaction("That makes sense to me now. Where does it go next?", "right", recent, 0);
+    expect(r).toBe("Oh, that makes sense. Where does it go next?");
+    expect(freshReaction("Ooh, where next?", "right", recent, 0)).toBe("Ooh, where next?");
+  });
+
+  it("counts progress in code and says it only when another idea is done", () => {
+    expect(withProgress("Ah, I get it now. What do valves do?", 2, 4)).toBe("Ah, I get it now. That's two of the four things. What do valves do?");
+    expect(lastProgress([F("Oh nice. That's two of the four things. Why?"), L("Because.")])).toBe(2);
+    expect(lastProgress([F("Why?")])).toBe(0);
+  });
+
+  it("always ends after the shakiest-bit question, even if they ask to be shown", () => {
+    const s = callState([L("The heart pumps."), F("That was really clear. Which bit felt shakiest to you?")], "The valves, can you show me?");
+    expect(allowedMoves(s, { ...DEFAULT_LIMITS, canShowMe: true, canTeach: true })).toEqual(["wrap"]);
   });
 });
