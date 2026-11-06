@@ -23,7 +23,7 @@ export const PROBES: Move[] = ["why", "what_if", "puzzled"];
 
 const STUCK = /\b(i\s*(don'?t|do not)\s*know|not sure|no idea|i forget|i can'?t remember|dunno|i'?m stuck|haven'?t got a clue)\b/i;
 /** "Can we skip that?": move on, not a sign they're stuck. Not when negated ("don't skip this"). */
-const SKIP = /^(?!.*\b(don'?t|do not|not|never)\s+(skip|pass|move on)\b)(.*\b(i'?ll (pass|skip)|pass on (that|this)|(can we|let'?s|could we) (skip|move on)|skip (that|this)( one)?|next question)\b|\s*(pass|skip)\b[\s.!,]*$)/i;
+const SKIP = /^(?!.*\b(don'?t|do not|not|never)\s+(skip|pass|move on)\b)\s*(\w+[,.]?\s+){0,3}?(i'?ll (pass|skip)|pass on (that|this)|(can|could) we (skip|move on)|let'?s (skip|move on)|(just )?skip (that|this)( one)?( please)?\s*[.!?]*$|next question|(pass|skip)\s*[.!,]*$)/i;
 const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|please|go on|go on then|alright|sounds good)\b/i;
 const TELL_ME = /\b(just tell me|can you (just )?(tell|explain)|explain it to me|what('?s| is) the answer|show me)\b/i;
 /** "Hang on, let me think": not the retell itself. */
@@ -97,11 +97,20 @@ export function callState(history: PastTurn[], transcript: string): CallState {
     retellPending,
     sinceRetell: after.length,
     words: transcript.trim() ? transcript.trim().split(/\s+/).length : 0,
-    hesitating: HESITATE.test(transcript) && transcript.trim().split(/\s+/).length < 20,
+    hesitating: isHesitation(transcript),
     askedToBeTold: TELL_ME.test(transcript),
     skipRequested: SKIP.test(transcript),
     answeredOffer: lastMove === "offer_show_me" ? (YES.test(transcript) ? "yes" : NO.test(transcript) ? "no" : undefined) : undefined,
   };
+}
+
+const FILLER = /\b(um+|uh+|erm+|er|ah+|oh+|ooh+|okay|ok|right|so|yeah|well|just|about|it|that|the|to|a|me|i|you)\b/gi;
+
+/** Only a pause to think ("hang on, give me a moment"), with no real answer in it. */
+function isHesitation(t: string): boolean {
+  if (!HESITATE.test(t)) return false;
+  const rest = t.replace(new RegExp(HESITATE.source, "gi"), " ").replace(FILLER, " ").replace(/[^\p{L}\p{N}\s']/gu, " ");
+  return rest.trim().split(/\s+/).filter(Boolean).length < 4;
 }
 
 export interface Limits {

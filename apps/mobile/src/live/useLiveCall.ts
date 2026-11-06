@@ -52,6 +52,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const [liveQuestion, setLiveQuestion] = useState<string | null>(null);
   const [liveSpeaking, setLiveSpeaking] = useState(0);
   const [isTalking, setIsTalking] = useState(false);
+  /** Fenny has said goodbye and finished speaking: the call is over. */
+  const [finished, setFinished] = useState(false);
 
   const phaseRef = useRef<CallPhase>("loading");
   const setPhase = useCallback((p: CallPhase) => {
@@ -327,7 +329,11 @@ export function useLiveCall(topic: string, settings: CallSettings) {
         ]);
       }
       // Fenny said goodbye: the call is over once it has finished speaking.
-      if (wrapped) return cancel();
+      if (wrapped) {
+        cancel();
+        setFinished(true);
+        return;
+      }
       resumeListening(true);
     } catch (e) {
       if (id !== turnId.current) return; // cut in or ended: not an error
@@ -370,6 +376,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     stats,
     liveQuestion,
     liveSpeaking,
+    finished,
     isTalking,
     start,
     /** "Done, ask me": send now instead of waiting for the pause. */

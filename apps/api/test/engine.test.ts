@@ -52,6 +52,7 @@ describe("engine limits", () => {
     const h = [L("That's it."), F("Thanks. Can you explain the whole thing again in 30 seconds, really simply?")];
     expect(allowedMoves(callState(h, "Ooh, give me a sec."))).toEqual(["listen"]);
     expect(allowedMoves(callState(h, "Hang on, give me a moment to think about it."))).toEqual(["listen"]);
+    expect(allowedMoves(callState(h, "Hang on, electricity flows through the circuit, the switch breaks it and the bulb goes out."))).toEqual(["close"]);
     const h2 = [...h, L("Ooh, give me a sec."), F("Mm, take your time."), L("Okay."), F("Go on.")];
     expect(allowedMoves(callState(h2, "Erm."))).toEqual(["close"]);
   });
@@ -73,6 +74,8 @@ describe("engine limits", () => {
       expect(allowedMoves(callState(h, t)), t).toEqual(["let_go"]);
     expect(callState(h, "Don't skip this one, I can explain it.").skipRequested).toBe(false);
     expect(callState(h, "The heart doesn't skip a beat because the valves work.").skipRequested).toBe(false);
+    expect(callState(h, "We skip that step because it's optional.").skipRequested).toBe(false);
+    expect(allowedMoves(callState(h, "We skip that step because it's optional."))).not.toEqual(["simpler"]);
   });
 
   it("does not repeat the last move and keeps listening rare", () => {

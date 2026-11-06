@@ -139,6 +139,11 @@ export default function Session() {
     router.back();
   };
   const close = end;
+  // Fenny said goodbye: save and leave, as if they tapped End.
+  useEffect(() => {
+    if (loop.finished) end();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loop.finished]);
 
   return (
     <View style={styles.root}>
