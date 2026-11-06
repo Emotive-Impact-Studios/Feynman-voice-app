@@ -9,6 +9,11 @@ import { liveSystemPrompt } from "../src/live";
 import type { PastTurn } from "../src/gemini";
 
 const cfg: ChatCfg = { apiKey: process.env.OPENAI_API_KEY!, model: process.env.OPENAI_CHAT_MODEL ?? "gpt-5.4-mini", reasoningEffort: "none" };
+// Fenny's own brain can be swapped for the comparison, e.g. FENNY_MODEL=claude-haiku-5-5.
+// The simulated learner and the judge stay on the same model, so only Fenny changes.
+const fennyCfg: ChatCfg = process.env.FENNY_MODEL
+  ? { ...cfg, model: process.env.FENNY_MODEL, anthropicKey: process.env.ANTHROPIC_API_KEY }
+  : cfg;
 const judgeCfg: ChatCfg = { ...cfg, model: process.env.JUDGE_MODEL ?? cfg.model, reasoningEffort: process.env.JUDGE_MODEL ? undefined : "low" };
 
 const PERSONAS: Record<string, string> = {
@@ -71,7 +76,7 @@ async function judge(topic: string, convo: PastTurn[]): Promise<Score> {
 
 async function run(kind: "old" | "engine", persona: string, topic: string, turns: number) {
   const convo: PastTurn[] = [];
-  const ideas = kind === "engine" ? (await keyIdeas(cfg, topic)).ideas : undefined;
+  const ideas = kind === "engine" ? (await keyIdeas(fennyCfg, topic)).ideas : undefined;
   const moves: string[] = [];
   for (let i = 0; i < turns; i++) {
     const said = await learnerSay(persona, topic, convo);
@@ -79,7 +84,7 @@ async function run(kind: "old" | "engine", persona: string, topic: string, turns
     if (kind === "old") reply = await oldFenny(topic, convo, said);
     else {
       // Same split as live.ts: the whole call for state, the last 20 lines for the model.
-      const t = await engineTurn(cfg, { transcript: said, history: convo.slice(-20), callHistory: convo, topic, ideas, limits: { canShowMe: true } });
+      const t = await engineTurn(fennyCfg, { transcript: said, history: convo.slice(-20), callHistory: convo, topic, ideas, limits: { canShowMe: true } });
       reply = t.say;
       moves.push(t.move);
       if (t.move === "wrap") {
