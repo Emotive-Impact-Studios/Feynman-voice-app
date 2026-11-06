@@ -201,3 +201,36 @@ export async function speakLine(
   if (!res.ok) throw new Error((body as { error?: string }).error ?? `Server returned ${res.status}`);
   return body as { text: string; audio?: string; sampleRate?: number; speech?: PhonemeChunk[] };
 }
+
+// Teach me this thing -------------------------------------------------------
+
+export interface LookAngle {
+  /** One of the learner's subjects, or "everyday". */
+  subject: string;
+  /** Fenny's opening question: curious, naive, asks them to explain. */
+  question: string;
+  /** The topic card title. */
+  topic: string;
+}
+
+export interface Look {
+  thing: string;
+  clear: boolean;
+  retry: string;
+  reaction: string;
+  angles: LookAngle[];
+}
+
+/** One photo of a real thing: what it is and how Fenny would ask about it, for these subjects. */
+export async function lookAt(input: { image: string; subjects: string[]; guess?: string }, signal?: AbortSignal): Promise<Look> {
+  if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in apps/mobile/.env");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/look`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify(input),
+    signal,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((body as { error?: string }).error ?? `Server returned ${res.status}`);
+  return (body as { look: Look }).look;
+}

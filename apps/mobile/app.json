@@ -34,6 +34,14 @@
         }
       ],
       "expo-asset",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to scan your notes and to see things you point it at, so Fenny can ask you about them.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "./plugins/withOnnxruntime",
       "expo-router",
       "expo-image",
@@ -49,7 +57,7 @@
       [
         "react-native-document-scanner-plugin",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to scan your notes so Fenny can learn from them."
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to scan your notes and to see things you point it at, so Fenny can ask you about them."
         }
       ]
     ],

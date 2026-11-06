@@ -47,6 +47,8 @@ export interface Profile {
   voice?: VoicePref;
   /** Trial: shorter wait after they stop, cut in by voice on headphones, timings shown. */
   fastReplies?: boolean;
+  /** Teach me this thing: the photo behind a topic, by lower-case title (a file in the app's documents). */
+  photos?: Record<string, string>;
 }
 
 export type SessionViewPref = "light" | "subtitles" | "chat";
@@ -107,6 +109,17 @@ export function setVoice(voice: VoicePref) {
 
 export function setFastReplies(on: boolean) {
   if (!!state.fastReplies !== on) set({ ...state, fastReplies: on });
+}
+
+/** Teach me this thing: remember the photo a topic started from, for its card in Topics. */
+export function setTopicPhoto(title: string, uri: string) {
+  const key = title.trim().toLowerCase();
+  if (!key || state.photos?.[key] === uri) return;
+  set({ ...state, photos: { ...state.photos, [key]: uri } });
+}
+
+export function photoFor(p: Profile, title: string): string | undefined {
+  return p.photos?.[title.trim().toLowerCase()];
 }
 
 export function replayIntro() {

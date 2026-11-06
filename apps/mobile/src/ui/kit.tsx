@@ -141,7 +141,7 @@ export function Stat({ value, label, tone = "text" }: { value: string; label: st
   );
 }
 
-type IconName = "mic" | "close" | "check" | "pause" | "person" | "wave";
+type IconName = "mic" | "close" | "check" | "pause" | "person" | "wave" | "camera";
 export function Icon({ name, size = 20, color = colour.text }: { name: IconName; size?: number; color?: string }) {
   const p = { stroke: color, strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, fill: "none" };
   return (
@@ -162,6 +162,12 @@ export function Icon({ name, size = 20, color = colour.text }: { name: IconName;
         </>
       )}
       {name === "wave" && <Path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2" {...p} />}
+      {name === "camera" && (
+        <>
+          <Path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.2l1.5-2h5.6l1.5 2h2.2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" {...p} />
+          <Circle cx={12} cy={13} r={3.5} {...p} />
+        </>
+      )}
     </Svg>
   );
 }
