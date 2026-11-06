@@ -12,7 +12,7 @@ import { riseIn, STAGGER_MS } from "../ui/motion";
 import { Soft } from "../ui/Soft";
 import { homeStyles } from "./styles";
 
-export function Today({ profile, top, bottom, onNew, onTopic }: { profile: Profile; top: number; bottom: number; onNew: () => void; onTopic: (t: string) => void }) {
+export function Today({ profile, top, bottom, onNew, onTopic, onLook }: { profile: Profile; top: number; bottom: number; onNew: () => void; onTopic: (t: string) => void; onLook?: () => void }) {
   const last = profile.topics[0];
   const streak = softStreak(profile.days);
   return (
@@ -51,6 +51,16 @@ export function Today({ profile, top, bottom, onNew, onTopic }: { profile: Profi
             </Soft>
           </Glass>
         </Press>
+        {onLook && (
+          <Press onPress={onLook} accessibilityRole="button" accessibilityLabel="Teach me this thing: show Fenny something with the camera">
+            <Glass style={styles.look}>
+              <Icon name="camera" size={19} color={colour.soft} />
+              <T size={15} tone="soft" style={{ flex: 1 }}>
+                Or show Fenny something real
+              </T>
+            </Glass>
+          </Press>
+        )}
       </In>
 
       {last && (
@@ -123,5 +133,6 @@ const styles = StyleSheet.create({
   stats: { marginTop: 16, flexDirection: "row", flexWrap: "wrap", gap: 16 },
   stat: { flexDirection: "row", alignItems: "center", gap: 6 },
   start: { marginTop: 18, height: 64, borderRadius: 999, flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 22, paddingRight: 6 },
+  look: { marginTop: 10, height: 50, borderRadius: 999, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 20 },
   card: { marginTop: 10, borderRadius: 24, padding: 16, paddingBottom: 14 },
 });

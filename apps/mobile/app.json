@@ -34,6 +34,14 @@
         }
       ],
       "expo-asset",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to see things you point it at, so Fenny can ask you about them.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "./plugins/withOnnxruntime",
       "expo-router",
       "expo-image",

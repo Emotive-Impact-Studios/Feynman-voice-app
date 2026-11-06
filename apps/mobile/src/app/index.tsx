@@ -28,7 +28,7 @@ export default function Home() {
     <View style={homeStyles.root}>
       <Backdrop scene={tab} />
       <ScreenIn key={tab}>
-        {tab === "today" && <Today {...common} onNew={onNew} onTopic={onTopic} />}
+        {tab === "today" && <Today {...common} onNew={onNew} onTopic={onTopic} onLook={() => router.push("/look")} />}
         {tab === "topics" && <Topics {...common} onNew={onNew} onTopic={onTopic} />}
         {tab === "me" && (
           <Me
