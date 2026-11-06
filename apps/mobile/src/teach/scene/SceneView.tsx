@@ -9,7 +9,7 @@ import { useState } from "react";
 import { View, type LayoutChangeEvent } from "react-native";
 import { Canvas, Group, Picture, createPicture, useFont } from "@shopify/react-native-skia";
 import { useDerivedValue, useFrameCallback, useReducedMotion, useSharedValue, type SharedValue } from "react-native-reanimated";
-import { drawScene, speedAt, VIEW_H, VIEW_W } from "./draw";
+import { drawScene, HAND_DRAWN, speedAt, VIEW_H, VIEW_W } from "./draw";
 import type { Change, Scene } from "./types";
 import { T } from "../../ui/kit";
 
@@ -62,7 +62,7 @@ export function SceneView({
   const picture = useDerivedValue(() =>
     createPicture((canvas) => {
       "worklet";
-      drawScene(canvas, scene, changes, { t: t.value, T: clock.value, v: v.value, intro: intro.value, still: reduce }, font);
+      drawScene(canvas, scene, changes, { t: t.value, T: clock.value, v: v.value, intro: intro.value, still: reduce, hand: HAND_DRAWN }, font);
     }),
   );
 
