@@ -55,6 +55,7 @@ describe("engine limits", () => {
     expect(allowedMoves(callState(h, "Hang on, give me a moment to think about it."))).toEqual(["listen"]);
     expect(allowedMoves(callState(h, "Hang on, I need a little more time to think."))).toEqual(["listen"]);
     expect(allowedMoves(callState(h, "Um, I need a bit more time."))).toEqual(["listen"]);
+    expect(allowedMoves(callState(h, "Well, I need a little more time to think about it."))).toEqual(["listen"]);
     expect(allowedMoves(callState(h, "You need more time to heat the water up, so it boils later."))).toEqual(["close"]);
     expect(allowedMoves(callState(h, "Hang on, electricity flows through the circuit, the switch breaks it and the bulb goes out."))).toEqual(["close"]);
     const h2 = [...h, L("Ooh, give me a sec."), F("Mm, take your time."), L("Okay."), F("Go on.")];
@@ -74,7 +75,7 @@ describe("engine limits", () => {
 
   it("moves on when they ask to skip, but not when they say don't skip", () => {
     const h = [L("Valves."), F("What do the valves do?")];
-    for (const t of ["I'd like to skip this one.", "I would like to move on.", "Pass.", "I'll pass on that one.", "Can we skip that?", "Let's move on.", "Skip this one please."])
+    for (const t of ["I'd like to skip this one, please.", "I'd like to skip this one.", "I would like to move on.", "Pass.", "I'll pass on that one.", "Can we skip that?", "Let's move on.", "Skip this one please."])
       expect(allowedMoves(callState(h, t)), t).toEqual(["let_go"]);
     expect(callState(h, "Don't skip this one, I can explain it.").skipRequested).toBe(false);
     expect(callState(h, "The heart doesn't skip a beat because the valves work.").skipRequested).toBe(false);

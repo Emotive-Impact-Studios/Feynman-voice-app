@@ -23,7 +23,7 @@ export const PROBES: Move[] = ["why", "what_if", "puzzled"];
 
 const STUCK = /\b(i\s*(don'?t|do not)\s*know|not sure|no idea|i forget|i can'?t remember|dunno|i'?m stuck|haven'?t got a clue)\b/i;
 /** "Can we skip that?": move on, not a sign they're stuck. Not when negated ("don't skip this"). */
-const SKIP = /^(?!.*\b(don'?t|do not|not|never)\s+(skip|pass|move on)\b)\s*(\w+[,.]?\s+){0,3}?(i'?ll (pass|skip)|pass on (that|this)|(can|could) we (skip|move on)|(i'?d|i would|i want to|i wanna)( like to)? (skip|pass|move on)(?=\s*(on )?((this|that)( one| question| bit)?)?\s*(please)?\s*[.!?]*$)|let'?s (skip|move on)|(just )?skip (that|this)( one)?( please)?\s*[.!?]*$|next question|(pass|skip)\s*[.!,]*$)/i;
+const SKIP = /^(?!.*\b(don'?t|do not|not|never)\s+(skip|pass|move on)\b)\s*(\w+[,.]?\s+){0,3}?(i'?ll (pass|skip)|pass on (that|this)|(can|could) we (skip|move on)|(i'?d|i would|i want to|i wanna)( like to)? (skip|pass|move on)(?=\s*(on )?((this|that)( one| question| bit)?)?[\s,]*(please)?\s*[.!?]*$)|let'?s (skip|move on)|(just )?skip (that|this)( one)?( please)?\s*[.!?]*$|next question|(pass|skip)\s*[.!,]*$)/i;
 const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|please|go on|go on then|alright|sounds good)\b/i;
 const TELL_ME = /\b(just tell me|can you (just )?(tell|explain)|explain it to me|what('?s| is) the answer|show me)\b/i;
 /** "Hang on, let me think": not the retell itself. */
@@ -110,7 +110,7 @@ const FILLER = /\b(um+|uh+|erm+|er|ah+|oh+|ooh+|okay|ok|right|so|yeah|well|just|
 function isHesitation(t: string): boolean {
   // The pause has to open the reply ("Hang on...", "Um, I need more time"),
   // so "You need more time to heat the water" stays an answer.
-  const opening = new RegExp(`^[\\s,.!]*((um+|uh+|erm+|er|oh+|ooh+|okay|ok|right|so|sorry|yeah|i|i'?m|i'?ll)[\\s,.!]+)*(${HESITATE.source.slice(2, -2)})`, "i");
+  const opening = new RegExp(`^[\\s,.!]*((um+|uh+|erm+|er|ah+|hmm+|oh+|ooh+|okay|ok|right|so|well|sorry|yeah|i|i'?m|i'?ll)[\\s,.!]+)*(${HESITATE.source.slice(2, -2)})`, "i");
   if (!opening.test(t)) return false;
   const rest = t.replace(new RegExp(HESITATE.source, "gi"), " ").replace(FILLER, " ").replace(/[^\p{L}\p{N}\s']/gu, " ");
   return rest.trim().split(/\s+/).filter(Boolean).length < 4;
