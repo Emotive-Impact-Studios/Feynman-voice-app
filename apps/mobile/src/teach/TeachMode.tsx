@@ -76,20 +76,6 @@ export function TeachMode({
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colour.ground }]} />
       <Backdrop scene="intro" />
 
-      {/* Top: a way back, and one segment per bite and puzzle. */}
-      <View style={[styles.top, { paddingTop: insets.top + 10 }]}>
-        <Press accessibilityRole="button" accessibilityLabel="Back to the call" onPress={onClose} style={styles.back} hitSlop={10}>
-          <T size={14} tone="soft">
-            Back to the call
-          </T>
-        </Press>
-        <View style={styles.segments} accessibilityLabel={`Step ${Math.min(done + 1, total)} of ${total}`}>
-          {Array.from({ length: total }, (_, i) => (
-            <View key={i} style={[styles.segment, i < done && styles.segmentDone, i === done && styles.segmentNow]} />
-          ))}
-        </View>
-      </View>
-
       <ScrollView ref={scroll} contentContainerStyle={{ paddingTop: insets.top + 84, paddingHorizontal: 24, paddingBottom: 200, flexGrow: 1 }}>
         {!lesson && !error && (
           <View style={styles.centre}>
@@ -112,6 +98,7 @@ export function TeachMode({
               {error}
             </T>
             <PillButton label="Try again" variant="solid" style={{ marginTop: 26, alignSelf: "stretch" }} onPress={() => setAttempt((n) => n + 1)} />
+            <PillButton label="Back to the call" style={{ marginTop: 10, alignSelf: "stretch" }} onPress={onClose} />
           </View>
         )}
 
@@ -171,6 +158,21 @@ export function TeachMode({
           </Animated.View>
         )}
       </ScrollView>
+      {/* Top: a way back, and one segment per bite and puzzle. Drawn after the
+          scroll so nothing can sit over the back button. */}
+      <View style={[styles.top, { paddingTop: insets.top + 10 }]}>
+        <Press accessibilityRole="button" accessibilityLabel="Back to the call" onPress={onClose} style={styles.back} hitSlop={10}>
+          <T size={14} tone="soft">
+            Back to the call
+          </T>
+        </Press>
+        <View style={styles.segments} accessibilityLabel={`Step ${Math.min(done + 1, total)} of ${total}`}>
+          {Array.from({ length: total }, (_, i) => (
+            <View key={i} style={[styles.segment, i < done && styles.segmentDone, i === done && styles.segmentNow]} />
+          ))}
+        </View>
+      </View>
+
 
       {/* Bottom: the next step. After a puzzle, a short sheet says why. */}
       {lesson && (
