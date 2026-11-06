@@ -140,6 +140,34 @@ describe("POST /api/live-turn", () => {
     expect(ev.find((e) => e.type === "done")!.question).toBe("Ooh, so which way does the water go?");
   });
 
+  it("holds the turn when the learner stops mid-thought and the phone can wait", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith("/audio/transcriptions")) return Response.json({ text: "Osmosis is when water moves and." });
+      const b = JSON.parse(String(init!.body));
+      expect(b.response_format.json_schema.name).toBe("key_ideas");
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ ideas: [{ idea: "Water moves" }] }) } }], usage: { prompt_tokens: 300, completion_tokens: 20 } });
+    }) as unknown as typeof fetch;
+    const res = await handleLiveTurn(request({ ...audio, topic: "Osmosis wait test", features: ["wait"] }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
+    const ev = await events(res);
+    expect(ev.map((e) => e.type)).toEqual(["transcript", "engine", "done"]);
+    expect(ev[1]).toEqual({ type: "engine", move: "wait" });
+    expect(ev[2].question).toBe("");
+    // Speech to text and the key ideas, but no turn.
+    expect(ev[2].cost.lines).toHaveLength(2);
+  });
+
+  it("says a short 'Go on.' to phones that cannot wait yet", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).endsWith("/audio/transcriptions")) return Response.json({ text: "So the membrane is, um" });
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ ideas: [{ idea: "Water moves" }] }) } }], usage: { prompt_tokens: 300, completion_tokens: 20 } });
+    }) as unknown as typeof fetch;
+    const res = await handleLiveTurn(request({ ...audio, topic: "Osmosis go on test" }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
+    const ev = await events(res);
+    expect(ev.find((e) => e.type === "sentence")!.text).toBe("Go on.");
+    expect(ev.find((e) => e.type === "engine")!.move).toBe("listen");
+    expect(ev.find((e) => e.type === "done")!.question).toBe("Go on.");
+  });
+
   it("hears with Ink and speaks with Sonic when Cartesia is set up", async () => {
     const pcm = new Uint8Array([1, 0, 2, 0]);
     const calls: string[] = [];

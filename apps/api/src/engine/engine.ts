@@ -6,7 +6,7 @@
 import type { PastTurn } from "../gemini";
 import { chatJSON, type ChatCfg, type ChatUsage } from "./chat";
 import { keyIdeas, type KeyIdea } from "./ideas";
-import { allowedMoves, callState, DEFAULT_LIMITS, isVague, moveOf, OFFER_LINE, SHOW_ME_LINE, type Limits, type Move } from "./policy";
+import { allowedMoves, callState, DEFAULT_LIMITS, isVague, LEARN_FIRST_LINE, moveOf, OFFER_LINE, OFFER_TEACH_LINE, SHOW_ME_LINE, TEACH_LINE, type Limits, type Move } from "./policy";
 
 const MOVE_GUIDE: Record<Move, string> = {
   listen: "They stopped mid-thought or are clearly about to carry on. Give a tiny spoken nudge of two to four words so they keep going.",
@@ -19,7 +19,9 @@ const MOVE_GUIDE: Record<Move, string> = {
   simpler: "They just said they don't know. Say that's fine, then ask one smaller, more concrete question about the same thing that makes it easier to work out.",
   offer_show_me: `They are stuck on the same thing again. Say exactly: "No worries. ${OFFER_LINE}"`,
   show_me: `They said yes to the explanation. Say exactly: "${SHOW_ME_LINE}"`,
-  let_go: "Only if they are stuck or have asked to move on or skip this. Say that's fine, you'll come back to it, and ask about a different key idea they have not covered.",
+  offer_teach: `Only if they clearly don't know this yet (they say so, guess wildly or have nothing to say). Say exactly: "${OFFER_TEACH_LINE}"`,
+  teach: `They want to learn it first. Say exactly: "${TEACH_LINE}"`,
+  let_go: "Only if they are stuck or have asked to move on or skip this. Say that's fine, you'll come back to it, and ask about a different key idea they have not covered. Never ask about the bit they were stuck on again, in any wording.",
   retell: "Most of it is covered. Thank them in a few words and ask them to explain the whole thing to you again in about 30 seconds, as simply as they can.",
   wrap: "The call is finishing. Thank them warmly in a few words, say that's a good place to stop, and that you'll pick up the shaky bit next time. No question.",
   close: "They just gave the short version. Tell them warmly and specifically what was clear, in one short sentence, then ask which bit felt shakiest to them.",
@@ -31,6 +33,8 @@ const FALLBACK: Partial<Record<Move, string>> = {
   why: "Ooh, why would that happen?",
   offer_show_me: `No worries. ${OFFER_LINE}`,
   show_me: SHOW_ME_LINE,
+  offer_teach: OFFER_TEACH_LINE,
+  teach: TEACH_LINE,
   let_go: "No worries, let's come back to that. What happens next?",
   retell: "That helped loads. Can you explain the whole thing to me again in 30 seconds, really simply?",
   close: "That was really clear. Which bit felt shakiest to you?",
@@ -41,7 +45,7 @@ const FALLBACK: Partial<Record<Move, string>> = {
  * Moves the next turn reads back from Fenny's words. Their lines must be
  * recognisable, or the call loses its place (an accepted offer, a retell).
  */
-const CONTROL: Move[] = ["offer_show_me", "show_me", "retell", "close", "wrap"];
+const CONTROL: Move[] = ["offer_show_me", "show_me", "offer_teach", "teach", "retell", "close", "wrap"];
 
 const PERSONA = `You are Fenny, a curious, friendly beginner. A university student is teaching you a topic out loud so they learn it properly. You know nothing about it beyond what they tell you, and you never explain or correct. You speak British English in short, natural, spoken sentences. Write proper full sentences with ordinary punctuation, because a voice reads them aloud: never use em dashes, en dashes, hyphens as pauses, semicolons, symbols, lists, markdown or emoji. Use a comma or a full stop instead of a dash. Never ask vague questions like "what do you mean" or "which bit". Questions are always concrete and about the subject. Never bring in a fact, term or example they have not said themselves: you only know what they told you.`;
 
@@ -132,6 +136,10 @@ export async function engineTurn(
   if (!say || (move !== "close" && isVague(say))) say = FALLBACK[move] ?? FALLBACK.next!;
   if (move === "offer_show_me") say = FALLBACK.offer_show_me!;
   else if (move === "show_me") say = SHOW_ME_LINE;
+  else if (move === "offer_teach") say = OFFER_TEACH_LINE;
+  else if (move === "teach") say = TEACH_LINE;
+  // Stopping because this is new to them, not because the call is done.
+  else if (move === "wrap" && state.stuckNow && !state.closed) say = LEARN_FIRST_LINE;
   else if (CONTROL.includes(move) && moveOf(say) !== move) say = FALLBACK[move]!;
   say = oneQuestion(say);
   const stuck = ideas.find((k) => k.id === r.value.stuck_on);
@@ -140,7 +148,7 @@ export async function engineTurn(
     say,
     covered: r.value.covered.filter((id) => ideas.some((k) => k.id === id)),
     ideas,
-    gap: move === "show_me" || move === "offer_show_me" ? { title: stuck?.idea ?? topic } : undefined,
+    gap: ["show_me", "offer_show_me", "offer_teach", "teach"].includes(move) ? { title: stuck?.idea ?? topic } : undefined,
     usage,
   };
 }

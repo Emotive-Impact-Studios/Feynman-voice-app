@@ -8,6 +8,7 @@
 //   {"type":"sentence","index":0,"text":"...","speech":[...]}            voice "kitten": phonemes for the phone
 //   {"type":"sentence","index":0,"text":"...","audio":"<base64>",...}    voice "sonic": 16-bit PCM from Cartesia
 //   {"type":"sentence","index":0,"text":"..."}                           voice "phonon": the phone speaks it
+//   {"type":"engine","move":"wait"}                                     the learner stopped mid-thought: no sentence, keep listening
 //   {"type":"done","question":"...","cost":{...},"timingMs":{...}}
 //   {"type":"error","error":"..."}                                       instead of done, if something fails
 import { askStudent, GeminiError, type PastTurn } from "./gemini";
@@ -20,6 +21,7 @@ import { speakable } from "./speakable";
 import { toSpeechChunks } from "./speech";
 import { engineTurn } from "./engine/engine";
 import { keyIdeas } from "./engine/ideas";
+import { unfinished } from "./engine/policy";
 
 const MAX_AUDIO_BYTES = 3 * 1024 * 1024;
 const ALLOWED_MIME = new Set(["audio/wav", "audio/x-wav", "audio/aac", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/flac", "audio/webm"]);
@@ -49,6 +51,17 @@ function json(status: number, body: unknown): Response {
 }
 
 /** Which service hears the learner. Cartesia Ink once a key is set, OpenAI until then. */
+/** One cost line for a chat call made by the engine. */
+function engineCost(model: string, u: ChatUsage, p: ReturnType<typeof openAIPricesFromEnv>): CostLine {
+  const cached = u.prompt_tokens_details?.cached_tokens ?? 0;
+  const freshIn = Math.max(0, (u.prompt_tokens ?? 0) - cached);
+  const out = u.completion_tokens ?? 0;
+  return {
+    label: `${model} engine (${freshIn} in, ${cached} cached, ${out} out)`,
+    usd: (freshIn * p.chatInPerM + cached * p.chatCachedInPerM + out * p.chatOutPerM) / 1e6,
+  };
+}
+
 export function sttProvider(env: Env): "cartesia" | "openai" {
   const chosen = env.STT?.toLowerCase();
   if (chosen === "cartesia" || chosen === "openai") return chosen;
@@ -150,7 +163,25 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         // 3. Ask the question, streaming.
         const t1 = Date.now();
         let question: string;
-        if (useEngine) {
+        // The learner stopped mid-thought: keep listening instead of answering.
+        // A phone that sends "wait" holds the turn and resends it longer;
+        // older phones get a short nudge to carry on.
+        const holdOn = useEngine && unfinished(transcript);
+        const wantsWait = (body.features ?? []).includes("wait");
+        let waited = false;
+        if (holdOn && wantsWait) {
+          const { usage: ideasUsage } = await ideasReady!;
+          if (ideasUsage) lines.push(engineCost(chatModel, ideasUsage, p));
+          question = "";
+          waited = true;
+          send({ type: "engine", move: "wait" });
+        } else if (holdOn) {
+          const { ideas, usage: ideasUsage } = await ideasReady!;
+          if (ideasUsage) lines.push(engineCost(chatModel, ideasUsage, p));
+          question = "Go on.";
+          speak(question);
+          send({ type: "engine", move: "listen", covered: [], ideas });
+        } else if (useEngine) {
           // Fenny's conversation engine: code picks the allowed moves, the model
           // picks one and says one line, the line is checked, then spoken.
           const { ideas, usage: ideasUsage } = await ideasReady!;
@@ -161,21 +192,15 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
             topic: body.topic,
             notes: body.notes,
             ideas,
-            limits: { canShowMe: (body.features ?? []).includes("show_me") },
+            limits: { canShowMe: (body.features ?? []).includes("show_me"), canTeach: (body.features ?? []).includes("teach") },
           });
           question = r.say;
           speak(question);
           send({ type: "engine", move: r.move, covered: r.covered, ideas: r.ideas });
           if (r.move === "show_me" && r.gap) send({ type: "show_me", gap: r.gap });
-          for (const u of ideasUsage ? [ideasUsage, ...r.usage] : r.usage) {
-            const cached = u.prompt_tokens_details?.cached_tokens ?? 0;
-            const freshIn = Math.max(0, (u.prompt_tokens ?? 0) - cached);
-            const out = u.completion_tokens ?? 0;
-            lines.push({
-              label: `${chatModel} engine (${freshIn} in, ${cached} cached, ${out} out)`,
-              usd: (freshIn * p.chatInPerM + cached * p.chatCachedInPerM + out * p.chatOutPerM) / 1e6,
-            });
-          }
+          // Teach me: the phone shows the button on an offer, and opens teach mode on "teach".
+          if ((r.move === "offer_teach" || r.move === "teach") && r.gap) send({ type: r.move === "teach" ? "teach" : "teach_offer", gap: r.gap });
+          for (const u of ideasUsage ? [ideasUsage, ...r.usage] : r.usage) lines.push(engineCost(chatModel, u, p));
         } else if (brain === "openai") {
           const splitter = new SentenceSplitter();
           const r = await streamQuestionOpenAI(
@@ -210,7 +235,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
           const c = costOf(r.usage, pricesFromEnv(env));
           lines.push({ label: `Gemini (${c.audioInTokens} audio in, ${c.textInTokens} text in, ${c.outTokens} out)`, usd: c.usd });
         }
-        if (index === 0) speak(speakable(question) || "Sorry, could you say that again?");
+        if (index === 0 && !waited) speak(speakable(question) || "Sorry, could you say that again?");
         timing.brain = Date.now() - t1;
         await voiced;
         if (sonicChars) lines.push({ label: `Cartesia Sonic (${sonicChars} characters)`, usd: sonicChars * credit });
@@ -221,7 +246,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         send({
           type: "done",
           transcript,
-          question: speakable(question) || "Sorry, could you say that again?",
+          question: waited ? "" : speakable(question) || "Sorry, could you say that again?",
           voice,
           stt,
           brain,
