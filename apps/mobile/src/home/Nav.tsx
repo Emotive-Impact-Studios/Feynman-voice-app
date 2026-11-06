@@ -9,6 +9,7 @@ import { colour } from "../theme";
 import { Glass, T } from "../ui/kit";
 import { LivingLight } from "../ui/LivingLight";
 import { smooth } from "../ui/motion";
+import { HaloRing } from "../ui/Soft";
 import { TabLight } from "../ui/TabLight";
 import { NAV_HEIGHT, navOffset } from "./styles";
 
@@ -86,6 +87,7 @@ export function Nav({ bottom, tab, onChange, onStart, width }: { bottom: number;
         <Glass strong blur={30} style={[styles.navLight, styles.solidBar]}>
           <LivingLight size={40} />
         </Glass>
+        <HaloRing />
       </Press>
     </View>
     </>

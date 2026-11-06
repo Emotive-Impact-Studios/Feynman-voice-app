@@ -20,10 +20,6 @@ export const colour = {
   onLight: "#141519",
 } as const;
 
-// Stops for the polished silver ring (a sweep gradient).
-export const silverStops = ["#5B5F66", "#F2F4F7", "#8E939B", "#FFFFFF", "#666A72", "#CDD1D7", "#5B5F66"];
-
-
 // Inter, as on the website (Linear-style: medium headings, regular body).
 // The wordmark keeps Instrument Sans.
 export const font = {

@@ -14,7 +14,7 @@ import { colour, font } from "../theme";
 import { Glass, Icon, Label, PillButton, T } from "../ui/kit";
 import { LivingLight } from "../ui/LivingLight";
 import { smooth, spring } from "../ui/motion";
-import { SilverRing } from "../ui/SilverRing";
+import { Soft } from "../ui/Soft";
 
 const SOURCES = [
   ["Slides or PDF", "PowerPoint, Keynote, PDF, Word"],
@@ -107,9 +107,9 @@ export default function NewTopic() {
                 accessibilityLabel="Topic"
               />
               <Press onPress={() => start(topic)} disabled={!topic.trim()} accessibilityRole="button" accessibilityLabel="Start explaining" style={{ opacity: topic.trim() ? 1 : 0.4 }}>
-                <SilverRing width={50} height={50}>
+                <Soft style={{ width: 50, height: 50 }}>
                   <Icon name="mic" />
-                </SilverRing>
+                </Soft>
               </Press>
             </View>
             {topic.trim().length > 0 && (

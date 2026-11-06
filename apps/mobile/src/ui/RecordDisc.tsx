@@ -15,11 +15,11 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
+import { SOFT_FILL, TOP_LIGHT } from "./Soft";
 
 const GLOW_GAP = 5;
 // The canvas asks for a 24 pt glow; 18 keeps its tail inside the control bar, which clips.
 const GLOW_SPREAD = 18;
-const IDLE = ["rgba(255,255,255,0.16)", "rgba(255,255,255,0.05)"];
 const LISTENING = ["rgba(169,190,230,0.32)", "rgba(110,134,188,0.12)"];
 
 export function RecordDisc({ size, listening, hold, children }: { size: number; listening: boolean; hold?: SharedValue<number>; children: ReactNode }) {
@@ -64,7 +64,7 @@ export function RecordDisc({ size, listening, hold, children }: { size: number; 
       <View style={[styles.disc, { width: size, height: size, borderRadius: r }]}>
         <Canvas style={StyleSheet.absoluteFill}>
           <Circle c={vec(r, r)} r={r}>
-            <RadialGradient c={vec(r, 0)} r={size} colors={IDLE} />
+            <RadialGradient c={vec(r, 0)} r={size} colors={SOFT_FILL} />
           </Circle>
         </Canvas>
         <Animated.View style={[StyleSheet.absoluteFill, tint]}>
@@ -75,7 +75,7 @@ export function RecordDisc({ size, listening, hold, children }: { size: number; 
           </Canvas>
         </Animated.View>
         {/* Only the top edge catches the light. */}
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: r, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.14)" }]} />
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: r, borderTopWidth: 1, borderTopColor: TOP_LIGHT }]} />
         <View style={[StyleSheet.absoluteFill, styles.centre]}>{children}</View>
       </View>
     </View>
