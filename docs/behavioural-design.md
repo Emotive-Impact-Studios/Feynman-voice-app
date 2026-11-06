@@ -52,3 +52,8 @@ Full write-up: https://claude.ai/artifact/2xzBxSJfscmHntjbaDkB3Y
 
 No using the learner's own goals to upsell, no fake scarcity on minutes or
 streaks, no guilt-tripping from Fenny, and cancelling is always easy.
+
+## Conversation engine
+
+From 2026-11-05 Fenny runs on the engine in `apps/api/src/engine`, which makes
+every call a full Feynman loop. See docs/conversation-engine.md.

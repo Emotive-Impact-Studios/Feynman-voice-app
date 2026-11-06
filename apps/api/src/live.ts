@@ -17,6 +17,8 @@ import { costOf, openAIPricesFromEnv, pricesFromEnv, wavSeconds, type CostLine }
 import { notesBlock, STUDENT_SYSTEM_PROMPT } from "./prompt";
 import { SentenceSplitter } from "./sentences";
 import { toSpeechChunks } from "./speech";
+import { engineTurn } from "./engine/engine";
+import { keyIdeas } from "./engine/ideas";
 
 const MAX_AUDIO_BYTES = 3 * 1024 * 1024;
 const ALLOWED_MIME = new Set(["audio/wav", "audio/x-wav", "audio/aac", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/flac", "audio/webm"]);
@@ -34,6 +36,8 @@ export interface LiveTurnRequest {
   voice?: Voice;
   /** Who hears the learner, for side-by-side tests. Defaults to the server's choice. */
   stt?: "cartesia" | "openai";
+  /** What this phone can do, e.g. "show_me" for the in-call explanation card. */
+  features?: string[];
 }
 
 type Env = Record<string, string | undefined>;
@@ -77,7 +81,10 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
   const audio = Uint8Array.from(Buffer.from(body.audioBase64, "base64"));
   const speakingSeconds = Number(body.audioSeconds) || 0;
   const recordedSeconds = wavSeconds(audio) ?? speakingSeconds;
-  const history = (body.history ?? []).slice(-20);
+  // The engine works out where the call is from the whole call; the model
+  // only sees the recent turns.
+  const callHistory = (body.history ?? []).slice(-100);
+  const history = callHistory.slice(-20);
   const f = fetchImpl ?? fetch;
 
   const stream = new ReadableStream<Uint8Array>({
@@ -89,6 +96,12 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
       const lines: CostLine[] = [];
       const p = openAIPricesFromEnv(env);
       const credit = Number(env.CARTESIA_USD_PER_CREDIT) || 0.00003;
+      const chatModel = env.OPENAI_CHAT_MODEL ?? "gpt-5.4-mini";
+      const useEngine = brain === "openai" && (env.FENNY_ENGINE ?? "on") !== "off";
+      const chatCfg = { apiKey: env.OPENAI_API_KEY!, model: chatModel, reasoningEffort: env.OPENAI_REASONING_EFFORT ?? "none", fetchImpl: f };
+      // The topic's key ideas, built while we listen (cached after the first turn).
+      const ideasReady = useEngine ? keyIdeas(chatCfg, body.topic?.trim() || "a topic of their choice", body.notes) : undefined;
+      ideasReady?.catch(() => {});
       try {
         // 1. Hear the learner.
         let transcript: string;
@@ -133,7 +146,33 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         // 3. Ask the question, streaming.
         const t1 = Date.now();
         let question: string;
-        if (brain === "openai") {
+        if (useEngine) {
+          // Fenny's conversation engine: code picks the allowed moves, the model
+          // picks one and says one line, the line is checked, then spoken.
+          const { ideas, usage: ideasUsage } = await ideasReady!;
+          const r = await engineTurn(chatCfg, {
+            transcript,
+            history,
+            callHistory,
+            topic: body.topic,
+            notes: body.notes,
+            ideas,
+            limits: { canShowMe: (body.features ?? []).includes("show_me") },
+          });
+          question = r.say;
+          speak(question);
+          send({ type: "engine", move: r.move, covered: r.covered, ideas: r.ideas });
+          if (r.move === "show_me" && r.gap) send({ type: "show_me", gap: r.gap });
+          for (const u of ideasUsage ? [ideasUsage, ...r.usage] : r.usage) {
+            const cached = u.prompt_tokens_details?.cached_tokens ?? 0;
+            const freshIn = Math.max(0, (u.prompt_tokens ?? 0) - cached);
+            const out = u.completion_tokens ?? 0;
+            lines.push({
+              label: `${chatModel} engine (${freshIn} in, ${cached} cached, ${out} out)`,
+              usd: (freshIn * p.chatInPerM + cached * p.chatCachedInPerM + out * p.chatOutPerM) / 1e6,
+            });
+          }
+        } else if (brain === "openai") {
           const splitter = new SentenceSplitter();
           const r = await streamQuestionOpenAI(
             {

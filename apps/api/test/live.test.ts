@@ -68,7 +68,7 @@ describe("sttProvider", () => {
 });
 
 describe("POST /api/live-turn", () => {
-  const env = { BRAIN: "openai", OPENAI_API_KEY: "k", PROTOTYPE_TOKEN: "t" };
+  const env = { BRAIN: "openai", OPENAI_API_KEY: "k", PROTOTYPE_TOKEN: "t", FENNY_ENGINE: "off" };
 
   it("rejects a missing token", async () => {
     const res = await handleLiveTurn(request(audio, "wrong"), env);
@@ -102,6 +102,25 @@ describe("POST /api/live-turn", () => {
     expect(chat.stream).toBe(true);
     expect(chat.messages[0].content).toContain("Osmosis");
     expect(chat.messages[0].content).not.toContain("transcript of what the student said");
+  });
+
+  it("runs the engine by default and streams its move and cost", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith("/audio/transcriptions")) return Response.json({ text: "Osmosis is water moving across a membrane." });
+      const b = JSON.parse(String(init!.body));
+      const reply =
+        b.response_format.json_schema.name === "key_ideas"
+          ? { ideas: [{ idea: "Water moves from dilute to concentrated" }, { idea: "The membrane lets water through" }] }
+          : { move: "next", say: "Ooh, so which way does the water go?", covered: ["k2"], stuck_on: "" };
+      return Response.json({ choices: [{ message: { content: JSON.stringify(reply) } }], usage: { prompt_tokens: 300, completion_tokens: 20 } });
+    }) as unknown as typeof fetch;
+    const res = await handleLiveTurn(request({ ...audio, topic: "Osmosis engine test" }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
+    const ev = await events(res);
+    expect(ev.map((e) => e.type)).toEqual(["transcript", "engine", "sentence", "done"]);
+    expect(ev[1]).toMatchObject({ type: "engine", move: "next", covered: ["k2"] });
+    expect(ev[2].text).toBe("Ooh, so which way does the water go?");
+    // Speech to text, the key ideas (first turn on this topic) and the turn.
+    expect(ev[3].cost.lines).toHaveLength(3);
   });
 
   it("hears with Ink and speaks with Sonic when Cartesia is set up", async () => {
