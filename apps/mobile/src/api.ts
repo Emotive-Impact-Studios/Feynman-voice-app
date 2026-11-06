@@ -56,7 +56,11 @@ export type LiveEvent =
     }
   | { type: "error"; error: string; detail?: string }
   /** Fenny's conversation engine: the move it made this turn. "wrap" is the goodbye. */
-  | { type: "engine"; move: string; covered: string[]; ideas: { id: string; idea: string }[] };
+  | { type: "engine"; move: string; covered: string[]; ideas: { id: string; idea: string }[] }
+  /** They clearly don't know this bit yet: show Teach me. */
+  | { type: "teach_offer"; gap: { title: string } }
+  /** They said yes to the offer: open teach mode now. */
+  | { type: "teach"; gap: { title: string } };
 
 /** Base URL of the Phonon model bundle the API serves for iPhones to download. */
 export const PHONON_BUNDLE_URL = API_URL ? `${API_URL.replace(/\/$/, "")}/phonon/31m-en-0.6.0` : "";
@@ -100,4 +104,47 @@ export async function streamLiveTurn(
     lines.push(decoder.decode(value, { stream: true }), (e) => onEvent(e as LiveEvent));
   }
   lines.flush((e) => onEvent(e as LiveEvent));
+}
+
+// Teach me -----------------------------------------------------------------
+
+export type PictureKind = "flow" | "compare" | "cycle" | "layers" | "parts" | "none";
+export type PuzzleKind = "true_false" | "choose" | "fill_gap" | "order" | "match";
+
+export interface LessonPuzzle {
+  kind: PuzzleKind;
+  prompt: string;
+  options: string[];
+  answer: string[];
+  why: string;
+}
+
+export interface LessonBite {
+  title: string;
+  text: string;
+  picture: { kind: PictureKind; labels: string[] };
+  quote: string;
+  fromNotes: boolean;
+  puzzle: LessonPuzzle;
+}
+
+export interface Lesson {
+  idea: string;
+  bites: LessonBite[];
+  recap: string;
+  explainBack: string;
+}
+
+/** A short lesson on one idea the learner is stuck on, built on the server from their notes. */
+export async function fetchLesson(input: { topic: string; idea: string; notes?: string; said?: string }, signal?: AbortSignal): Promise<Lesson> {
+  if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in apps/mobile/.env");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/lesson`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify(input),
+    signal,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((body as { error?: string }).error ?? `Server returned ${res.status}`);
+  return (body as { lesson: Lesson }).lesson;
 }
