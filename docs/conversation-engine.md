@@ -27,6 +27,10 @@ Extra stream events: `{"type":"engine","move","covered","ideas"}` every turn and
 phone sends `features: ["show_me"]` once it can show the card; older phones are
 never offered it.
 
+## Lines the voices can read
+
+Every line Fenny says goes through `speakable()` (`apps/api/src/speakable.ts`) before any voice gets it. Em and en dashes, semicolons, markdown and emoji make the voices, Phonon above all, lose the shape of the sentence and the inflection goes wrong. Dashes become commas, number ranges become "5 to 10", and symbols are removed. The prompts also ask for proper sentences with no dashes. Before this rule, 15 of 287 lines in the test calls had a dash; after it, 0 of 240.
+
 ## The conversation test
 
 No change to how Fenny talks ships without this:
