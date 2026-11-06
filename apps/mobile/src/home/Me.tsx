@@ -4,7 +4,7 @@
 // forgives a missed day a week (see docs/behavioural-design.md).
 import { Press } from "../ui/Press";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { minutesLeft, PROTOTYPE_MINUTES, setSessionView, setVoice, softStreak, type Profile, type VoicePref } from "../data/profile";
+import { minutesLeft, PROTOTYPE_MINUTES, setFastReplies, setSessionView, setVoice, softStreak, type Profile, type VoicePref } from "../data/profile";
 import { ViewIcon, VIEWS } from "../live/ViewMenu";
 import { colour } from "../theme";
 import { MinutesRing } from "../ui/Dots";
@@ -119,6 +119,36 @@ export function Me({ profile, top, bottom, onReplayIntro }: { profile: Profile; 
                   </T>
                   <T size={11.5} tone="muted">
                     {v.note}
+                  </T>
+                </Press>
+              );
+            })}
+          </View>
+
+          <T size={15} style={{ marginTop: 22 }}>
+            Replies
+          </T>
+          <T size={12.5} tone="muted" style={{ marginTop: 2 }}>
+            Faster is a trial: Fenny waits less after you stop, you can talk over Fenny with headphones on, and each reply shows how long it took.
+          </T>
+          <View style={styles.views} accessibilityRole="radiogroup" accessibilityLabel="Replies">
+            {([false, true] as const).map((on) => {
+              const chosen = !!profile.fastReplies === on;
+              const label = on ? "Faster" : "As now";
+              return (
+                <Press
+                  key={label}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: chosen }}
+                  accessibilityLabel={label}
+                  onPress={() => setFastReplies(on)}
+                  style={[styles.view, styles.voice, chosen && styles.viewOn]}
+                >
+                  <T size={13.5} tone={chosen ? "text" : "muted"}>
+                    {label}
+                  </T>
+                  <T size={11.5} tone="muted">
+                    {on ? "Trial" : "Steady"}
                   </T>
                 </Press>
               );

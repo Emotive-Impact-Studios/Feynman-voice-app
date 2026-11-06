@@ -63,7 +63,10 @@ export default function Session() {
   // Chosen in Settings (Me): Cartesia Sonic, or Phonon on the phone for demos.
   const [voice] = useState<LiveVoice>(() => profile.voice ?? "sonic");
   const ears: LiveEars = "auto";
-  const loop = useLiveCall(brainTopic, { voice, ears });
+  const [fast] = useState(() => !!profile.fastReplies);
+  const loop = useLiveCall(brainTopic, { voice, ears, fast });
+  // Faster-replies trial: how long the last reply took, so we can compare.
+  const lastStats = fast ? loop.stats[loop.stats.length - 1] : undefined;
 
   const spoken = loop.heardSeconds + (loop.phase === "listening" ? loop.liveSpeaking : 0);
   const asked = [...loop.turns].reverse().find((t) => t.speaker === "student")?.text ?? opening;
@@ -261,6 +264,11 @@ export default function Session() {
 
       {/* One button at the bottom, with no panel: what it does sits just above it. */}
       <View pointerEvents="box-none" style={[styles.controls, { bottom: Math.max(insets.bottom, 12) + 8 }]}>
+        {lastStats ? (
+          <T size={11.5} tone="muted" lines={1} style={{ textAlign: "center", marginBottom: 6 }}>
+            {`Last reply ${secs(lastStats.quietSeconds * 1000 + lastStats.firstWordMs)}: wait ${secs(lastStats.quietSeconds * 1000)}, hearing ${secs(lastStats.transcribeMs)}, thinking ${secs(lastStats.brainMs)}`}
+          </T>
+        ) : null}
         {/* One quiet line: what is happening, or the dots while you talk. */}
         <View style={styles.hintLine}>
           {loop.phase === "listening" ? (
@@ -335,3 +343,8 @@ const styles = StyleSheet.create({
     borderColor: colour.hairline,
   },
 });
+
+/** 1234 ms as "1.2 s". */
+function secs(ms: number): string {
+  return `${(ms / 1000).toFixed(1)} s`;
+}

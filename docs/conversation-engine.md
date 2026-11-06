@@ -54,3 +54,14 @@ Feynman loop. Transcripts are written to `converse-test-results.json`.
 First run (2026-11-05): the engine's first draft was annoying in 14 of 24 calls
 (it parroted "Ooh, and what happens after that?"). After fixes: 0 of 30
 annoying, nag 1.1, naturalness 4.1, Feynman loop 4.7 (old prompt: 3.7).
+
+## A clear goal, a clear end, and how it landed
+
+Edem's feedback (2026-11-06): the calls felt like an endless run of questions, with no goal, no end in sight, and no idea whether an answer was right.
+
+- **Goal up front.** The key ideas are now 3 or 4, and each one has a short label that doesn't give the answer away ("why the heart has valves"). On the learner's first turn Fenny says what it wants to understand: "By the end I want to understand three things: a, b and c."
+- **How it landed.** Every turn the model gives a verdict (right, partly, off or none) and opens its line with a matching reaction, without ever saying the answer. If the opener repeats one of Fenny's recent openers, code swaps in a fresh one for the same verdict. The verdict also goes to the phone in the `engine` event.
+- **Progress you can hear.** Code counts the covered ideas. When another one is done, Fenny says "That's two of the three things." Code reads back the last count from Fenny's own lines, so the server stays stateless.
+- **A clear end.** Once every idea is covered, Fenny asks for the 30 second retell straight away ("That's all three things I wanted to understand..."). After the shakiest-bit question the call always ends. The goodbye is built in code: what they explained well, and the shaky bit for next time.
+
+30 simulated calls of up to 14 turns: 29 of 30 ended by themselves, the median was 6 learner turns, none were annoying, nag 1.17, natural 4.07.

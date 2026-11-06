@@ -6,7 +6,7 @@ import PhononTTS
 /// speak() for each sentence as it arrives, and stop() when the learner cuts in.
 public class PhononModule: Module {
   private var tts: Phonon?
-  private var player: PhononPlayer?
+  private var player: SpeakerPlayer?
   private let lock = NSLock()
   // Bumped by stop(), so audio from a cancelled sentence is never queued.
   private var generation = 0
@@ -40,7 +40,7 @@ public class PhononModule: Module {
       self.useSpeaker()
       if self.player == nil {
         // expo-audio owns the session (play and record), so the player must not change it.
-        self.player = try PhononPlayer(configureSession: false)
+        self.player = try SpeakerPlayer()
       }
       if tts.voices.contains(voice), tts.voice != voice {
         try await tts.setVoice(voice)
@@ -86,6 +86,12 @@ public class PhononModule: Module {
       ]
     }
 
+    /// Headphones or earbuds, so the mic can't hear the student's voice.
+    Function("usesHeadphones") { () -> Bool in
+      let headphones: Set<AVAudioSession.Port> = [.headphones, .bluetoothA2DP, .bluetoothHFP, .bluetoothLE]
+      return AVAudioSession.sharedInstance().currentRoute.outputs.contains { headphones.contains($0.portType) }
+    }
+
     /// Stop talking now: cancel generation and drop queued audio.
     Function("stop") {
       self.lock.lock()
@@ -104,5 +110,57 @@ public class PhononModule: Module {
     let session = AVAudioSession.sharedInstance()
     guard session.category == .playAndRecord, !session.categoryOptions.contains(.defaultToSpeaker) else { return }
     try? session.setCategory(.playAndRecord, mode: session.mode, options: session.categoryOptions.union([.defaultToSpeaker, .allowBluetoothA2DP]))
+  }
+}
+
+/// Plays Phonon's audio as it arrives. Like PhononPlayer, but it keeps its
+/// engine running: iOS stops an AVAudioEngine whenever the audio setup
+/// changes, such as the microphone closing when Teach me opens, and a
+/// stopped engine silently drops every sentence queued after it.
+final class SpeakerPlayer: @unchecked Sendable {
+  private let engine = AVAudioEngine()
+  private let node = AVAudioPlayerNode()
+  private let format = AVAudioFormat(standardFormatWithSampleRate: Phonon.sampleRate, channels: 1)!
+  private var observer: NSObjectProtocol?
+
+  init() throws {
+    engine.attach(node)
+    engine.connect(node, to: engine.mainMixerNode, format: format)
+    try engine.start()
+    node.play()
+    observer = NotificationCenter.default.addObserver(
+      forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+    ) { [weak self] _ in self?.ensureRunning() }
+  }
+
+  deinit {
+    if let observer { NotificationCenter.default.removeObserver(observer) }
+    node.stop()
+    engine.stop()
+  }
+
+  /// Start the engine again if iOS stopped it. Queued audio was lost with it.
+  func ensureRunning() {
+    if !engine.isRunning {
+      engine.prepare()
+      try? engine.start()
+    }
+    if engine.isRunning && !node.isPlaying { node.play() }
+  }
+
+  func enqueue(_ samples: [Float]) {
+    guard !samples.isEmpty,
+          let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count))
+    else { return }
+    ensureRunning()
+    buf.frameLength = AVAudioFrameCount(samples.count)
+    samples.withUnsafeBufferPointer { buf.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
+    node.scheduleBuffer(buf)
+  }
+
+  /// Drop everything queued and go quiet. Playing again afterwards works.
+  func stop() {
+    node.stop()
+    ensureRunning()
   }
 }
