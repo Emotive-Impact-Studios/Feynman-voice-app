@@ -40,15 +40,21 @@ export const STACK_ACTIONS = ["push", "pop"] as const;
 export const THING_LAYOUTS = ["row", "versus", "chain", "orbit", "scale"] as const;
 /** Every drawn thing the app knows (apps/mobile/src/teach/scene/things.ts), by group. A test keeps the two lists the same. */
 export const THING_GROUPS = {
-  "People and the body": ["person", "people", "face", "hand", "eye", "brain", "heart", "lungs", "cell", "dna", "virus", "bacterium"],
+  "People and the body": ["person", "people", "face", "hand", "eye", "brain", "heart", "lungs", "cell", "dna", "virus", "bacterium", "tooth", "bone", "kidney", "stomach", "neuron", "ear", "chromosome", "mitochondrion", "skeleton", "family"],
   "Earth and space": ["sun", "moon", "planet", "earth", "star", "rocket", "cloud", "raindrop", "lightning", "snowflake", "flame", "mountain", "tree", "leaf", "flower", "sprout", "water", "volcano"],
-  "Science": ["atom", "molecule", "flask", "magnet", "battery", "bulb", "gear", "thermometer", "pill", "spring", "microscope", "telescope"],
-  "Money and society": ["coin", "banknote", "house", "factory", "building", "crown", "flag", "ballot", "justice", "book", "document", "contract", "pin", "graduation", "speech", "handshake", "shop"],
-  "Technology": ["computer", "phone", "chip", "database", "lock", "key", "envelope", "signal", "robot", "code"],
-  "Time and ideas": ["clock", "hourglass", "calendar", "target", "trophy", "question", "idea", "puzzle", "shield", "umbrella"],
+  "Science": ["atom", "molecule", "flask", "magnet", "battery", "bulb", "gear", "thermometer", "pill", "spring", "microscope", "telescope", "magnifier", "prism", "pendulum", "beaker", "circuit"],
+  "Money and society": ["coin", "banknote", "house", "factory", "building", "crown", "flag", "ballot", "justice", "book", "document", "contract", "pin", "graduation", "speech", "handshake", "shop", "gavel", "prison", "hospital", "school"],
+  "Technology": ["computer", "phone", "chip", "database", "lock", "key", "envelope", "signal", "robot", "code", "satellite", "camera", "server", "cloudstore"],
+  "Time and ideas": ["clock", "hourglass", "calendar", "target", "trophy", "question", "idea", "puzzle", "shield", "umbrella", "thought", "chain", "hammer", "scales", "mirror"],
   "Transport": ["car", "ship", "plane", "train", "bicycle"],
-  "Living things": ["apple", "bird", "fish", "cat", "footprint"],
-  "Metaphors": ["iceberg", "dominoes", "snowball", "ladder", "bridge", "door", "signpost", "anchor", "funnel", "wall", "seesaw", "maze", "path", "seed", "gift"],
+  "Living things": ["apple", "bird", "fish", "cat", "footprint", "dog", "butterfly", "bee", "frog", "mushroom"],
+  "Metaphors": ["iceberg", "dominoes", "snowball", "ladder", "bridge", "door", "signpost", "anchor", "funnel", "wall", "seesaw", "maze", "path", "seed", "gift", "rope", "key_hole", "balloon", "tug", "crossroads", "hill", "toolbox", "battery_low", "staircase", "bucket", "flagpeak"],
+  "Health and medicine": ["syringe", "stethoscope", "plaster", "medical", "bed", "clipboard", "drip", "wheelchair"],
+  "Energy and environment": ["turbine", "solar", "pylon", "plug", "barrel", "recycle", "tap", "smoke"],
+  "Maths and data": ["dice", "card", "ruler", "protractor", "triangle", "cube", "barchart", "linechart", "pie", "abacus", "infinity", "compasses"],
+  "Arts, music and sport": ["note", "piano", "guitar", "headphones", "microphone", "palette", "brush", "frame", "ball", "runner", "dumbbell", "medal", "theatre"],
+  "History and places": ["castle", "sword", "scroll", "pyramid", "helmet", "candle", "globe", "map", "compass", "quill", "wheel", "tent"],
+  "Food and farming": ["bread", "carrot", "wheat", "cow", "cup", "egg", "tractor"],
 } as const;
 export const THING_NAMES = Object.values(THING_GROUPS).flat();
 type ThingName = (typeof THING_GROUPS)[keyof typeof THING_GROUPS][number];
