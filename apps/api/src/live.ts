@@ -195,7 +195,11 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
             limits: { canShowMe: (body.features ?? []).includes("show_me"), canTeach: (body.features ?? []).includes("teach") },
           });
           question = r.say;
-          speak(question);
+          // Sentence by sentence, so the phone can leave a breath between a
+          // reaction ("Oh, nice.") and the question that follows it.
+          // Even a short reaction gets its own piece here, so it lands on its own.
+          const lineSplitter = new SentenceSplitter(4);
+          [...lineSplitter.push(question + " "), ...lineSplitter.flush()].forEach(speak);
           send({ type: "engine", move: r.move, covered: r.covered, ideas: r.ideas });
           if (r.move === "show_me" && r.gap) send({ type: "show_me", gap: r.gap });
           // Teach me: the phone shows the button on an offer, and opens teach mode on "teach".
