@@ -120,7 +120,7 @@ export class EndOfTurn {
 
   constructor(
     /** Seconds of quiet that end a turn. Long enough for a breath mid-thought. */
-    private silenceSeconds = 1.2,
+    private silenceSeconds = 2,
     /** Speech needed before quiet can end a turn, so a cough does not. */
     private minSpeechSeconds = 0.6,
   ) {}
@@ -150,6 +150,34 @@ export class EndOfTurn {
     this.spoken = 0;
     this.quiet = 0;
   }
+
+  /** Change how much quiet ends the next turn. */
+  setSilence(seconds: number): void {
+    this.silenceSeconds = seconds;
+  }
+}
+
+/** Quiet that ends a turn after an ordinary question. */
+export const TURN_QUIET_SECONDS = 2;
+/** Quiet that ends a turn after a "why" or "how" question, which needs thinking time. */
+export const THINKING_QUIET_SECONDS = 3;
+/**
+ * The faster-replies trial: a shorter wait. Safe because the server holds a
+ * turn that stopped mid-thought ("wait") and talking on while Fenny thinks
+ * carries the turn on.
+ */
+export const FAST_TURN_QUIET_SECONDS = 1.2;
+export const FAST_THINKING_QUIET_SECONDS = 2;
+
+/**
+ * How long to wait in silence before the learner's answer to this question
+ * counts as finished. "Why" and "how" questions get longer, so a learner who
+ * stops to think is not cut off.
+ */
+export function quietAfter(question: string, fast = false): number {
+  const thinking = /\b(why|how)\b/i.test(question);
+  if (fast) return thinking ? FAST_THINKING_QUIET_SECONDS : FAST_TURN_QUIET_SECONDS;
+  return thinking ? THINKING_QUIET_SECONDS : TURN_QUIET_SECONDS;
 }
 
 /**
@@ -225,3 +253,34 @@ export class NdjsonReader {
     this.pending = "";
   }
 }
+
+/**
+ * Makes the student's voice loud on a phone speaker. Each clip is lifted to
+ * a speech level well above what the voices send (about -14 dBFS RMS), and
+ * a soft limiter rounds off the peaks instead of clipping them, so it gets
+ * much louder without crackling. Quiet clips (near silence) are left alone.
+ */
+export const LOUD_TARGET_RMS = 0.2;
+export const LOUD_MAX_GAIN = 6; // about +15 dB
+
+export function louder(samples: Float32Array, targetRms = LOUD_TARGET_RMS, maxGain = LOUD_MAX_GAIN): Float32Array {
+  const level = rms(samples);
+  const out = new Float32Array(samples.length);
+  if (level < 1e-4) {
+    out.set(samples);
+    return out;
+  }
+  const gain = Math.min(maxGain, Math.max(1, targetRms / level));
+  for (let i = 0; i < samples.length; i++) out[i] = softLimit(samples[i] * gain);
+  return out;
+}
+
+/** Linear up to 0.6, then curves smoothly towards 1 and never passes it. */
+export function softLimit(x: number): number {
+  const knee = 0.6;
+  const a = Math.abs(x);
+  if (a <= knee) return x;
+  const over = (a - knee) / (1 - knee);
+  return Math.sign(x) * (knee + (1 - knee) * Math.tanh(over));
+}
+export * from "./film";

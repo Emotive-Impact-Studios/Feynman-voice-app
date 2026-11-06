@@ -8,15 +8,20 @@
 //   {"type":"sentence","index":0,"text":"...","speech":[...]}            voice "kitten": phonemes for the phone
 //   {"type":"sentence","index":0,"text":"...","audio":"<base64>",...}    voice "sonic": 16-bit PCM from Cartesia
 //   {"type":"sentence","index":0,"text":"..."}                           voice "phonon": the phone speaks it
+//   {"type":"engine","move":"wait"}                                     the learner stopped mid-thought: no sentence, keep listening
 //   {"type":"done","question":"...","cost":{...},"timingMs":{...}}
 //   {"type":"error","error":"..."}                                       instead of done, if something fails
 import { askStudent, GeminiError, type PastTurn } from "./gemini";
 import { speakSonic, SONIC_SAMPLE_RATE, transcribeCartesia } from "./cartesia";
 import { ProviderError, transcribeOpenAI } from "./openai";
-import { costOf, openAIPricesFromEnv, pricesFromEnv, wavSeconds, type CostLine } from "./pricing";
+import { chatPricesFor, costOf, openAIPricesFromEnv, pricesFromEnv, wavSeconds, type CostLine } from "./pricing";
 import { notesBlock, STUDENT_SYSTEM_PROMPT } from "./prompt";
 import { SentenceSplitter } from "./sentences";
+import { speakable } from "./speakable";
 import { toSpeechChunks } from "./speech";
+import { engineTurn } from "./engine/engine";
+import { keyIdeas } from "./engine/ideas";
+import { unfinished } from "./engine/policy";
 
 const MAX_AUDIO_BYTES = 3 * 1024 * 1024;
 const ALLOWED_MIME = new Set(["audio/wav", "audio/x-wav", "audio/aac", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/flac", "audio/webm"]);
@@ -34,6 +39,8 @@ export interface LiveTurnRequest {
   voice?: Voice;
   /** Who hears the learner, for side-by-side tests. Defaults to the server's choice. */
   stt?: "cartesia" | "openai";
+  /** What this phone can do, e.g. "show_me" for the in-call explanation card. */
+  features?: string[];
 }
 
 type Env = Record<string, string | undefined>;
@@ -44,6 +51,17 @@ function json(status: number, body: unknown): Response {
 }
 
 /** Which service hears the learner. Cartesia Ink once a key is set, OpenAI until then. */
+/** One cost line for a chat call made by the engine. */
+function engineCost(model: string, u: ChatUsage, p: ReturnType<typeof openAIPricesFromEnv>): CostLine {
+  const cached = u.prompt_tokens_details?.cached_tokens ?? 0;
+  const freshIn = Math.max(0, (u.prompt_tokens ?? 0) - cached);
+  const out = u.completion_tokens ?? 0;
+  return {
+    label: `${model} engine (${freshIn} in, ${cached} cached, ${out} out)`,
+    usd: (freshIn * p.chatInPerM + cached * p.chatCachedInPerM + out * p.chatOutPerM) / 1e6,
+  };
+}
+
 export function sttProvider(env: Env): "cartesia" | "openai" {
   const chosen = env.STT?.toLowerCase();
   if (chosen === "cartesia" || chosen === "openai") return chosen;
@@ -58,6 +76,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
   const brain = (env.BRAIN ?? "openai").toLowerCase();
   if (brain !== "openai" && brain !== "gemini") return json(500, { error: `Unknown BRAIN ${brain}` });
   if (brain === "openai" && !env.OPENAI_API_KEY) return json(500, { error: "OPENAI_API_KEY is not set on the server" });
+  if (env.FENNY_MODEL?.startsWith("claude-") && !env.ANTHROPIC_API_KEY) return json(500, { error: "FENNY_MODEL is a Claude model but ANTHROPIC_API_KEY is not set on the server" });
   if (brain === "gemini" && !env.GEMINI_API_KEY) return json(500, { error: "GEMINI_API_KEY is not set on the server" });
   let body: LiveTurnRequest;
   try {
@@ -77,7 +96,10 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
   const audio = Uint8Array.from(Buffer.from(body.audioBase64, "base64"));
   const speakingSeconds = Number(body.audioSeconds) || 0;
   const recordedSeconds = wavSeconds(audio) ?? speakingSeconds;
-  const history = (body.history ?? []).slice(-20);
+  // The engine works out where the call is from the whole call; the model
+  // only sees the recent turns.
+  const callHistory = (body.history ?? []).slice(-100);
+  const history = callHistory.slice(-20);
   const f = fetchImpl ?? fetch;
 
   const stream = new ReadableStream<Uint8Array>({
@@ -89,6 +111,15 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
       const lines: CostLine[] = [];
       const p = openAIPricesFromEnv(env);
       const credit = Number(env.CARTESIA_USD_PER_CREDIT) || 0.00003;
+      const chatModel = env.OPENAI_CHAT_MODEL ?? "gpt-5.4-mini";
+      const useEngine = brain === "openai" && (env.FENNY_ENGINE ?? "on") !== "off";
+      // Fenny's engine can run on another model, e.g. FENNY_MODEL=claude-haiku-5-5.
+      const fennyModel = env.FENNY_MODEL ?? chatModel;
+      const fp = chatPricesFor(fennyModel, env);
+      const chatCfg = { apiKey: env.OPENAI_API_KEY!, anthropicKey: env.ANTHROPIC_API_KEY, model: fennyModel, reasoningEffort: env.OPENAI_REASONING_EFFORT ?? "none", fetchImpl: f };
+      // The topic's key ideas, built while we listen (cached after the first turn).
+      const ideasReady = useEngine ? keyIdeas(chatCfg, body.topic?.trim() || "a topic of their choice", body.notes) : undefined;
+      ideasReady?.catch(() => {});
       try {
         // 1. Hear the learner.
         let transcript: string;
@@ -108,12 +139,15 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         let voiced: Promise<void> = Promise.resolve();
         let firstSentenceMs: number | undefined;
         let sonicChars = 0;
-        const speak = (text: string) => {
+        const speak = (raw: string) => {
+          // Every voice gets the same clean line: no dashes or symbols.
+          const text = speakable(raw);
+          if (!text) return;
           const i = index++;
           firstSentenceMs ??= Date.now() - t0;
           const work =
             voice === "sonic"
-              ? speakSonic({ apiKey: env.CARTESIA_API_KEY!, voiceId: env.SONIC_VOICE_ID ?? "62ae83ad-4f6a-430b-af41-a9bede9286ca", model: env.SONIC_MODEL, fetchImpl: f }, text).then(
+              ? speakSonic({ apiKey: env.CARTESIA_API_KEY!, voiceId: env.SONIC_VOICE_ID ?? "62ae83ad-4f6a-430b-af41-a9bede9286ca", model: env.SONIC_MODEL, speed: env.SONIC_SPEED ? Number(env.SONIC_SPEED) : undefined, fetchImpl: f }, text).then(
                   (pcm) => {
                     sonicChars += text.length;
                     return { audio: Buffer.from(pcm).toString("base64"), sampleRate: SONIC_SAMPLE_RATE, encoding: "pcm_s16le" };
@@ -133,7 +167,49 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         // 3. Ask the question, streaming.
         const t1 = Date.now();
         let question: string;
-        if (brain === "openai") {
+        // The learner stopped mid-thought: keep listening instead of answering.
+        // A phone that sends "wait" holds the turn and resends it longer;
+        // older phones get a short nudge to carry on.
+        const holdOn = useEngine && unfinished(transcript);
+        const wantsWait = (body.features ?? []).includes("wait");
+        let waited = false;
+        if (holdOn && wantsWait) {
+          const { usage: ideasUsage } = await ideasReady!;
+          if (ideasUsage) lines.push(engineCost(fennyModel, ideasUsage, fp));
+          question = "";
+          waited = true;
+          send({ type: "engine", move: "wait" });
+        } else if (holdOn) {
+          const { ideas, usage: ideasUsage } = await ideasReady!;
+          if (ideasUsage) lines.push(engineCost(fennyModel, ideasUsage, fp));
+          question = "Go on.";
+          speak(question);
+          send({ type: "engine", move: "listen", covered: [], ideas });
+        } else if (useEngine) {
+          // Fenny's conversation engine: code picks the allowed moves, the model
+          // picks one and says one line, the line is checked, then spoken.
+          const { ideas, usage: ideasUsage } = await ideasReady!;
+          const r = await engineTurn(chatCfg, {
+            transcript,
+            history,
+            callHistory,
+            topic: body.topic,
+            notes: body.notes,
+            ideas,
+            limits: { canShowMe: (body.features ?? []).includes("show_me"), canTeach: (body.features ?? []).includes("teach") },
+          });
+          question = r.say;
+          // Sentence by sentence, so the phone can leave a breath between a
+          // reaction ("Oh, nice.") and the question that follows it.
+          // Even a short reaction gets its own piece here, so it lands on its own.
+          const lineSplitter = new SentenceSplitter(4);
+          [...lineSplitter.push(question + " "), ...lineSplitter.flush()].forEach(speak);
+          send({ type: "engine", move: r.move, covered: r.covered, ideas: r.ideas, verdict: r.verdict });
+          if (r.move === "show_me" && r.gap) send({ type: "show_me", gap: r.gap });
+          // Teach me: the phone shows the button on an offer, and opens teach mode on "teach".
+          if ((r.move === "offer_teach" || r.move === "teach") && r.gap) send({ type: r.move === "teach" ? "teach" : "teach_offer", gap: r.gap });
+          for (const u of ideasUsage ? [ideasUsage, ...r.usage] : r.usage) lines.push(engineCost(fennyModel, u, fp));
+        } else if (brain === "openai") {
           const splitter = new SentenceSplitter();
           const r = await streamQuestionOpenAI(
             {
@@ -167,7 +243,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
           const c = costOf(r.usage, pricesFromEnv(env));
           lines.push({ label: `Gemini (${c.audioInTokens} audio in, ${c.textInTokens} text in, ${c.outTokens} out)`, usd: c.usd });
         }
-        if (index === 0) speak(question || "Sorry, could you say that again?");
+        if (index === 0 && !waited) speak(speakable(question) || "Sorry, could you say that again?");
         timing.brain = Date.now() - t1;
         await voiced;
         if (sonicChars) lines.push({ label: `Cartesia Sonic (${sonicChars} characters)`, usd: sonicChars * credit });
@@ -178,7 +254,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         send({
           type: "done",
           transcript,
-          question: question || "Sorry, could you say that again?",
+          question: waited ? "" : speakable(question) || "Sorry, could you say that again?",
           voice,
           stt,
           brain,

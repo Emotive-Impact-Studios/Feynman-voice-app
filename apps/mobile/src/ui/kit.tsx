@@ -1,10 +1,13 @@
 // Small shared pieces: type, glass, buttons, backgrounds, icons.
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { BUTTON_SHADOW, LIT_BG, SOFT_BG } from "./Soft";
+import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { BlurView } from "expo-blur";
-import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { colour, font, radius } from "../theme";
+import { FennyAura, type AuraScene } from "./FennyAura";
+import { Press } from "./Press";
 
 export const images = {
   horizon: require("../../assets/images/horizon.webp"),
@@ -41,7 +44,8 @@ export function T({
   lines?: number;
 }) {
   const family = weight === "mono" ? font.mono : font[weight];
-  const tight = size >= 24 ? { letterSpacing: -size * 0.025, lineHeight: size * 1.1 } : { lineHeight: size * 1.45 };
+  // Inter tracked in a touch, as Linear does: tighter on headings than body.
+  const tight = size >= 24 ? { letterSpacing: -size * 0.022, lineHeight: size * 1.1 } : { letterSpacing: weight === "mono" ? 0 : -size * 0.011, lineHeight: size * 1.45 };
   return (
     <Text numberOfLines={lines} style={[{ fontFamily: family, fontSize: size, color: tones[tone] }, tight, style]}>
       {children}
@@ -58,25 +62,23 @@ export function Label({ children, tone = "muted", style }: { children: ReactNode
   );
 }
 
-export function Glass({ children, style, strong }: { children?: ReactNode; style?: StyleProp<ViewStyle>; strong?: boolean }) {
+/**
+ * A glass surface: a soft blurred fill with no outline and no top edge.
+ * `strong` is the denser glass for bars.
+ */
+export function Glass({ children, style, strong, blur = 28 }: { children?: ReactNode; style?: StyleProp<ViewStyle>; strong?: boolean; blur?: number }) {
   return (
-    <View style={[styles.glass, { backgroundColor: strong ? colour.glassStrong : colour.glass }, style]}>
-      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+    <View style={[styles.glass, strong && { backgroundColor: colour.glassStrong }, style]}>
+      <BlurView intensity={blur} tint="dark" style={StyleSheet.absoluteFill} />
+      {!strong && <LinearGradient pointerEvents="none" colors={["rgba(255,255,255,0.055)", "rgba(255,255,255,0.025)"]} style={StyleSheet.absoluteFill} />}
       {children}
     </View>
   );
 }
 
-export function Backdrop({ source, opacity = 1, flip, offsetY = 0 }: { source: number; opacity?: number; flip?: boolean; offsetY?: number }) {
-  return (
-    <Image
-      source={source}
-      contentFit="cover"
-      style={[StyleSheet.absoluteFill, { opacity, top: offsetY, transform: flip ? [{ scaleY: -1 }] : undefined }]}
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-    />
-  );
+/** The living background: drifting blurred lights drawn in code, placed per screen (see FennyAura). */
+export function Backdrop({ scene }: { scene?: AuraScene }) {
+  return <FennyAura scene={scene} />;
 }
 
 export function PillButton({
@@ -96,36 +98,33 @@ export function PillButton({
 }) {
   const solid = variant === "solid";
   return (
-    <Pressable
+    <Press
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.pill,
-        solid ? { backgroundColor: colour.text } : { backgroundColor: "rgba(255,255,255,0.10)", borderWidth: 1, borderColor: colour.hairline },
-        { opacity: pressed ? 0.75 : 1 },
-        style,
-      ]}
+      style={[styles.pill, solid ? styles.solid : styles.ghost, style, StyleSheet.flatten(style)?.backgroundColor === "transparent" && styles.flat]}
     >
+      {/* Solid soft silver (primary) or solid graphite: no bevel, no edge. */}
       {children ?? (
-        <T size={15} weight={solid ? "semibold" : "regular"} tone={solid ? "dark" : "text"}>
+        <T size={15} weight={solid ? "semibold" : "regular"} tone={solid ? "dark" : "text"} style={solid ? undefined : { color: "#D6D9DE" }}>
           {label}
         </T>
       )}
-    </Pressable>
+    </Press>
   );
 }
 
-export function RoundButton({ onPress, label, children, size = 48 }: { onPress?: () => void; label: string; children: ReactNode; size?: number }) {
+export function RoundButton({ onPress, label, children, size = 48, on }: { onPress?: () => void; label: string; children: ReactNode; size?: number; on?: boolean }) {
   return (
-    <Pressable
+    <Press
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={on === undefined ? undefined : { expanded: on }}
       onPress={onPress}
-      style={({ pressed }) => [styles.round, { width: size, height: size, opacity: pressed ? 0.7 : 1 }]}
+      style={[styles.round, { width: size, height: size }, on && { backgroundColor: "#34383F" }]}
     >
       {children}
-    </Pressable>
+    </Press>
   );
 }
 
@@ -142,7 +141,7 @@ export function Stat({ value, label, tone = "text" }: { value: string; label: st
   );
 }
 
-type IconName = "mic" | "close" | "check" | "pause" | "person" | "wave";
+type IconName = "mic" | "close" | "check" | "pause" | "person" | "wave" | "camera";
 export function Icon({ name, size = 20, color = colour.text }: { name: IconName; size?: number; color?: string }) {
   const p = { stroke: color, strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, fill: "none" };
   return (
@@ -163,19 +162,22 @@ export function Icon({ name, size = 20, color = colour.text }: { name: IconName;
         </>
       )}
       {name === "wave" && <Path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2" {...p} />}
+      {name === "camera" && (
+        <>
+          <Path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.2l1.5-2h5.6l1.5 2h2.2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" {...p} />
+          <Circle cx={12} cy={13} r={3.5} {...p} />
+        </>
+      )}
     </Svg>
   );
 }
 
 const styles = StyleSheet.create({
-  glass: { borderRadius: radius.card, borderWidth: 1, borderColor: colour.hairline, overflow: "hidden" },
-  pill: { height: 56, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
-  round: {
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: colour.hairlineSoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  glass: { borderRadius: radius.card, overflow: "hidden" },
+  // Solid buttons on a soft shadow (see Soft): no overflow clip, or iOS drops the shadow.
+  pill: { height: 56, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", paddingHorizontal: 20, ...BUTTON_SHADOW },
+  solid: { backgroundColor: LIT_BG },
+  ghost: { backgroundColor: SOFT_BG },
+  flat: { shadowOpacity: 0, elevation: 0 },
+  round: { borderRadius: 999, backgroundColor: SOFT_BG, alignItems: "center", justifyContent: "center", ...BUTTON_SHADOW },
 });

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useWindowDimensions, View } from "react-native";
 import { Redirect, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, { FadeIn } from "react-native-reanimated";
 import { minutesLeft, replayIntro, useProfile } from "../data/profile";
 import { Me } from "../home/Me";
 import { Nav, TopBar, type HomeTab } from "../home/Nav";
@@ -12,8 +11,7 @@ import { homeStyles } from "../home/styles";
 import { Today } from "../home/Today";
 import { Topics } from "../home/Topics";
 import { Backdrop } from "../ui/kit";
-
-const dusk = require("../../assets/images/home-dusk.webp");
+import { ScreenIn } from "../ui/ScreenIn";
 
 export default function Home() {
   const insets = useSafeAreaInsets();
@@ -28,9 +26,9 @@ export default function Home() {
 
   return (
     <View style={homeStyles.root}>
-      <Backdrop source={dusk} opacity={tab === "today" ? 0.85 : 0.45} flip={tab === "topics"} />
-      <Animated.View key={tab} entering={FadeIn.duration(300)} style={{ flex: 1 }}>
-        {tab === "today" && <Today {...common} onNew={onNew} onTopic={onTopic} />}
+      <Backdrop scene={tab} />
+      <ScreenIn key={tab}>
+        {tab === "today" && <Today {...common} onNew={onNew} onTopic={onTopic} onLook={() => router.push("/look")} />}
         {tab === "topics" && <Topics {...common} onNew={onNew} onTopic={onTopic} />}
         {tab === "me" && (
           <Me
@@ -40,7 +38,7 @@ export default function Home() {
             }}
           />
         )}
-      </Animated.View>
+      </ScreenIn>
       <TopBar top={insets.top} tab={tab} minutes={minutesLeft(profile)} initial={(profile.name[0] ?? "?").toUpperCase()} onMe={() => setTab("me")} />
       <Nav bottom={insets.bottom} tab={tab} onChange={setTab} onStart={onNew} width={width} />
     </View>

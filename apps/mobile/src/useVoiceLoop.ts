@@ -40,6 +40,7 @@ export function useVoiceLoop(topic: string) {
 
   const parts = useRef<Float32Array[]>([]);
   const resampler = useRef<Resampler | null>(null);
+  const resamplerRate = useRef(0);
   const meter = useRef(new SpeechMeter());
   // Bumped by cancel(). Async work checks it after every await and stops if
   // it has changed, so nothing records, plays or sets state after an end.
@@ -52,7 +53,10 @@ export function useVoiceLoop(topic: string) {
     // Mono float32 was requested. If a device gives stereo, keep the left channel.
     let samples = new Float32Array(buf.data);
     if (buf.channels > 1) samples = samples.filter((_, i) => i % buf.channels === 0);
-    resampler.current ??= new Resampler(buf.sampleRate, UPLOAD_RATE);
+    if (!resampler.current || resamplerRate.current !== buf.sampleRate) {
+      resampler.current = new Resampler(buf.sampleRate, UPLOAD_RATE);
+      resamplerRate.current = buf.sampleRate;
+    }
     const down = resampler.current.push(samples);
     parts.current.push(down);
     setIsTalking(meter.current.push(down, UPLOAD_RATE));

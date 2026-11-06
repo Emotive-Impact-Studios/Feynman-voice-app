@@ -1,5 +1,6 @@
 import { NdjsonReader } from "@feynman/audio";
 import type { PhonemeChunk } from "@feynman/kitten-tts";
+import type { Play, Scene } from "./teach/scene/types";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 const TOKEN = process.env.EXPO_PUBLIC_PROTOTYPE_TOKEN ?? "";
@@ -54,7 +55,13 @@ export type LiveEvent =
       cost: { pence: number; usd: number; lines: { label: string; pence: number }[] };
       timingMs: { transcribe: number; brain: number; firstSentence: number; total: number };
     }
-  | { type: "error"; error: string; detail?: string };
+  | { type: "error"; error: string; detail?: string }
+  /** Fenny's conversation engine: the move it made this turn. "wrap" is the goodbye. */
+  | { type: "engine"; move: string; covered: string[]; ideas: { id: string; idea: string; label?: string }[]; verdict?: string }
+  /** They clearly don't know this bit yet: show Teach me. */
+  | { type: "teach_offer"; gap: { title: string } }
+  /** They said yes to the offer: open teach mode now. */
+  | { type: "teach"; gap: { title: string } };
 
 /** Base URL of the Phonon model bundle the API serves for iPhones to download. */
 export const PHONON_BUNDLE_URL = API_URL ? `${API_URL.replace(/\/$/, "")}/phonon/31m-en-0.6.0` : "";
@@ -64,7 +71,18 @@ export const PHONON_BUNDLE_URL = API_URL ? `${API_URL.replace(/\/$/, "")}/phonon
  * student can start speaking its first sentence before the rest is written.
  */
 export async function streamLiveTurn(
-  input: { audioBase64: string; audioSeconds: number; history: Turn[]; topic: string; voice: LiveVoice; ears: LiveEars },
+  input: {
+    audioBase64: string;
+    audioSeconds: number;
+    history: Turn[];
+    topic: string;
+    voice: LiveVoice;
+    ears: LiveEars;
+    /** What this phone can handle. "wait": the server may say the learner isn't finished. */
+    features?: string[];
+    /** Their scanned notes on this topic, so Fenny can spot what they leave out. */
+    notes?: string;
+  },
   onEvent: (e: LiveEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -89,4 +107,130 @@ export async function streamLiveTurn(
     lines.push(decoder.decode(value, { stream: true }), (e) => onEvent(e as LiveEvent));
   }
   lines.flush((e) => onEvent(e as LiveEvent));
+}
+
+// Scanned notes -----------------------------------------------------------
+
+export interface ReadPage {
+  title: string;
+  text: string;
+  readable: boolean;
+  cost: { usd: number; pence: number };
+}
+
+/** Read one scanned page (base64 JPEG) on the server: handwriting, handouts, slides. */
+export async function readPage(imageBase64: string, topic?: string, signal?: AbortSignal): Promise<ReadPage> {
+  if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in apps/mobile/.env");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/read-page`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify({ image: imageBase64, topic }),
+    signal,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((body as { error?: string }).error ?? `Server returned ${res.status}`);
+  return body as ReadPage;
+}
+
+// Teach me -----------------------------------------------------------------
+
+export type PictureKind = "flow" | "compare" | "cycle" | "layers" | "parts" | "none";
+export type PuzzleKind = "true_false" | "choose" | "fill_gap" | "order" | "match";
+
+export interface LessonPuzzle {
+  kind: PuzzleKind;
+  prompt: string;
+  options: string[];
+  answer: string[];
+  why: string;
+}
+
+export interface LessonBite {
+  title: string;
+  text: string;
+  picture: { kind: PictureKind; labels: string[] };
+  /** A live drawing from the kit, or null (older servers leave it out). */
+  scene?: Scene | null;
+  /** A slider that changes the scene, on at most one bite. */
+  play?: Play | null;
+  /** One short sentence under the drawing that states its point. */
+  caption?: string;
+  quote: string;
+  fromNotes: boolean;
+  puzzle: LessonPuzzle;
+  /** What Fenny says while the drawing builds, one sentence per part (older servers leave it out). */
+  film?: { say: string; cue: string }[];
+  /** "What happens next?", asked before the last sentence, on at most one bite. */
+  guess?: { ask: string; options: string[]; answer: string } | null;
+}
+
+export interface Lesson {
+  idea: string;
+  bites: LessonBite[];
+  recap: string;
+  explainBack: string;
+}
+
+/** A short lesson on one idea the learner is stuck on, built on the server from their notes. */
+export async function fetchLesson(input: { topic: string; idea: string; notes?: string; said?: string }, signal?: AbortSignal): Promise<Lesson> {
+  if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in apps/mobile/.env");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/lesson`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify(input),
+    signal,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((body as { error?: string }).error ?? `Server returned ${res.status}`);
+  return (body as { lesson: Lesson }).lesson;
+}
+
+/** One line in Fenny's voice, without a turn (the opening question, a lesson bite). */
+export async function speakLine(
+  input: { text: string; voice: LiveVoice },
+  signal?: AbortSignal,
+): Promise<{ text: string; audio?: string; sampleRate?: number; speech?: PhonemeChunk[] }> {
+  if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in apps/mobile/.env");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/speak`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify(input),
+    signal,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((body as { error?: string }).error ?? `Server returned ${res.status}`);
+  return body as { text: string; audio?: string; sampleRate?: number; speech?: PhonemeChunk[] };
+}
+
+// Teach me this thing -------------------------------------------------------
+
+export interface LookAngle {
+  /** One of the learner's subjects, or "everyday". */
+  subject: string;
+  /** Fenny's opening question: curious, naive, asks them to explain. */
+  question: string;
+  /** The topic card title. */
+  topic: string;
+}
+
+export interface Look {
+  thing: string;
+  clear: boolean;
+  retry: string;
+  reaction: string;
+  angles: LookAngle[];
+}
+
+/** One photo of a real thing: what it is and how Fenny would ask about it, for these subjects. */
+export async function lookAt(input: { image: string; subjects: string[]; guess?: string }, signal?: AbortSignal): Promise<Look> {
+  if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in apps/mobile/.env");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/look`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify(input),
+    signal,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((body as { error?: string }).error ?? `Server returned ${res.status}`);
+  return (body as { look: Look }).look;
 }

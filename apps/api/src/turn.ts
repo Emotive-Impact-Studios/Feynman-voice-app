@@ -2,6 +2,7 @@ import { askStudent, GeminiError, type PastTurn } from "./gemini";
 import { askStudentOpenAI, ProviderError } from "./openai";
 import { costOf, openAIPricesFromEnv, pricesFromEnv, wavSeconds, type CostLine } from "./pricing";
 import { toSpeechChunks } from "./speech";
+import { speakable } from "./speakable";
 
 const MAX_AUDIO_BYTES = 3 * 1024 * 1024; // keeps us under the 4.5MB serverless body limit once base64 encoded
 const ALLOWED_MIME = new Set(["audio/wav", "audio/x-wav", "audio/aac", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/flac", "audio/webm"]);
@@ -85,6 +86,7 @@ export async function handleTurn(req: Request, env: Env = process.env, fetchImpl
     throw e;
   }
   const brainMs = Date.now() - t0;
+  question = speakable(question) || question;
   const speech = await toSpeechChunks(question);
   const phonemeMs = Date.now() - t0 - brainMs;
 

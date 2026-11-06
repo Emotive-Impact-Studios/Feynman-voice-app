@@ -31,6 +31,19 @@ writeFileSync(`${fn}/.vc-config.json`, JSON.stringify(config, null, 2));
 const live = `${out}/functions/api/live-turn.func`;
 cpSync(fn, live, { recursive: true });
 writeFileSync(`${live}/.vc-config.json`, JSON.stringify({ ...config, supportsResponseStreaming: true }, null, 2));
+// Lessons take longer to write, so they get their own function with more time.
+const lesson = `${out}/functions/api/lesson.func`;
+cpSync(fn, lesson, { recursive: true });
+writeFileSync(`${lesson}/.vc-config.json`, JSON.stringify({ ...config, maxDuration: 60 }, null, 2));
+// One line spoken on its own (the call's opening question, a lesson bite).
+const speak = `${out}/functions/api/speak.func`;
+cpSync(fn, speak, { recursive: true });
+// Teach me this thing: one photo in, what it is and Fenny's question out.
+cpSync(fn, `${out}/functions/api/look.func`, { recursive: true });
+// One scanned page of notes, read by a vision model. Handwriting can take a while.
+const readPage = `${out}/functions/api/read-page.func`;
+cpSync(fn, readPage, { recursive: true });
+writeFileSync(`${readPage}/.vc-config.json`, JSON.stringify({ ...config, maxDuration: 60 }, null, 2));
 // The iPhone voice model, served as static files for the app to download.
 if (process.env.SKIP_PHONON_BUNDLE !== "1") {
   const { out: dir, files } = await writePhononBundle(`${out}/static`);

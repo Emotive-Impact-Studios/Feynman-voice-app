@@ -16,6 +16,21 @@ export interface TopicRecord {
   sessions: number;
   /** How many questions the student asked. */
   questions: number;
+  /** What they want to be able to explain, in their own words. */
+  goal?: string;
+  /** The topic's key ideas (from Fenny's engine) and the ids they have explained. */
+  ideas?: KeyIdea[];
+  known?: string[];
+  /** Ideas first explained in the latest session, so the topic page can light them up. */
+  fresh?: string[];
+}
+
+export interface KeyIdea {
+  id: string;
+  /** The idea itself (the answer). */
+  idea: string;
+  /** A short name for it that doesn't give the answer away. */
+  label?: string;
 }
 
 export interface Profile {
@@ -24,9 +39,22 @@ export interface Profile {
   subjects: string[];
   secondsUsed: number;
   topics: TopicRecord[];
+  /** Local day numbers on which they explained something, for the soft streak. */
+  days: number[];
+  /** How a session shows the conversation: the light, subtitles or the full chat. */
+  sessionView: SessionViewPref;
+  /** Fenny's voice: Cartesia Sonic from the server, or Phonon downloaded to the phone. */
+  voice?: VoicePref;
+  /** Trial: shorter wait after they stop, cut in by voice on headphones, timings shown. */
+  fastReplies?: boolean;
+  /** Teach me this thing: the photo behind a topic, by lower-case title (a file in the app's documents). */
+  photos?: Record<string, string>;
 }
 
-const EMPTY: Profile = { introDone: false, name: "", subjects: [], secondsUsed: 0, topics: [] };
+export type SessionViewPref = "light" | "subtitles" | "chat";
+export type VoicePref = "sonic" | "phonon";
+
+const EMPTY: Profile = { introDone: false, name: "", subjects: [], secondsUsed: 0, topics: [], days: [], sessionView: "light" };
 const file = new File(Paths.document, "profile.json");
 
 function load(): Profile {
@@ -69,23 +97,97 @@ export function finishIntro(name: string, subjects: string[]) {
   set({ ...state, introDone: true, name: name.trim(), subjects });
 }
 
+/** Remember how sessions should look, from Me or from the session's own menu. */
+export function setSessionView(view: SessionViewPref) {
+  if (state.sessionView !== view) set({ ...state, sessionView: view });
+}
+
+/** Remember Fenny's voice (Settings in Me). */
+export function setVoice(voice: VoicePref) {
+  if (state.voice !== voice) set({ ...state, voice });
+}
+
+export function setFastReplies(on: boolean) {
+  if (!!state.fastReplies !== on) set({ ...state, fastReplies: on });
+}
+
+/** Teach me this thing: remember the photo a topic started from, for its card in Topics. */
+export function setTopicPhoto(title: string, uri: string) {
+  const key = title.trim().toLowerCase();
+  if (!key || state.photos?.[key] === uri) return;
+  set({ ...state, photos: { ...state.photos, [key]: uri } });
+}
+
+export function photoFor(p: Profile, title: string): string | undefined {
+  return p.photos?.[title.trim().toLowerCase()];
+}
+
 export function replayIntro() {
   set({ ...state, introDone: false });
 }
 
 /** Record a finished session. Sessions with no speaking are not saved. */
-export function recordSession(title: string, seconds: number, questions: number) {
+export function recordSession(
+  title: string,
+  seconds: number,
+  questions: number,
+  goal?: string,
+  map?: { ideas: KeyIdea[]; covered: string[] },
+) {
   const t = title.trim();
   if (!t || seconds < 1) return;
-  const old = state.topics.find((x) => x.title.toLowerCase() === t.toLowerCase());
-  const rec: TopicRecord = old
-    ? { ...old, at: Date.now(), seconds: old.seconds + seconds, sessions: old.sessions + 1, questions: old.questions + questions }
-    : { title: t, at: Date.now(), seconds, sessions: 1, questions };
+  const old = findTopic(t);
+  const g = goal?.trim() || old?.goal;
+  const base: TopicRecord = old
+    ? { ...old, at: Date.now(), seconds: old.seconds + seconds, sessions: old.sessions + 1, questions: old.questions + questions, goal: g }
+    : { title: t, at: Date.now(), seconds, sessions: 1, questions, goal: g };
+  const rec = map ? { ...base, ...mergeIdeas(old, map) } : { ...base, fresh: [] };
+  const today = dayNumber(Date.now());
   set({
     ...state,
     secondsUsed: state.secondsUsed + seconds,
     topics: [rec, ...state.topics.filter((x) => x !== old)],
+    days: state.days.includes(today) ? state.days : [...state.days, today].slice(-120),
   });
+}
+
+/**
+ * The topic's ideas after a session. The server builds the checklist once per
+ * topic, so it is normally the same list each time and what they knew adds up.
+ * If it came back different (the server restarted), the new list starts over
+ * with what they explained this time. Lasting maps come with accounts.
+ */
+function mergeIdeas(old: TopicRecord | undefined, map: { ideas: KeyIdea[]; covered: string[] }): Pick<TopicRecord, "ideas" | "known" | "fresh"> {
+  const same = !!old?.ideas && old.ideas.length === map.ideas.length && old.ideas.every((k, i) => k.idea === map.ideas[i].idea);
+  const before = same ? (old?.known ?? []) : [];
+  const fresh = map.covered.filter((id) => !before.includes(id));
+  return { ideas: map.ideas, known: [...before, ...fresh], fresh };
+}
+
+export function findTopic(title: string): TopicRecord | undefined {
+  const t = title.trim().toLowerCase();
+  return state.topics.find((x) => x.title.toLowerCase() === t);
+}
+
+/**
+ * Days in a row you explained something, forgiving one missed day in any
+ * seven. Today only counts once you've explained, and an empty today never
+ * breaks the streak. A soft streak: missing a day is fine, not a reset.
+ */
+export function softStreak(days: number[], today = dayNumber(Date.now())): number {
+  const seen = new Set(days);
+  if (!seen.size) return 0;
+  const first = Math.min(...days);
+  let d = seen.has(today) ? today : today - 1;
+  let streak = 0;
+  const misses: number[] = [];
+  while (d >= first) {
+    if (seen.has(d)) streak++;
+    else if (misses.some((m) => m - d < 7)) break;
+    else misses.push(d);
+    d--;
+  }
+  return streak;
 }
 
 /** Whole minutes left, counting any seconds spoken in a session not yet saved. */
@@ -103,7 +205,7 @@ export function ago(at: number) {
 }
 
 // Local calendar day as a whole number, so clock changes can't shift it.
-function dayNumber(t: number) {
+export function dayNumber(t: number) {
   const d = new Date(t);
   return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
 }
@@ -125,3 +227,43 @@ export const SUBJECTS: [string, string][] = [
   ["cs", "Computer science"],
   ["other", "Something else"],
 ];
+
+/** One run of the Today sentence; `hl` runs are the numbers that get a dotted underline. */
+export interface SentencePart {
+  text: string;
+  hl?: "num" | "gap";
+}
+
+/**
+ * Today's opening sentence, built only from what the phone really knows:
+ * "Evening, Ama. Yesterday you taught Fenny 2 topics." The gap clause
+ * ("It caught 5 gaps, and 3 are ready to explain again.") appears once gap
+ * analysis (build step 4) passes real counts in.
+ */
+export function todaySentence(p: Profile, gaps?: { caught: number; due: number }, now = Date.now()): SentencePart[] {
+  const parts: SentencePart[] = [{ text: `${greeting(new Date(now))}${p.name ? `, ${p.name}` : ""}. ` }];
+  const last = p.topics[0];
+  if (!last) {
+    parts.push({ text: "Fenny is ready for your first topic." });
+    return parts;
+  }
+  const day = dayNumber(last.at);
+  const that = p.topics.filter((t) => dayNumber(t.at) === day);
+  parts.push({ text: `${dayWord(last.at, now)} you taught Fenny ` });
+  parts.push(that.length === 1 ? { text: that[0].title, hl: "num" } : { text: `${that.length} topics`, hl: "num" });
+  if (gaps && gaps.caught > 0) {
+    parts.push({ text: ". It caught " }, { text: `${gaps.caught} ${gaps.caught === 1 ? "gap" : "gaps"}`, hl: "gap" });
+    if (gaps.due > 0) parts.push({ text: ", and " }, { text: `${gaps.due} ${gaps.due === 1 ? "is" : "are"}`, hl: "num" }, { text: " ready to explain again." });
+    else parts.push({ text: "." });
+  } else parts.push({ text: "." });
+  return parts;
+}
+
+/** "Today", "Yesterday", "On Tuesday", "On 3 Nov". */
+export function dayWord(at: number, now = Date.now()) {
+  const days = dayNumber(now) - dayNumber(at);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `On ${new Date(at).toLocaleDateString("en-GB", { weekday: "long" })}`;
+  return `On ${new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+}

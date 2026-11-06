@@ -45,6 +45,14 @@ async function events(res: Response) {
 }
 
 describe("SentenceSplitter", () => {
+  it("keeps a short reaction on its own when asked to", () => {
+    const s = new SentenceSplitter(4);
+    expect([...s.push("Oh, nice. So why does the plant need light at all? "), ...s.flush()]).toEqual([
+      "Oh, nice.",
+      "So why does the plant need light at all?",
+    ]);
+  });
+
   it("releases whole sentences as text streams in", () => {
     const s = new SentenceSplitter();
     expect(s.push("Wait, what does ")).toEqual([]);
@@ -68,7 +76,7 @@ describe("sttProvider", () => {
 });
 
 describe("POST /api/live-turn", () => {
-  const env = { BRAIN: "openai", OPENAI_API_KEY: "k", PROTOTYPE_TOKEN: "t" };
+  const env = { BRAIN: "openai", OPENAI_API_KEY: "k", PROTOTYPE_TOKEN: "t", FENNY_ENGINE: "off" };
 
   it("rejects a missing token", async () => {
     const res = await handleLiveTurn(request(audio, "wrong"), env);
@@ -104,6 +112,76 @@ describe("POST /api/live-turn", () => {
     expect(chat.messages[0].content).not.toContain("transcript of what the student said");
   });
 
+  it("runs the engine by default and streams its move and cost", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith("/audio/transcriptions")) return Response.json({ text: "Osmosis is water moving across a membrane." });
+      const b = JSON.parse(String(init!.body));
+      const reply =
+        b.response_format.json_schema.name === "key_ideas"
+          ? { ideas: [{ idea: "Water moves from dilute to concentrated", label: "which way water moves" }, { idea: "The membrane lets water through", label: "what the membrane does" }] }
+          : { move: "next", verdict: "partly", say: "Ooh, so which way does the water go?", covered: ["k2"], stuck_on: "" };
+      return Response.json({ choices: [{ message: { content: JSON.stringify(reply) } }], usage: { prompt_tokens: 300, completion_tokens: 20 } });
+    }) as unknown as typeof fetch;
+    const res = await handleLiveTurn(request({ ...audio, topic: "Osmosis engine test" }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
+    const ev = await events(res);
+    // First turn: Fenny says up front what it wants to understand, then asks.
+    expect(ev.map((e) => e.type)).toEqual(["transcript", "engine", "sentence", "sentence", "sentence", "done"]);
+    expect(ev[1]).toMatchObject({ type: "engine", move: "next", covered: ["k2"], verdict: "partly" });
+    expect(ev[3].text).toBe("By the end I want to understand two things: which way water moves and what the membrane does.");
+    expect(ev[4].text).toBe("Ooh, so which way does the water go?");
+    // Speech to text, the key ideas (first turn on this topic) and the turn.
+    expect(ev[5].cost.lines).toHaveLength(3);
+  });
+
+  it("never sends a dash to the voice, even if the model writes one", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith("/audio/transcriptions")) return Response.json({ text: "Osmosis is water moving." });
+      const b = JSON.parse(String(init!.body));
+      const reply =
+        b.response_format.json_schema.name === "key_ideas"
+          ? { ideas: [{ idea: "Water moves from dilute to concentrated" }] }
+          : { move: "next", say: "Ooh — so which way does the water go?", covered: [], stuck_on: "" };
+      return Response.json({ choices: [{ message: { content: JSON.stringify(reply) } }], usage: { prompt_tokens: 300, completion_tokens: 20 } });
+    }) as unknown as typeof fetch;
+    const history = [
+      { speaker: "learner" as const, text: "Osmosis is about water." },
+      { speaker: "student" as const, text: "Ooh, what does the water do?" },
+    ];
+    const res = await handleLiveTurn(request({ ...audio, history, topic: "Osmosis dash test" }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
+    const ev = await events(res);
+    const sentence = ev.find((e) => e.type === "sentence")!;
+    expect(sentence.text).toBe("Ooh, so which way does the water go?");
+    expect(ev.find((e) => e.type === "done")!.question).toBe("Ooh, so which way does the water go?");
+  });
+
+  it("holds the turn when the learner stops mid-thought and the phone can wait", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith("/audio/transcriptions")) return Response.json({ text: "Osmosis is when water moves and." });
+      const b = JSON.parse(String(init!.body));
+      expect(b.response_format.json_schema.name).toBe("key_ideas");
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ ideas: [{ idea: "Water moves" }] }) } }], usage: { prompt_tokens: 300, completion_tokens: 20 } });
+    }) as unknown as typeof fetch;
+    const res = await handleLiveTurn(request({ ...audio, topic: "Osmosis wait test", features: ["wait"] }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
+    const ev = await events(res);
+    expect(ev.map((e) => e.type)).toEqual(["transcript", "engine", "done"]);
+    expect(ev[1]).toEqual({ type: "engine", move: "wait" });
+    expect(ev[2].question).toBe("");
+    // Speech to text and the key ideas, but no turn.
+    expect(ev[2].cost.lines).toHaveLength(2);
+  });
+
+  it("says a short 'Go on.' to phones that cannot wait yet", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).endsWith("/audio/transcriptions")) return Response.json({ text: "So the membrane is, um" });
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ ideas: [{ idea: "Water moves" }] }) } }], usage: { prompt_tokens: 300, completion_tokens: 20 } });
+    }) as unknown as typeof fetch;
+    const res = await handleLiveTurn(request({ ...audio, topic: "Osmosis go on test" }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
+    const ev = await events(res);
+    expect(ev.find((e) => e.type === "sentence")!.text).toBe("Go on.");
+    expect(ev.find((e) => e.type === "engine")!.move).toBe("listen");
+    expect(ev.find((e) => e.type === "done")!.question).toBe("Go on.");
+  });
+
   it("hears with Ink and speaks with Sonic when Cartesia is set up", async () => {
     const pcm = new Uint8Array([1, 0, 2, 0]);
     const calls: string[] = [];
@@ -118,6 +196,7 @@ describe("POST /api/live-turn", () => {
         const b = JSON.parse(String(init!.body));
         expect(b.model_id).toBe("sonic-3.6");
         expect(b.output_format).toEqual({ container: "raw", encoding: "pcm_s16le", sample_rate: 24000 });
+        expect(b.generation_config).toEqual({ speed: 1 });
         return new Response(pcm, { status: 200 });
       }
       return chatStream(["Pressure from what, though?"]);

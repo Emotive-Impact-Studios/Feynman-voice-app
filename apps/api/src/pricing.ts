@@ -75,3 +75,17 @@ export function wavSeconds(bytes: Uint8Array): number | null {
   const byteRate = v.getUint32(28, true);
   return byteRate ? (bytes.length - 44) / byteRate : null;
 }
+
+/** Claude prices per million tokens (in, cached in, out), checked 2026-11-06. */
+export const CLAUDE_PRICES: Record<string, { in: number; cachedIn: number; out: number }> = {
+  "claude-haiku-5-5": { in: 0.1, cachedIn: 0.01, out: 0.5 },
+  "claude-sonnet-5-5": { in: 2, cachedIn: 0.2, out: 10 },
+  "claude-opus-5-5": { in: 4, cachedIn: 0.2, out: 20 },
+};
+
+/** Chat prices for a model, in openAIPricesFromEnv's shape, so cost lines work for either provider. */
+export function chatPricesFor(model: string, env: Record<string, string | undefined> = process.env) {
+  const base = openAIPricesFromEnv(env);
+  const c = CLAUDE_PRICES[model];
+  return c ? { ...base, chatInPerM: c.in, chatCachedInPerM: c.cachedIn, chatOutPerM: c.out } : base;
+}

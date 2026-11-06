@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BargeIn, EndOfTurn, fromBase64, NdjsonReader, pcm16ToFloat32, toBase64 } from "../src/index";
+import { BargeIn, EndOfTurn, fromBase64, NdjsonReader, pcm16ToFloat32, quietAfter, toBase64 } from "../src/index";
 
 const tick = 0.1; // seconds per buffer
 
@@ -27,6 +27,29 @@ describe("EndOfTurn", () => {
     t.push(true, 0.2);
     for (let i = 0; i < 30; i++) expect(t.push(false, tick)).toBe(false);
     expect(t.hasSpeech).toBe(false);
+  });
+
+  it("waits longer once given more quiet", () => {
+    const t = new EndOfTurn(1.2, 0.6);
+    t.setSilence(2.5);
+    for (let i = 0; i < 10; i++) t.push(true, tick);
+    for (let i = 0; i < 20; i++) expect(t.push(false, tick)).toBe(false); // 2s: still thinking
+    for (let i = 0; i < 4; i++) t.push(false, tick);
+    expect(t.push(false, tick)).toBe(true);
+  });
+});
+
+describe("quietAfter", () => {
+  it("gives why and how questions thinking time", () => {
+    expect(quietAfter("Why does the price go up?")).toBe(3);
+    expect(quietAfter("So how would that work?")).toBe(3);
+    expect(quietAfter("What is an enzyme?")).toBe(2);
+    expect(quietAfter("Is that the same as showing?")).toBe(2);
+  });
+
+  it("waits less in the faster-replies trial", () => {
+    expect(quietAfter("Why does the price go up?", true)).toBe(2);
+    expect(quietAfter("What is an enzyme?", true)).toBe(1.2);
   });
 });
 

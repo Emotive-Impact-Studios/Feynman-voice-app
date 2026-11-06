@@ -1,9 +1,46 @@
+diff --git a/node_modules/expo-audio/ios/AudioModule.swift b/node_modules/expo-audio/ios/AudioModule.swift
+index 42ce9e8..6430a53 100644
+--- a/node_modules/expo-audio/ios/AudioModule.swift
++++ b/node_modules/expo-audio/ios/AudioModule.swift
+@@ -994,6 +994,10 @@ public class AudioModule: Module {
+     if registry.allPlayables.contains(where: { $0.isPlaying }) {
+       return true
+     }
++    // Feynman patch: an open mic stream needs the session too.
++    if AudioStream.liveCount.current > 0 {
++      return true
++    }
+     #if os(iOS)
+     return registry.allRecorders.values.contains { $0.isRecording }
+     #else
 diff --git a/node_modules/expo-audio/ios/AudioStream.swift b/node_modules/expo-audio/ios/AudioStream.swift
-index 1534fe5..576bbdb 100644
+index 1534fe5..a3745b9 100644
 --- a/node_modules/expo-audio/ios/AudioStream.swift
 +++ b/node_modules/expo-audio/ios/AudioStream.swift
-@@ -34,7 +34,15 @@ class AudioStream: SharedObject {
+@@ -16,7 +16,17 @@ class AudioStream: SharedObject {
+ 
+   private(set) var sampleRate: Double = 0
+   private(set) var channels: Int = 0
+-  private(set) var isStreaming: Bool = false
++  private(set) var isStreaming: Bool = false {
++    // Feynman patch: count open mic streams, so a player finishing does not
++    // switch the audio session off underneath one (that silenced the mic
++    // after the student's first reply).
++    didSet {
++      if isStreaming != oldValue {
++        AudioStream.liveCount.withLock { $0 += isStreaming ? 1 : -1 }
++      }
++    }
++  }
++  static let liveCount = StreamCounter()
+   private var startTimestamp: AVAudioTime?
+ 
+   private var fileWriter: AudioStreamFileWriter?
+@@ -32,15 +42,55 @@ class AudioStream: SharedObject {
+ 
+   func start() throws {
      guard !isStreaming else { return }
++    generation += 1
  
      let session = AVAudioSession.sharedInstance()
 -    try session.setCategory(.record, mode: .measurement)
@@ -15,7 +52,163 @@ index 1534fe5..576bbdb 100644
 +#else
 +    options.insert(.allowBluetooth)
 +#endif
-+    try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
++    // .default, not .voiceChat or .videoChat: both of those use the quieter
++    // call volume and speech tuning, so the student was faint (builds 10, 11).
++    // .default plays at full media volume out of the loudspeaker.
++    try session.setCategory(.playAndRecord, mode: .default, options: options)
      try session.setPreferredSampleRate(requestedSampleRate)
      try session.setActive(true)
++    routeToSpeakerIfReceiver(session)
++
++    try startEngine()
++    isStreaming = true
++    emitStatus()
++  }
++
++  // Feynman patch: with no headphones or Bluetooth, play out of the
++  // loudspeaker, never the earpiece at the top of the phone.
++  private func routeToSpeakerIfReceiver(_ session: AVAudioSession) {
++    if session.currentRoute.outputs.contains(where: { $0.portType == .builtInReceiver }) {
++      try? session.overrideOutputAudioPort(.speaker)
++    }
++  }
++
++  // Feynman patch: iOS stops an AVAudioEngine when the audio route or
++  // hardware format changes (as it can when the student's voice starts or
++  // stops playing). Without a restart the mic went silent after the first
++  // reply. So the engine is built here, and built again on a change.
++  private var configObserver: NSObjectProtocol?
++  // Bumped on every start and stop, so a restart retry left over from an
++  // earlier run never touches a newer one.
++  private var generation = 0
  
++  private func startEngine() throws {
+     let engine = AVAudioEngine()
+     let inputNode = engine.inputNode
+     let hardwareFormat = inputNode.outputFormat(forBus: 0)
++    // Mid route change the input can briefly report no format; a tap on it would crash.
++    guard hardwareFormat.sampleRate > 0, hardwareFormat.channelCount > 0 else {
++      throw AudioStreamException("The microphone is not ready yet.")
++    }
+ 
+     let targetSampleRate = requestedSampleRate
+     let targetChannels = AVAudioChannelCount(requestedChannels)
+@@ -69,9 +119,8 @@ class AudioStream: SharedObject {
+         channels = Int(hardwareFormat.channelCount)
+         setupTapWithoutConversion(engine: engine, inputNode: inputNode, format: hardwareFormat)
+         self.audioEngine = engine
++        observeConfigChanges(engine)
+         try engine.start()
+-        isStreaming = true
+-        emitStatus()
+         return
+       }
+       self.converter = conv
+@@ -98,13 +147,72 @@ class AudioStream: SharedObject {
+     }
+ 
+     self.audioEngine = engine
++    observeConfigChanges(engine)
+     try engine.start()
+-    isStreaming = true
+-    emitStatus()
++  }
++
++  private func observeConfigChanges(_ engine: AVAudioEngine) {
++    if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
++    configObserver = NotificationCenter.default.addObserver(
++      forName: .AVAudioEngineConfigurationChange,
++      object: engine,
++      queue: .main
++    ) { [weak self] _ in
++      guard let self else { return }
++      self.restartEngine(generation: self.generation)
++    }
++  }
++
++  private func tearDownEngine() {
++    if let configObserver {
++      NotificationCenter.default.removeObserver(configObserver)
++      self.configObserver = nil
++    }
++    audioEngine?.inputNode.removeTap(onBus: 0)
++    audioEngine?.stop()
++    audioEngine = nil
++    converter = nil
++  }
++
++  private func restartEngine(generation: Int, attempt: Int = 0) {
++    guard isStreaming, generation == self.generation else { return }
++    tearDownEngine()
++    do {
++      try startEngine()
++      routeToSpeakerIfReceiver(AVAudioSession.sharedInstance())
++    } catch {
++      // The new route may not be ready yet: try again shortly, then give up.
++      if attempt < 3 {
++        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
++          self?.restartEngine(generation: generation, attempt: attempt + 1)
++        }
++        return
++      }
++      // Give up: the stream ends as if stop() were called, so JS hears it
++      // stopped and any file recording is finished.
++      self.generation += 1
++      isStreaming = false
++      startTimestamp = nil
++      emitStatus()
++      finishFileRecording()
++    }
++  }
++
++  private func finishFileRecording() {
++    fileWriterQueue.sync {
++      _ = try? self.fileWriter?.finish()
++      self.fileWriter = nil
++      self.fileWriterError = nil
++    }
+   }
+ 
+   func stop() {
+     guard isStreaming else { return }
++    generation += 1
++    if let configObserver {
++      NotificationCenter.default.removeObserver(configObserver)
++      self.configObserver = nil
++    }
+     audioEngine?.inputNode.removeTap(onBus: 0)
+     audioEngine?.stop()
+     audioEngine = nil
+@@ -116,11 +224,7 @@ class AudioStream: SharedObject {
+     // Auto-finalize any in-progress file recording.
+     // removeTap above ensures no more data is dispatched to fileWriterQueue;
+     // syncing on the queue drains any appends already in flight before closing the writer.
+-    fileWriterQueue.sync {
+-      _ = try? self.fileWriter?.finish()
+-      self.fileWriter = nil
+-      self.fileWriterError = nil
+-    }
++    finishFileRecording()
+   }
+ 
+   func startFileRecording(url: URL, format: AudioStreamFileFormat) throws -> String {
+@@ -285,3 +389,19 @@ internal final class AudioStreamException: GenericException<String> {
+     param
+   }
+ }
++
++/// Feynman patch: a tiny thread-safe counter for open mic streams.
++final class StreamCounter: @unchecked Sendable {
++  private var value = 0
++  private let lock = NSLock()
++  func withLock(_ body: (inout Int) -> Void) {
++    lock.lock()
++    body(&value)
++    lock.unlock()
++  }
++  var current: Int {
++    lock.lock()
++    defer { lock.unlock() }
++    return value
++  }
++}
