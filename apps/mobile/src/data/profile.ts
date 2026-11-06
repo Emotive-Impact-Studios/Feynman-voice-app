@@ -30,9 +30,12 @@ export interface Profile {
   days: number[];
   /** How a session shows the conversation: the light, subtitles or the full chat. */
   sessionView: SessionViewPref;
+  /** Fenny's voice: Cartesia Sonic from the server, or Phonon downloaded to the phone. */
+  voice?: VoicePref;
 }
 
 export type SessionViewPref = "light" | "subtitles" | "chat";
+export type VoicePref = "sonic" | "phonon";
 
 const EMPTY: Profile = { introDone: false, name: "", subjects: [], secondsUsed: 0, topics: [], days: [], sessionView: "light" };
 const file = new File(Paths.document, "profile.json");
@@ -80,6 +83,11 @@ export function finishIntro(name: string, subjects: string[]) {
 /** Remember how sessions should look, from Me or from the session's own menu. */
 export function setSessionView(view: SessionViewPref) {
   if (state.sessionView !== view) set({ ...state, sessionView: view });
+}
+
+/** Remember Fenny's voice (Settings in Me). */
+export function setVoice(voice: VoicePref) {
+  if (state.voice !== voice) set({ ...state, voice });
 }
 
 export function replayIntro() {
