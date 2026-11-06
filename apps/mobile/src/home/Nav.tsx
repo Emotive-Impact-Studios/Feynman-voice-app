@@ -83,9 +83,9 @@ export function Nav({ bottom, tab, onChange, onStart, width }: { bottom: number;
         ))}
       </Glass>
       <Press accessibilityRole="button" accessibilityLabel="Start explaining something new" onPress={onStart}>
-        <Glass strong blur={30} style={[styles.navLight, styles.solidBar]}>
+        <View style={[styles.navLight, styles.solidBar]}>
           <LivingLight size={40} />
-        </Glass>
+        </View>
       </Press>
     </View>
     </>
@@ -97,9 +97,9 @@ const styles = StyleSheet.create({
   minutes: { height: 36, borderRadius: 999, paddingHorizontal: 12, justifyContent: "center" },
   avatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colour.glass },
   scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: 170 },
-  solidBar: { backgroundColor: "rgba(16,17,20,0.88)" },
+  solidBar: { backgroundColor: "rgba(22,24,28,0.94)" },
   nav: { position: "absolute", left: 16, right: 16, flexDirection: "row", gap: 10 },
   navBar: { flex: 1, height: NAV_HEIGHT, borderRadius: 999, flexDirection: "row", alignItems: "center", padding: 6 },
   navItem: { flex: 1, height: 52, alignItems: "center", justifyContent: "center" },
-  navLight: { width: NAV_HEIGHT, height: NAV_HEIGHT, borderRadius: 999, alignItems: "center", justifyContent: "center" },
+  navLight: { width: NAV_HEIGHT, height: NAV_HEIGHT, borderRadius: 999, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
 });

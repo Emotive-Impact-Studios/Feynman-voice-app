@@ -1,11 +1,12 @@
 // Small shared pieces: type, glass, buttons, backgrounds, icons.
 import type { ReactNode } from "react";
+import { BUTTON_SHADOW, LIT_BG, SOFT_BG } from "./Soft";
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { colour, font, radius } from "../theme";
-import { FennyAura } from "./FennyAura";
+import { FennyAura, type AuraScene } from "./FennyAura";
 import { Press } from "./Press";
 
 export const images = {
@@ -62,23 +63,22 @@ export function Label({ children, tone = "muted", style }: { children: ReactNode
 }
 
 /**
- * A glass surface: a soft fill lit from the top and a one-pixel highlight
- * along the top edge, with no outline. `strong` is the denser glass for bars.
+ * A glass surface: a soft blurred fill with no outline and no top edge.
+ * `strong` is the denser glass for bars.
  */
 export function Glass({ children, style, strong, blur = 28 }: { children?: ReactNode; style?: StyleProp<ViewStyle>; strong?: boolean; blur?: number }) {
   return (
     <View style={[styles.glass, strong && { backgroundColor: colour.glassStrong }, style]}>
       <BlurView intensity={blur} tint="dark" style={StyleSheet.absoluteFill} />
       {!strong && <LinearGradient pointerEvents="none" colors={["rgba(255,255,255,0.055)", "rgba(255,255,255,0.025)"]} style={StyleSheet.absoluteFill} />}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.topLight, strong && { borderTopColor: "rgba(255,255,255,0.06)" }]} />
       {children}
     </View>
   );
 }
 
-/** The living background: slow blurred lights drawn in code (see FennyAura). */
-export function Backdrop() {
-  return <FennyAura />;
+/** The living background: drifting blurred lights drawn in code, placed per screen (see FennyAura). */
+export function Backdrop({ scene }: { scene?: AuraScene }) {
+  return <FennyAura scene={scene} />;
 }
 
 export function PillButton({
@@ -102,10 +102,9 @@ export function PillButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       onPress={onPress}
-      style={[styles.pill, solid ? styles.solid : styles.ghost, style]}
+      style={[styles.pill, solid ? styles.solid : styles.ghost, style, StyleSheet.flatten(style)?.backgroundColor === "transparent" && styles.flat]}
     >
-      {/* The primary button is soft silver, lit from above, not flat white. */}
-      {solid && <LinearGradient pointerEvents="none" colors={["#E6E8EC", "#CDD1D8"]} style={[StyleSheet.absoluteFill, styles.solidFill]} />}
+      {/* Solid soft silver (primary) or solid graphite: no bevel, no edge. */}
       {children ?? (
         <T size={15} weight={solid ? "semibold" : "regular"} tone={solid ? "dark" : "text"} style={solid ? undefined : { color: "#D6D9DE" }}>
           {label}
@@ -122,7 +121,7 @@ export function RoundButton({ onPress, label, children, size = 48, on }: { onPre
       accessibilityLabel={label}
       accessibilityState={on === undefined ? undefined : { expanded: on }}
       onPress={onPress}
-      style={[styles.round, { width: size, height: size }, on && { backgroundColor: "rgba(255,255,255,0.18)" }]}
+      style={[styles.round, { width: size, height: size }, on && { backgroundColor: "#34383F" }]}
     >
       {children}
     </Press>
@@ -169,19 +168,10 @@ export function Icon({ name, size = 20, color = colour.text }: { name: IconName;
 
 const styles = StyleSheet.create({
   glass: { borderRadius: radius.card, overflow: "hidden" },
-  // Only the top edge catches the light.
-  topLight: { borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.07)" },
-  pill: { height: 56, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", paddingHorizontal: 20, overflow: "hidden" },
-  solid: {
-    backgroundColor: "#D9DCE1",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.6)",
-    shadowColor: "#000",
-    shadowOpacity: 0.6,
-    shadowRadius: 9,
-    shadowOffset: { width: 0, height: 6 },
-  },
-  solidFill: { borderRadius: radius.pill },
-  ghost: { backgroundColor: "rgba(255,255,255,0.06)" },
-  round: { borderRadius: 999, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
+  // Solid buttons on a soft shadow (see Soft): no overflow clip, or iOS drops the shadow.
+  pill: { height: 56, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", paddingHorizontal: 20, ...BUTTON_SHADOW },
+  solid: { backgroundColor: LIT_BG },
+  ghost: { backgroundColor: SOFT_BG },
+  flat: { shadowOpacity: 0, elevation: 0 },
+  round: { borderRadius: 999, backgroundColor: SOFT_BG, alignItems: "center", justifyContent: "center", ...BUTTON_SHADOW },
 });

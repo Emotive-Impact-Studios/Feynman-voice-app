@@ -26,7 +26,7 @@ export default function Home() {
 
   return (
     <View style={homeStyles.root}>
-      <Backdrop />
+      <Backdrop scene={tab} />
       <ScreenIn key={tab}>
         {tab === "today" && <Today {...common} onNew={onNew} onTopic={onTopic} />}
         {tab === "topics" && <Topics {...common} onNew={onNew} onTopic={onTopic} />}

@@ -52,10 +52,10 @@ index 1534fe5..a3745b9 100644
 +#else
 +    options.insert(.allowBluetooth)
 +#endif
-+    // .videoChat, not .voiceChat: both tune the mic for speech, but
-+    // .voiceChat played the student very faintly, like a phone call held to
-+    // the ear. .videoChat is the speakerphone mode.
-+    try session.setCategory(.playAndRecord, mode: .videoChat, options: options)
++    // .default, not .voiceChat or .videoChat: both of those use the quieter
++    // call volume and speech tuning, so the student was faint (builds 10, 11).
++    // .default plays at full media volume out of the loudspeaker.
++    try session.setCategory(.playAndRecord, mode: .default, options: options)
      try session.setPreferredSampleRate(requestedSampleRate)
      try session.setActive(true)
 +    routeToSpeakerIfReceiver(session)
