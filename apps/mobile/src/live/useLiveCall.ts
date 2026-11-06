@@ -11,7 +11,7 @@ import {
   useAudioStream,
   type AudioStreamBuffer,
 } from "expo-audio";
-import { BargeIn, concatFloat32, EndOfTurn, fromBase64, pcm16ToFloat32, quietAfter, Resampler, SpeechMeter, toBase64, TURN_QUIET_SECONDS } from "@feynman/audio";
+import { BargeIn, concatFloat32, EndOfTurn, FAST_TURN_QUIET_SECONDS, fromBase64, pcm16ToFloat32, quietAfter, Resampler, SpeechMeter, toBase64, TURN_QUIET_SECONDS } from "@feynman/audio";
 import { encodeWav, SAMPLE_RATE as KITTEN_RATE, synthesise } from "@feynman/kitten-tts";
 import { Phonon, PHONON_DEFAULT_VOICE } from "../../modules/phonon";
 import { PHONON_BUNDLE_URL, speakLine, streamLiveTurn, type LiveEars, type LiveEvent, type LiveVoice, type Turn } from "../api";
@@ -36,6 +36,8 @@ export type CallPhase = "loading" | "ready" | "listening" | "thinking" | "speaki
 export interface CallSettings {
   voice: LiveVoice;
   ears: LiveEars;
+  /** Faster-replies trial (Me): shorter wait after they stop, and cut in by voice on headphones. */
+  fast?: boolean;
 }
 
 export interface CallTurnStats {
@@ -47,6 +49,8 @@ export interface CallTurnStats {
   firstWordMs: number;
   transcribeMs: number;
   brainMs: number;
+  /** The quiet the phone waited for before sending the turn. */
+  quietSeconds: number;
 }
 
 /** Phonon runs on iPhone builds only. Elsewhere the on-device voice is Kitten. */
@@ -92,6 +96,10 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const listenFrom = useRef(0);
   // While thinking, the learner may carry on talking: then the turn was not over.
   const carryOn = useRef(new BargeIn(0.015, 0.4));
+  // Faster-replies trial: on headphones the mic can't hear the student, so
+  // talking over it for a moment cuts in, as in a real conversation.
+  const voiceCutIn = useRef(new BargeIn(0.02, 0.35));
+  const onHeadphones = useRef(false);
 
   // Bumped whenever a reply is abandoned (cut in, carried on, ended). Async
   // work checks it after each await and drops out if it has changed.
@@ -130,8 +138,10 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       parts.current.push(down);
       const speech = meter.current.push(down, RATE);
       if (carryOn.current.push(down, RATE) && speech) continueRef.current();
+    } else if (p === "speaking" && onHeadphones.current && settingsRef.current.fast) {
+      if (voiceCutIn.current.push(down, RATE)) interruptRef.current(down);
     }
-    // While the student speaks, the mic is ignored (see listenFrom).
+    // Otherwise, while the student speaks, the mic is ignored (see listenFrom).
   }, []);
 
   const { stream, isStreaming } = useAudioStream({ sampleRate: RATE, channels: 1, encoding: "float32", onBuffer });
@@ -181,6 +191,16 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     endOfTurn.current.setSilence(nextQuiet.current);
     carryOn.current.reset();
     setLiveSpeaking(meter.current.speakingSeconds);
+  };
+
+  /** Headphones on? Asked as Fenny starts each reply, since they can come and go. */
+  const checkHeadphones = () => {
+    voiceCutIn.current.reset();
+    try {
+      onHeadphones.current = !!Phonon?.usesHeadphones?.();
+    } catch {
+      onHeadphones.current = false;
+    }
   };
 
   /** Stop the student talking and drop any reply in flight. */
@@ -253,11 +273,12 @@ export function useLiveCall(topic: string, settings: CallSettings) {
    */
   const sayThenListen = async (text: string) => {
     const id = turnId.current;
+    checkHeadphones();
     setLiveQuestion(text);
     setPhase("speaking");
     await speakOnly(text);
     if (id !== turnId.current) return; // they tapped to cut in, or ended
-    nextQuiet.current = quietAfter(text);
+    nextQuiet.current = quietAfter(text, settingsRef.current.fast);
     resumeListening(true);
   };
   const sayRef = useRef(sayThenListen);
@@ -297,7 +318,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const start = useCallback(
     async (opening?: string) => {
       setError(null);
-      nextQuiet.current = TURN_QUIET_SECONDS;
+      nextQuiet.current = settingsRef.current.fast ? FAST_TURN_QUIET_SECONDS : TURN_QUIET_SECONDS;
       freshTurn();
       resampler.current = null;
       await streamRef.current.start();
@@ -348,6 +369,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     setIsTalking(false);
     setMove(null);
     const quietAt = Date.now();
+    const quietSeconds = nextQuiet.current;
+    checkHeadphones();
     const pcm = concatFloat32(parts.current).subarray(0, MAX_TURN_SECONDS * RATE);
     const speakingSeconds = meter.current.speakingSeconds;
     const chosen = settingsRef.current;
@@ -377,7 +400,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
         spoken = spoken ? `${spoken} ${e.text}` : e.text;
         setLiveQuestion(spoken);
         // Known as soon as it's said, so cutting in mid-question still gets it.
-        nextQuiet.current = quietAfter(spoken);
+        nextQuiet.current = quietAfter(spoken, settingsRef.current.fast);
         if (voice === "phonon") {
           voiced = voiced.then(async () => {
             if (id !== turnId.current) return;
@@ -399,7 +422,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       if (e.type === "done") {
         done = e;
         if (waited) return; // not finished: nothing to record yet
-        nextQuiet.current = quietAfter(e.question);
+        nextQuiet.current = quietAfter(e.question, settingsRef.current.fast);
         setHeardSeconds((n) => n + speakingSeconds);
         setTurns((t) => [...t, { speaker: "learner", text: e.transcript }, { speaker: "student", text: e.question }]);
         if (sent.current?.id === id) sent.current.recorded = true;
@@ -453,6 +476,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
             firstWordMs,
             transcribeMs: d.timingMs.transcribe,
             brainMs: d.timingMs.brain,
+            quietSeconds,
           },
         ]);
       }

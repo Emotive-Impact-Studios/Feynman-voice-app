@@ -46,6 +46,11 @@ describe("quietAfter", () => {
     expect(quietAfter("What is an enzyme?")).toBe(2);
     expect(quietAfter("Is that the same as showing?")).toBe(2);
   });
+
+  it("waits less in the faster-replies trial", () => {
+    expect(quietAfter("Why does the price go up?", true)).toBe(2);
+    expect(quietAfter("What is an enzyme?", true)).toBe(1.2);
+  });
 });
 
 describe("BargeIn", () => {

@@ -32,6 +32,8 @@ export interface Profile {
   sessionView: SessionViewPref;
   /** Fenny's voice: Cartesia Sonic from the server, or Phonon downloaded to the phone. */
   voice?: VoicePref;
+  /** Trial: shorter wait after they stop, cut in by voice on headphones, timings shown. */
+  fastReplies?: boolean;
 }
 
 export type SessionViewPref = "light" | "subtitles" | "chat";
@@ -88,6 +90,10 @@ export function setSessionView(view: SessionViewPref) {
 /** Remember Fenny's voice (Settings in Me). */
 export function setVoice(voice: VoicePref) {
   if (state.voice !== voice) set({ ...state, voice });
+}
+
+export function setFastReplies(on: boolean) {
+  if (!!state.fastReplies !== on) set({ ...state, fastReplies: on });
 }
 
 export function replayIntro() {

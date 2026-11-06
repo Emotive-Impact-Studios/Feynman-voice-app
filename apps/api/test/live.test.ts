@@ -118,17 +118,19 @@ describe("POST /api/live-turn", () => {
       const b = JSON.parse(String(init!.body));
       const reply =
         b.response_format.json_schema.name === "key_ideas"
-          ? { ideas: [{ idea: "Water moves from dilute to concentrated" }, { idea: "The membrane lets water through" }] }
-          : { move: "next", say: "Ooh, so which way does the water go?", covered: ["k2"], stuck_on: "" };
+          ? { ideas: [{ idea: "Water moves from dilute to concentrated", label: "which way water moves" }, { idea: "The membrane lets water through", label: "what the membrane does" }] }
+          : { move: "next", verdict: "partly", say: "Ooh, so which way does the water go?", covered: ["k2"], stuck_on: "" };
       return Response.json({ choices: [{ message: { content: JSON.stringify(reply) } }], usage: { prompt_tokens: 300, completion_tokens: 20 } });
     }) as unknown as typeof fetch;
     const res = await handleLiveTurn(request({ ...audio, topic: "Osmosis engine test" }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
     const ev = await events(res);
-    expect(ev.map((e) => e.type)).toEqual(["transcript", "engine", "sentence", "done"]);
-    expect(ev[1]).toMatchObject({ type: "engine", move: "next", covered: ["k2"] });
-    expect(ev[2].text).toBe("Ooh, so which way does the water go?");
+    // First turn: Fenny says up front what it wants to understand, then asks.
+    expect(ev.map((e) => e.type)).toEqual(["transcript", "engine", "sentence", "sentence", "sentence", "done"]);
+    expect(ev[1]).toMatchObject({ type: "engine", move: "next", covered: ["k2"], verdict: "partly" });
+    expect(ev[3].text).toBe("By the end I want to understand two things: which way water moves and what the membrane does.");
+    expect(ev[4].text).toBe("Ooh, so which way does the water go?");
     // Speech to text, the key ideas (first turn on this topic) and the turn.
-    expect(ev[3].cost.lines).toHaveLength(3);
+    expect(ev[5].cost.lines).toHaveLength(3);
   });
 
   it("never sends a dash to the voice, even if the model writes one", async () => {
@@ -141,7 +143,11 @@ describe("POST /api/live-turn", () => {
           : { move: "next", say: "Ooh — so which way does the water go?", covered: [], stuck_on: "" };
       return Response.json({ choices: [{ message: { content: JSON.stringify(reply) } }], usage: { prompt_tokens: 300, completion_tokens: 20 } });
     }) as unknown as typeof fetch;
-    const res = await handleLiveTurn(request({ ...audio, topic: "Osmosis dash test" }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
+    const history = [
+      { speaker: "learner" as const, text: "Osmosis is about water." },
+      { speaker: "student" as const, text: "Ooh, what does the water do?" },
+    ];
+    const res = await handleLiveTurn(request({ ...audio, history, topic: "Osmosis dash test" }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
     const ev = await events(res);
     const sentence = ev.find((e) => e.type === "sentence")!;
     expect(sentence.text).toBe("Ooh, so which way does the water go?");

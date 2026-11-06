@@ -1,0 +1,51 @@
+# Sends a JavaScript-only change straight to phones that already have a
+# TestFlight build, in a couple of minutes, with no new build. Uses EAS Update
+# (free plan) through EXPO_TOKEN.
+#
+# Only for changes to the app's own code (screens, logic, text). A change to
+# native code (Swift, a new native package, app.json plugins) needs
+# "iOS to TestFlight" instead: phones on an older build ignore updates that
+# don't match their native code, so nothing breaks either way.
+#
+# Run it from the Actions tab: "Update the app" > Run workflow. Close and
+# reopen the app twice: it downloads on the first open and uses it on the next.
+name: Update the app
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "What changed (shown on expo.dev)"
+        type: string
+        default: "Update"
+
+concurrency:
+  group: app-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    environment: Build
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      # Same as the production build profile in eas.json.
+      EXPO_PUBLIC_API_URL: https://feynman-voice-api.vercel.app
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        working-directory: .
+        run: npm ci
+
+      - name: Publish the update to the production channel
+        run: npx --yes eas-cli@latest update --channel production --environment production --platform ios --message "${{ inputs.message }}" --non-interactive
