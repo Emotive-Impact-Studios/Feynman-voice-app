@@ -76,6 +76,11 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const [covered, setCovered] = useState<string[]>([]);
   const coveredRef = useRef<string[]>([]);
   const gotTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  /** Drop chips still waiting their turn (the answer was taken back, or the call ended). */
+  const clearGotTimers = () => {
+    gotTimers.current.forEach(clearTimeout);
+    gotTimers.current = [];
+  };
   useEffect(() => () => gotTimers.current.forEach(clearTimeout), []);
   /** The latest idea they nailed, with a counter so each one celebrates once. */
   const [got, setGot] = useState<{ idea: string; n: number } | null>(null);
@@ -354,6 +359,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     if (s && coveredRef.current !== s.coveredBefore) {
       coveredRef.current = s.coveredBefore;
       setCovered(s.coveredBefore);
+      clearGotTimers();
     }
     sent.current = null;
     if (more) {
@@ -543,6 +549,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   /** End the call: microphone off, reply dropped. Safe to call twice. Runs on unmount. */
   const cancel = useCallback(() => {
     silence();
+    clearGotTimers();
     if (callOn.current) {
       callOn.current = false;
       streamRef.current.stop();
