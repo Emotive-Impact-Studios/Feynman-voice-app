@@ -273,8 +273,10 @@ export interface MapScene {
 /** Drawn objects, people and places (names from things.ts). */
 export interface ThingsScene {
   family: "things";
-  layout: "row" | "versus" | "chain" | "orbit" | "scale";
+  layout: "row" | "versus" | "chain" | "orbit" | "scale" | "parts";
   items: { thing: string; label: string; size: number }[];
+  /** parts layout: named parts of the one thing, each at a spot on it. Older servers leave it out. */
+  parts?: { label: string; at: string }[];
   lit: number;
 }
 

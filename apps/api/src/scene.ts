@@ -37,18 +37,26 @@ export const TIMELINE_SCALES = ["even", "true"] as const;
 export const LAYER_STYLES = ["stack", "nested"] as const;
 export const WAVE_KINDS = ["transverse", "longitudinal"] as const;
 export const STACK_ACTIONS = ["push", "pop"] as const;
-export const THING_LAYOUTS = ["row", "versus", "chain", "orbit", "scale"] as const;
+export const THING_LAYOUTS = ["row", "versus", "chain", "orbit", "scale", "parts"] as const;
+/** Where a named part sits on a drawn thing, for the parts layout. */
+export const PART_SPOTS = ["top", "bottom", "left", "right", "top left", "top right", "bottom left", "bottom right", "centre"] as const;
 /** Every drawn thing the app knows (apps/mobile/src/teach/scene/things.ts), by group. A test keeps the two lists the same. */
 export const THING_GROUPS = {
-  "People and the body": ["person", "people", "face", "hand", "eye", "brain", "heart", "lungs", "cell", "dna", "virus", "bacterium"],
+  "People and the body": ["person", "people", "face", "hand", "eye", "brain", "heart", "lungs", "cell", "dna", "virus", "bacterium", "tooth", "bone", "kidney", "stomach", "neuron", "ear", "chromosome", "mitochondrion", "skeleton", "family"],
   "Earth and space": ["sun", "moon", "planet", "earth", "star", "rocket", "cloud", "raindrop", "lightning", "snowflake", "flame", "mountain", "tree", "leaf", "flower", "sprout", "water", "volcano"],
-  "Science": ["atom", "molecule", "flask", "magnet", "battery", "bulb", "gear", "thermometer", "pill", "spring", "microscope", "telescope"],
-  "Money and society": ["coin", "banknote", "house", "factory", "building", "crown", "flag", "ballot", "justice", "book", "document", "contract", "pin", "graduation", "speech", "handshake", "shop"],
-  "Technology": ["computer", "phone", "chip", "database", "lock", "key", "envelope", "signal", "robot", "code"],
-  "Time and ideas": ["clock", "hourglass", "calendar", "target", "trophy", "question", "idea", "puzzle", "shield", "umbrella"],
+  "Science": ["atom", "molecule", "flask", "magnet", "battery", "bulb", "gear", "thermometer", "pill", "spring", "microscope", "telescope", "magnifier", "prism", "pendulum", "beaker", "circuit"],
+  "Money and society": ["coin", "banknote", "house", "factory", "building", "crown", "flag", "ballot", "justice", "book", "document", "contract", "pin", "graduation", "speech", "handshake", "shop", "gavel", "prison", "hospital", "school"],
+  "Technology": ["computer", "phone", "chip", "database", "lock", "key", "envelope", "signal", "robot", "code", "satellite", "camera", "server", "cloudstore"],
+  "Time and ideas": ["clock", "hourglass", "calendar", "target", "trophy", "question", "idea", "puzzle", "shield", "umbrella", "thought", "chain", "hammer", "scales", "mirror"],
   "Transport": ["car", "ship", "plane", "train", "bicycle"],
-  "Living things": ["apple", "bird", "fish", "cat", "footprint"],
-  "Metaphors": ["iceberg", "dominoes", "snowball", "ladder", "bridge", "door", "signpost", "anchor", "funnel", "wall", "seesaw", "maze", "path", "seed", "gift"],
+  "Living things": ["apple", "bird", "fish", "cat", "footprint", "dog", "butterfly", "bee", "frog", "mushroom"],
+  "Metaphors": ["iceberg", "dominoes", "snowball", "ladder", "bridge", "door", "signpost", "anchor", "funnel", "wall", "seesaw", "maze", "path", "seed", "gift", "rope", "key_hole", "balloon", "tug", "crossroads", "hill", "toolbox", "battery_low", "staircase", "bucket", "flagpeak"],
+  "Health and medicine": ["syringe", "stethoscope", "plaster", "medical", "bed", "clipboard", "drip", "wheelchair"],
+  "Energy and environment": ["turbine", "solar", "pylon", "plug", "barrel", "recycle", "tap", "smoke"],
+  "Maths and data": ["dice", "card", "ruler", "protractor", "triangle", "cube", "barchart", "linechart", "pie", "abacus", "infinity", "compasses"],
+  "Arts, music and sport": ["note", "piano", "guitar", "headphones", "microphone", "palette", "brush", "frame", "ball", "runner", "dumbbell", "medal", "theatre"],
+  "History and places": ["castle", "sword", "scroll", "pyramid", "helmet", "candle", "globe", "map", "compass", "quill", "wheel", "tent"],
+  "Food and farming": ["bread", "carrot", "wheat", "cow", "cup", "egg", "tractor"],
 } as const;
 export const THING_NAMES = Object.values(THING_GROUPS).flat();
 type ThingName = (typeof THING_GROUPS)[keyof typeof THING_GROUPS][number];
@@ -298,11 +306,14 @@ export interface MapScene {
   lit: number;
 }
 /** Real objects, people and places, drawn: in a row, two against each other,
- * one becoming the next, one going round another, or at their real sizes. */
+ * one becoming the next, one going round another, at their real sizes, or one
+ * thing drawn big with its parts named. */
 export interface ThingsScene {
   family: "things";
   layout: (typeof THING_LAYOUTS)[number];
   items: { thing: ThingName; label: string; size: number }[];
+  /** The parts layout only: 2 to 4 named parts, each pointed at where it sits. Empty otherwise. */
+  parts: { label: string; at: (typeof PART_SPOTS)[number] }[];
   lit: number;
 }
 export type Scene =
@@ -409,7 +420,7 @@ export const SCENE_SCHEMA = {
     obj({ family: en(["zoom"]), levels: arr(obj({ label: str, size: str })), at: int }),
     obj({ family: en(["brace"]), items: strs, groups: arr(obj({ label: str, from: int, to: int })), lit: int }),
     obj({ family: en(["map"]), places: arr(obj({ label: str, x: num, y: num })), routes: arr(obj({ from: int, to: int })), lit: int }),
-    obj({ family: en(["things"]), layout: en(THING_LAYOUTS), items: arr(obj({ thing: str, label: str, size: num })), lit: int }),
+    obj({ family: en(["things"]), layout: en(THING_LAYOUTS), items: arr(obj({ thing: str, label: str, size: num })), parts: arr(obj({ label: str, at: en(PART_SPOTS) })), lit: int }),
     { type: "null" },
   ],
 } as const;
@@ -473,6 +484,7 @@ Pick the device by the question the idea answers:
 - Which items belong together in groups (ionising and non-ionising radiation)? brace.
 - Where are places, and what moves between them (a trade route, a migration, a campaign)? map.
 - What does it look like, who is involved, or what real object is it (the Earth and Moon, a cell, a bank and a factory)? things.
+- What are its parts, and where are they (a labelled diagram, a metaphor with named parts)? things with layout parts.
 
 The devices:
 particles: zones (1 to 3 area labels, left to right, "" for none), divider (none, wall, membrane = dashed and crossable, sieve = gaps), things (1 to 3 groups: name, mark dot = something that moves, ring = an object, blocked = something stopped, at most one group; count 1 to 16; zone it starts in; to = zone it heads to, same as zone if it stays; motion still, drift, jiggle like heat, cross from zone to "to", rise, fall, orbit, pulse, flow).
@@ -504,7 +516,7 @@ spiral: stages 2 to 5 for one turn, turns 2 or 3, label = what grows each time r
 zoom: levels 2 to 5, biggest first (label and size, like "Cell" and "10 µm", size "" if unknown), at = index of the lit level.
 brace: items 3 to 7 in a row, groups 1 to 3 (label, from and to = the first and last item index in the group, groups never overlap), lit = index of the lit group.
 map: places 2 to 6 (label, x = 0 west to 1 east, y = 0 south to 1 north, rough real positions, never invented), routes 0 to 6 (from and to place indexes, in the order they happen), lit = index of the lit place. It draws dots and routes only, never coastlines.
-things: drawn objects, people and places from the list below, each with a label (1 to 3 words) and a size. layout row (1 to 5 things side by side: examples of a kind, or one big picture), versus (exactly 2, set against each other), chain (2 to 4, each becoming or causing the next, joined by arrows), orbit (2 or 3: item 1 goes round item 0, and item 2 goes round item 1, like the Sun, Earth and Moon), scale (2 to 4 drawn at their real relative sizes standing on one line; size = a real number in one unit, smallest first). size is 1 for other layouts. lit = index of the lit thing. Only use names from this list; if nothing in it is the thing, use another device:
+things: drawn objects, people and places from the list below, each with a label (1 to 3 words) and a size. layout row (1 to 5 things side by side: examples of a kind, or one big picture), versus (exactly 2, set against each other), chain (2 to 4, each becoming or causing the next, joined by arrows), orbit (2 or 3: item 1 goes round item 0, and item 2 goes round item 1, like the Sun, Earth and Moon), scale (2 to 4 drawn at their real relative sizes standing on one line; size = a real number in one unit, smallest first), parts (exactly 1 thing drawn big, with parts = 2 to 4 of its named parts, each with a label of 1 to 4 words and at = where that part sits on the drawing: top, bottom, left, right, top left, top right, bottom left, bottom right or centre, each spot once; only when they really are parts of that drawn thing, where the drawing shows them, never labels hung on a symbol like a bulb or a book). size is 1 for other layouts. parts is [] for every layout but parts. lit = index of the lit thing, or for parts the index of the lit part. Only use names from this list; if nothing in it is the thing, use another device:
 ${THING_MENU}
   A metaphor (iceberg, dominoes, snowball, ladder, bridge and so on) only when the notes use that image or it is the standard teaching image for the idea, never as decoration.
 units: also thing = a thing from the list to count with instead of dots (person for people, coin for money), or "".
@@ -523,7 +535,7 @@ play: at most one bite per lesson (usually the first or second) gets a slider th
     tree: step (the light walks down the lit path). test: step (the case moves through the gates). threshold: fill (the level rises from empty to full). units: grow (the lit dots count up to lit).
     grid: slide (the item moves from the opposite corner to its place). wave: speed (higher frequency), stretch (longer wavelength), grow (bigger amplitude). fan: grow (the forecast's spread widens).
     timeline, layers, mirror, stack, radial, cutaway, funnel, sankey, spiral, zoom, brace and map: step (the light moves through the parts in order).
-    things: step (the light moves through the things in order), speed (for orbit: it goes round faster).
+    things: step (the light moves through the things in order, or through the parts), speed (for orbit: it goes round faster).
 
 caption: one short sentence under 9 words that states the point, ending with a full stop, like "Water follows the sugar."
 
@@ -534,7 +546,10 @@ What makes a good scene:
 - A slider moves the cause so they can watch the effect. Never a slider that only makes things busier unless speed is the idea.
 - Be honest. compare values must be real quantities in one unit (convert first: Neptune is 30 AU, Proxima Centauri is about 268,000 AU). Never invent numbers to compare two ideas.
 - Labels name real things (Serbia, Supply, Sucrose), never placeholder steps like "One move", "Start" or "Allies react".
-- Use a different device for each bite of a lesson, so the student sees something new every time. Most ideas fit more than one device honestly: pick another that fits rather than repeating one.
+- Plan the pictures first: devices lists the device for each bite, in order, all different (or none). Then write each bite's scene with its planned device. Most ideas fit more than one device honestly, so the student sees something new every time.
+- links is the device most often reached for and most often the wrong one. Use it only when the idea really is a chain of causes or a network, and at most once a lesson. Before links, check: levels climbed in order (stairs), dates (timeline), stages gone round (radial with cycle), how many out of how many (units), a tipping point (threshold), a range (spectrum), a real object or person (things).
+- Never the same device twice in one lesson, pair and things included.
+- compare is for real quantities in one unit. Without real numbers, choose by the question the idea answers instead.
 - If no device honestly fits, use null. A wrong picture is worse than none.
 
 Examples (scene, then play):
@@ -563,11 +578,12 @@ Composition of air: {"family":"cutaway","whole":"Air","parts":[{"label":"Nitroge
 Power station: {"family":"sankey","source":"Fuel energy","splits":[{"label":"Electricity","share":35},{"label":"Heat lost","share":65}],"lit":0}
 Levels of organisation: {"family":"zoom","levels":[{"label":"Body","size":"1.7 m"},{"label":"Heart","size":"12 cm"},{"label":"Muscle cell","size":"100 µm"}],"at":2}
 Triangular trade: {"family":"map","places":[{"label":"Britain","x":0.55,"y":0.85},{"label":"West Africa","x":0.6,"y":0.4},{"label":"Caribbean","x":0.1,"y":0.5}],"routes":[{"from":0,"to":1},{"from":1,"to":2},{"from":2,"to":0}],"lit":1}
-Earth and Moon: {"family":"things","layout":"orbit","items":[{"thing":"sun","label":"Sun","size":1},{"thing":"earth","label":"Earth","size":1},{"thing":"moon","label":"Moon","size":1}],"lit":2}
-Growth from a seed: {"family":"things","layout":"chain","items":[{"thing":"seed","label":"Seed","size":1},{"thing":"sprout","label":"Seedling","size":1},{"thing":"tree","label":"Tree","size":1}],"lit":2}
-Climbing Everest: {"family":"things","layout":"scale","items":[{"thing":"person","label":"Climber, 1.8 m","size":1.8},{"thing":"house","label":"House, 8 m","size":8},{"thing":"mountain","label":"Everest, 8,849 m","size":8849}],"lit":0}
-Visible and hidden costs: {"family":"things","layout":"row","items":[{"thing":"iceberg","label":"Most costs are hidden","size":1}],"lit":0}
-Viruses and bacteria: {"family":"things","layout":"versus","items":[{"thing":"virus","label":"Virus","size":1},{"thing":"bacterium","label":"Bacterium","size":1}],"lit":0}
+Earth and Moon: {"family":"things","layout":"orbit","items":[{"thing":"sun","label":"Sun","size":1},{"thing":"earth","label":"Earth","size":1},{"thing":"moon","label":"Moon","size":1}],"parts":[],"lit":2}
+Growth from a seed: {"family":"things","layout":"chain","items":[{"thing":"seed","label":"Seed","size":1},{"thing":"sprout","label":"Seedling","size":1},{"thing":"tree","label":"Tree","size":1}],"parts":[],"lit":2}
+Climbing Everest: {"family":"things","layout":"scale","items":[{"thing":"person","label":"Climber, 1.8 m","size":1.8},{"thing":"house","label":"House, 8 m","size":8},{"thing":"mountain","label":"Everest, 8,849 m","size":8849}],"parts":[],"lit":0}
+Visible and hidden costs: {"family":"things","layout":"row","items":[{"thing":"iceberg","label":"Most costs are hidden","size":1}],"parts":[],"lit":0}
+Viruses and bacteria: {"family":"things","layout":"versus","items":[{"thing":"virus","label":"Virus","size":1},{"thing":"bacterium","label":"Bacterium","size":1}],"parts":[],"lit":0}
+The iceberg model of culture: {"family":"things","layout":"parts","items":[{"thing":"iceberg","label":"Culture","size":1}],"parts":[{"label":"Food and dress","at":"top"},{"label":"Values and beliefs","at":"bottom"}],"lit":1}
 Weather and climate: {"family":"pair","left":{"label":"Weather","shape":"jagged","count":0,"note":"Day to day"},"right":{"label":"Climate","shape":"smooth","count":0,"note":"Over 30 years"},"lit":"right"}`;
 
 // ---- checking ----
@@ -911,19 +927,29 @@ export function checkScene(s: unknown): Scene | null {
     }
     if (r.family === "things") {
       const layout = oneOf(r.layout, THING_LAYOUTS, "row");
-      const max = { row: 5, versus: 2, chain: 4, orbit: 3, scale: 4 }[layout];
+      const max = { row: 5, versus: 2, chain: 4, orbit: 3, scale: 4, parts: 1 }[layout];
       let items = (Array.isArray(r.items) ? r.items : [])
         .filter((t: Record<string, unknown>) => t && isThing(t.thing))
         .slice(0, max)
         .map((t: Record<string, unknown>) => ({ thing: t.thing as ThingName, label: short(t.label, layout === "row" || layout === "scale" ? 4 : 3, 26), size: Number(t.size) > 0 ? Number(t.size) : 1 }));
-      const min = layout === "row" ? 1 : 2;
+      const min = layout === "row" || layout === "parts" ? 1 : 2;
       if (items.length < min) return null;
       if (layout === "scale") {
         // Smallest first, and only real sizes: drop a scale whose sizes are all the same.
         items = items.sort((a, b) => a.size - b.size);
         if (items[items.length - 1].size <= items[0].size) return null;
       } else items = items.map((t) => ({ ...t, size: 1 }));
-      return { family: "things", layout, items, lit: clampInt(r.lit, 0, items.length - 1, items.length - 1) };
+      if (layout === "parts") {
+        // One thing, drawn big, with 2 to 4 of its parts named. Each spot is used once.
+        const seen = new Set<string>();
+        const parts = (Array.isArray(r.parts) ? r.parts : [])
+          .map((x: Record<string, unknown>) => ({ label: short(x?.label, 4, 26), at: oneOf(x?.at, PART_SPOTS, "centre") }))
+          .filter((x) => x.label && !seen.has(x.at) && seen.add(x.at))
+          .slice(0, 4);
+        if (parts.length < 2) return { family: "things", layout: "row", items, parts: [], lit: 0 };
+        return { family: "things", layout, items, parts, lit: clampInt(r.lit, 0, parts.length - 1, 0) };
+      }
+      return { family: "things", layout, items, parts: [], lit: clampInt(r.lit, 0, items.length - 1, items.length - 1) };
     }
     if (r.family === "venn") {
       const a = short(r.a);
