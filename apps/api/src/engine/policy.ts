@@ -21,7 +21,7 @@ export type Move =
 /** Moves that push the learner. At most one in any two turns. */
 export const PROBES: Move[] = ["why", "what_if", "puzzled"];
 
-const STUCK = /\b(i\s*(don'?t|do not)\s*know|not sure|no idea|i forget|i can'?t remember|dunno|i'?m stuck|haven'?t got a clue)\b|^\s*(pass|skip)\b[\s.!,]*$/i;
+const STUCK = /\b(i\s*(don'?t|do not)\s*know|not sure|no idea|i forget|i can'?t remember|dunno|i'?m stuck|haven'?t got a clue|i'?ll (pass|skip)|pass on (that|this)|(can we |let'?s )?skip (that|this)( one)?)\b|^\s*(pass|skip)\b[\s.!,]*$/i;
 const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|please|go on|go on then|alright|sounds good)\b/i;
 const TELL_ME = /\b(just tell me|can you (just )?(tell|explain)|explain it to me|what('?s| is) the answer|show me)\b/i;
 const NO = /^\s*(no|nah|nope|not now|no thanks|i'?m (fine|good)|let me try)\b/i;

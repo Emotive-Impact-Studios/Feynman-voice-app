@@ -65,6 +65,8 @@ describe("engine limits", () => {
   it("does not mistake the word pass for being stuck", () => {
     expect(callState([], "Blood can pass through the valve.").stuckStreak).toBe(0);
     expect(callState([], "Pass.").stuckStreak).toBe(1);
+    expect(callState([], "I'll pass on that one.").stuckStreak).toBe(1);
+    expect(callState([], "Can we skip that?").stuckStreak).toBe(1);
   });
 
   it("does not repeat the last move and keeps listening rare", () => {
