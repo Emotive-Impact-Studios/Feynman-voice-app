@@ -339,7 +339,9 @@ const short = (s: unknown, words = 3) =>
     .split(/\s+/)
     .slice(0, words)
     .join(" ")
-    .slice(0, 22);
+    .slice(0, 22)
+    // A cut that leaves a bracket open drops the bracketed part: "Before (per" is "Before".
+    .replace(/\s*\([^)]*$/, "");
 const oneOf = <T extends string>(v: unknown, list: readonly T[], d: T): T => (list.includes(v as T) ? (v as T) : d);
 
 const ALLOWED: Record<Scene["family"], readonly Play["changes"][number]["does"][]> = {

@@ -106,6 +106,10 @@ ${SCENE_PROMPT}
 
 ${FILM_PROMPT}`;
 
+const CLAUDE_SYSTEM = `${SYSTEM}
+
+Write each scene as JSON text holding the scene object, for example {"family":"stairs","steps":["Seed","Shoot","Tree"],"at":2}, or the text null when no device fits.`;
+
 const str = { type: "string" };
 const strs = { type: "array", items: str };
 export const LESSON_SCHEMA = {
@@ -148,6 +152,30 @@ export const LESSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+/**
+ * Claude's structured output refuses a grammar as large as the fourteen scene
+ * shapes, so Claude writes the scene as JSON text instead, and checkScene reads
+ * it like any other scene. Everything else is the same schema.
+ */
+const biteItems = LESSON_SCHEMA.properties.bites.items;
+export const CLAUDE_LESSON_SCHEMA = {
+  ...LESSON_SCHEMA,
+  properties: {
+    ...LESSON_SCHEMA.properties,
+    bites: { ...LESSON_SCHEMA.properties.bites, items: { ...biteItems, properties: { ...biteItems.properties, scene: str } } },
+  },
+} as const;
+
+/** A scene written as JSON text (Claude) or as an object (OpenAI). */
+function sceneOf(raw: unknown): unknown {
+  if (typeof raw !== "string") return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 type Draft = { bites: (Omit<Bite, "fromNotes" | "scene" | "play" | "caption" | "film" | "guess"> & { scene?: unknown; play?: unknown; caption?: string; film?: unknown; guess?: unknown })[]; recap: string; explainBack: string };
 
 /** Lower case, plain quotes, single spaces, no punctuation: for checking quotes against notes. */
@@ -187,7 +215,7 @@ export function checkLesson(d: Draft, req: LessonRequest): Lesson {
       // Each side is a set of cards tapped once, so a repeat can't be matched.
       if (new Set(p.options).size !== p.options.length || new Set(p.answer).size !== p.answer.length) throw new Error(`${where}: match has repeated items, every card must be different`);
     }
-    const scene = checkScene(b.scene);
+    const scene = checkScene(sceneOf(b.scene));
     const film = checkFilm(b.film, b.text);
     return {
       ...b,
@@ -250,8 +278,8 @@ async function draftClaude(env: Env, req: LessonRequest, retry?: string, fetchIm
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     // The instructions are the same for every lesson, so they are cached.
-    system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-    output_config: { effort: (env.LESSON_EFFORT ?? "medium") as "low" | "medium" | "high", format: { type: "json_schema", schema: LESSON_SCHEMA } },
+    system: [{ type: "text", text: CLAUDE_SYSTEM, cache_control: { type: "ephemeral" } }],
+    output_config: { effort: (env.LESSON_EFFORT ?? "medium") as "low" | "medium" | "high", format: { type: "json_schema", schema: CLAUDE_LESSON_SCHEMA } },
     messages: [{ role: "user", content: userMessage(req, retry) }],
   });
   if (r.stop_reason === "refusal") throw new Error("Claude declined to write this lesson");

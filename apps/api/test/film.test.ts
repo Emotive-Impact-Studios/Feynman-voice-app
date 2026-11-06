@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkFilm, checkGuess, sentencesOf } from "../src/film";
-import { checkLesson } from "../src/lesson";
+import { CLAUDE_LESSON_SCHEMA, checkLesson, LESSON_SCHEMA } from "../src/lesson";
 
 const osmosis = [
   { say: "Here is a membrane with water on both sides.", cue: "membrane" },
@@ -73,6 +73,20 @@ describe("films in a lesson", () => {
     expect(l.bites[0].guess?.answer).toBe("Right");
     expect(l.bites[1].guess).toBeNull();
     expect(l.bites.every((b) => b.film.length === 3)).toBe(true);
+  });
+
+  it("reads a scene Claude wrote as JSON text", () => {
+    const a = bite("A", guess);
+    const asText = { ...a, scene: JSON.stringify(a.scene) };
+    const l = checkLesson({ bites: [asText, { ...a, scene: "null" }, { ...a, scene: "{broken" }], recap: "r", explainBack: "q" } as never, { topic: "t", idea: "i" });
+    expect(l.bites[0].scene?.family).toBe("particles");
+    expect(l.bites[1].scene).toBeNull();
+    expect(l.bites[2].scene).toBeNull();
+  });
+
+  it("keeps Claude's schema small: the scene is text there", () => {
+    expect(CLAUDE_LESSON_SCHEMA.properties.bites.items.properties.scene).toEqual({ type: "string" });
+    expect(LESSON_SCHEMA.properties.bites.items.properties.scene).toHaveProperty("anyOf");
   });
 
   it("drops a guess on a bite with no drawing to watch", () => {

@@ -63,6 +63,8 @@ describe("lessons with scenes", () => {
 describe("the newer devices", () => {
   it("checks compare, stairs, spectrum and venn scenes and their sliders", () => {
     const c = checkScene({ family: "compare", style: "circles", items: [{ label: "Earth", value: 1 }, { label: "Sun", value: 109 }, { label: "", value: 3 }] });
+    const cut = checkScene({ family: "compare", style: "bars", items: [{ label: "Before (per 1,000)", value: 1 }, { label: "After", value: 2 }] });
+    expect(cut?.family === "compare" && cut.items[0].label).toBe("Before");
     expect(c?.family === "compare" && c.items).toHaveLength(2);
     expect(checkPlay({ prompt: "p", low: "a", high: "b", readouts: ["a", "b", "c"], changes: [{ target: "Sun", does: "grow" }] }, c)?.changes[0].target).toBe("sun");
     expect(checkPlay({ prompt: "p", low: "a", high: "b", readouts: ["a", "b", "c"], changes: [{ target: "x", does: "step" }] }, c)?.changes[0].target).toBe("");

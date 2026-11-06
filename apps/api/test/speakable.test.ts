@@ -31,6 +31,11 @@ describe("speakable", () => {
     expect(speakable("It’s “neat”; why?")).toBe(`It's "neat", why?`);
   });
 
+  it("keeps numbers like 1,000 whole", () => {
+    expect(speakable("Now it doubles to 2 in 1,000.")).toBe("Now it doubles to 2 in 1,000.");
+    expect(speakable("Apples,pears and 3,dogs")).toBe("Apples, pears and 3, dogs");
+  });
+
   it("leaves a clean line alone", () => {
     const line = "That was really clear. Which bit felt shakiest to you?";
     expect(speakable(line)).toBe(line);
