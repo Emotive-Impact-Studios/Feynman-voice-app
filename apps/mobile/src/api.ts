@@ -56,7 +56,12 @@ export type LiveEvent =
     }
   | { type: "error"; error: string; detail?: string }
   /** Fenny's conversation engine: the move it made this turn. "wrap" is the goodbye. */
-  | { type: "engine"; move: string; covered: string[]; ideas: { id: string; idea: string }[] };
+  | { type: "engine"; move: string; covered: string[]; ideas: { id: string; idea: string }[] }
+  /** The learner took the engine's offer of a quick explanation: show the Show me card. */
+  | { type: "show_me"; gap: { title: string } };
+
+/** What this phone can do. "show_me": it can show the in-call explanation card. */
+export const LIVE_FEATURES = ["show_me"];
 
 /** Base URL of the Phonon model bundle the API serves for iPhones to download. */
 export const PHONON_BUNDLE_URL = API_URL ? `${API_URL.replace(/\/$/, "")}/phonon/31m-en-0.6.0` : "";
@@ -66,7 +71,7 @@ export const PHONON_BUNDLE_URL = API_URL ? `${API_URL.replace(/\/$/, "")}/phonon
  * student can start speaking its first sentence before the rest is written.
  */
 export async function streamLiveTurn(
-  input: { audioBase64: string; audioSeconds: number; history: Turn[]; topic: string; voice: LiveVoice; ears: LiveEars },
+  input: { audioBase64: string; audioSeconds: number; history: Turn[]; topic: string; voice: LiveVoice; ears: LiveEars; features?: string[] },
   onEvent: (e: LiveEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -135,7 +140,7 @@ async function postJson<T>(path: string, body: object, signal?: AbortSignal): Pr
 
 /** What came across clearly and where the gaps are, from the call's transcript. */
 export function analyseCall(
-  input: { topic: string; goal?: string; notes?: string; turns: Turn[]; shakiest?: string; firstAttempt?: string; focus?: string },
+  input: { topic: string; goal?: string; notes?: string; turns: Turn[]; shakiest?: string; firstAttempt?: string; focus?: string; missedIdeas?: string[] },
   signal?: AbortSignal,
 ): Promise<Analysis> {
   return postJson("/api/analyse", input, signal);

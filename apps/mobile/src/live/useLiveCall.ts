@@ -13,7 +13,7 @@ import {
 import { BargeIn, concatFloat32, EndOfTurn, fromBase64, pcm16ToFloat32, quietAfter, Resampler, SpeechMeter, toBase64, TURN_QUIET_SECONDS } from "@feynman/audio";
 import { encodeWav, SAMPLE_RATE as KITTEN_RATE, synthesise } from "@feynman/kitten-tts";
 import { Phonon, PHONON_DEFAULT_VOICE } from "../../modules/phonon";
-import { PHONON_BUNDLE_URL, streamLiveTurn, type LiveEars, type LiveEvent, type LiveVoice, type Turn } from "../api";
+import { LIVE_FEATURES, PHONON_BUNDLE_URL, streamLiveTurn, type LiveEars, type LiveEvent, type LiveVoice, type Turn } from "../api";
 import { loadKitten } from "../kitten";
 import { ClipQueue } from "./clipQueue";
 
@@ -50,6 +50,13 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [stats, setStats] = useState<CallTurnStats[]>([]);
   const [liveQuestion, setLiveQuestion] = useState<string | null>(null);
+  // From the conversation engine: an explanation the learner asked for, their
+  // answer to "which bit felt shakiest?", and the key ideas they have covered.
+  const [showMeGap, setShowMeGap] = useState<{ title: string } | null>(null);
+  const [shakiest, setShakiest] = useState<string | null>(null);
+  const shakiestRef = useRef<string | null>(null);
+  const [ideas, setIdeas] = useState<{ id: string; idea: string; covered: boolean }[]>([]);
+  const coveredIds = useRef(new Set<string>());
   const [liveSpeaking, setLiveSpeaking] = useState(0);
   const [isTalking, setIsTalking] = useState(false);
   /** Fenny has said goodbye and finished speaking: the call is over. */
@@ -258,6 +265,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     let voiced: Promise<unknown> = Promise.resolve();
     let phononRemaining = 0;
     let wrapped = false;
+    let heard = "";
     const markStart = () => {
       if (id !== turnId.current) return;
       if (!firstWordMs) firstWordMs = Date.now() - quietAt;
@@ -267,6 +275,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
 
     const onEvent = (e: LiveEvent) => {
       if (id !== turnId.current) return;
+      if (e.type === "transcript") heard = e.text;
       if (e.type === "sentence") {
         spoken = spoken ? `${spoken} ${e.text}` : e.text;
         setLiveQuestion(spoken);
@@ -296,7 +305,20 @@ export function useLiveCall(topic: string, settings: CallSettings) {
         setHeardSeconds((n) => n + speakingSeconds);
         setTurns((t) => [...t, { speaker: "learner", text: e.transcript }, { speaker: "student", text: e.question }]);
       }
-      if (e.type === "engine" && e.move === "wrap") wrapped = true;
+      if (e.type === "engine") {
+        e.covered.forEach((k) => coveredIds.current.add(k));
+        if (e.ideas.length) setIdeas(e.ideas.map((i) => ({ ...i, covered: coveredIds.current.has(i.id) })));
+        // Wrap only follows the close, so the first wrap's turn is their answer
+        // to "which bit felt shakiest?". A later wrap is just a goodbye.
+        if (e.move === "wrap") {
+          wrapped = true;
+          if (shakiestRef.current === null && heard.trim()) {
+            shakiestRef.current = heard.trim();
+            setShakiest(heard.trim());
+          }
+        }
+      }
+      if (e.type === "show_me" && e.gap?.title) setShowMeGap(e.gap);
       if (e.type === "error") throw new Error(e.error);
     };
 
@@ -304,7 +326,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       const abort = new AbortController();
       request.current = abort;
       await streamLiveTurn(
-        { audioBase64: toBase64(encodeWav(pcm, RATE)), audioSeconds: speakingSeconds, history: turnsRef.current, topic, voice, ears: chosen.ears },
+        { audioBase64: toBase64(encodeWav(pcm, RATE)), audioSeconds: speakingSeconds, history: turnsRef.current, topic, voice, ears: chosen.ears, features: LIVE_FEATURES },
         onEvent,
         abort.signal,
       );
@@ -377,6 +399,10 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     liveQuestion,
     liveSpeaking,
     finished,
+    showMeGap,
+    dismissShowMe: () => setShowMeGap(null),
+    shakiest,
+    ideas,
     isTalking,
     start,
     /** "Done, ask me": send now instead of waiting for the pause. */

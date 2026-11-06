@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "re
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { setFinishedCall } from "../data/lastCall";
+import { ShowMeCard } from "../live/ShowMeCard";
 import { findTopic, minutesLeft, recordSession, useProfile } from "../data/profile";
 import { colour } from "../theme";
 import { DotWave } from "../ui/Dots";
@@ -142,7 +143,16 @@ export default function Session() {
     loop.cancel();
     save();
     if (loop.turns.some((t) => t.speaker === "learner" && t.text.trim())) {
-      setFinishedCall({ topic, goal, focus: focus || undefined, focusId: params.focusId, turns: loop.turns, seconds: latest.current.spoken });
+      setFinishedCall({
+        topic,
+        goal,
+        focus: focus || undefined,
+        focusId: params.focusId,
+        turns: loop.turns,
+        seconds: latest.current.spoken,
+        shakiest: loop.shakiest ?? undefined,
+        missedIdeas: loop.ideas.filter((i) => !i.covered).map((i) => i.idea),
+      });
       router.replace("/results");
     } else router.back();
   };
@@ -295,6 +305,17 @@ export default function Session() {
         </View>
         <PillButton label="End" variant="solid" onPress={end} style={{ height: 54 }} />
       </Glass>
+      {/* The learner took Fenny's offer of a quick explanation. */}
+      {loop.showMeGap && (
+        <ShowMeCard
+          topic={topic}
+          gap={loop.showMeGap}
+          notes={findTopic(topic)?.notes}
+          turns={loop.turns}
+          bottom={Math.max(insets.bottom, 10) + 106}
+          onDone={loop.dismissShowMe}
+        />
+      )}
     </View>
   );
 }

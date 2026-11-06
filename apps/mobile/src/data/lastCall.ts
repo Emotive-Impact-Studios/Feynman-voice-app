@@ -9,6 +9,10 @@ export interface FinishedCall {
   focus?: string;
   focusId?: string;
   turns: Turn[];
+  /** Their answer to "which bit felt shakiest?" when Fenny asked it in the call. */
+  shakiest?: string;
+  /** Key ideas from the conversation engine that never came up in the call. */
+  missedIdeas?: string[];
   /** Speaking seconds in the call. */
   seconds: number;
 }
@@ -22,6 +26,9 @@ export function setFinishedCall(call: FinishedCall) {
 export function getFinishedCall(): FinishedCall | null {
   return pending;
 }
+
+/** The button that hands back after Show me. */
+export const TELL_ME_BUTTON = "Now tell Fenny in your own words";
 
 /** Fenny's first line when a gap card opens a call. */
 export const TELL_ME = "Go on, tell me in your own words.";

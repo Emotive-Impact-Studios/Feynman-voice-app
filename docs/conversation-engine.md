@@ -27,6 +27,12 @@ Extra stream events: `{"type":"engine","move","covered","ideas"}` every turn and
 phone sends `features: ["show_me"]` once it can show the card; older phones are
 never offered it.
 
+On the phone (`useLiveCall`): `show_me` opens `live/ShowMeCard.tsx` over the
+call, which fetches `/api/show-me` and hands back with "Now tell Fenny in your
+own words". The transcript of the first turn that ends in `wrap` is their answer
+to "which bit felt shakiest?", so the results skip the typed question. Key ideas
+never in `covered` go to `/api/analyse` as `missedIdeas`, to seed "skipped" gaps.
+
 ## The conversation test
 
 No change to how Fenny talks ships without this:

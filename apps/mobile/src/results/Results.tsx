@@ -15,7 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown, FadeOutLeft, SlideInRight } from "react-native-reanimated";
 import { analyseCall, showMe, type Analysis, type Gap } from "../api";
-import { getFinishedCall, SHAKIEST_MIN_SECONDS, TELL_ME, type FinishedCall } from "../data/lastCall";
+import { getFinishedCall, SHAKIEST_MIN_SECONDS, TELL_ME, TELL_ME_BUTTON, type FinishedCall } from "../data/lastCall";
 import { findTopic, minutesLeft, saveAnalysis, useProfile, type SavedGap } from "../data/profile";
 import { colour, font } from "../theme";
 import { Backdrop, Glass, Label, PillButton, T } from "../ui/kit";
@@ -37,8 +37,10 @@ export default function Results() {
 function ResultsFor({ call }: { call: FinishedCall }) {
   const insets = useSafeAreaInsets();
   const profile = useProfile();
-  const [phase, setPhase] = useState<Phase>(call.seconds >= SHAKIEST_MIN_SECONDS ? "shakiest" : "analysing");
-  const [shakiest, setShakiest] = useState("");
+  // Fenny asks "which bit felt shakiest?" in the call now; the typed screen is
+  // only for calls that ended before it got there.
+  const [phase, setPhase] = useState<Phase>(!call.shakiest && call.seconds >= SHAKIEST_MIN_SECONDS ? "shakiest" : "analysing");
+  const [shakiest, setShakiest] = useState(call.shakiest ?? "");
   const [result, setResult] = useState<Analysis | null>(null);
   const [cards, setCards] = useState<SavedGap[]>([]);
   const [error, setError] = useState("");
@@ -65,7 +67,7 @@ function ResultsFor({ call }: { call: FinishedCall }) {
     const firstAttempt = before && before.sessions > 1 ? before.firstAttempt : undefined;
     try {
       const a = await analyseCall(
-        { topic: call.topic, goal: call.goal, notes: before?.notes, turns: call.turns, shakiest: shakiest.trim() || undefined, firstAttempt, focus: call.focus },
+        { topic: call.topic, goal: call.goal, notes: before?.notes, turns: call.turns, shakiest: shakiest.trim() || undefined, firstAttempt, focus: call.focus, missedIdeas: call.missedIdeas },
         ctl.signal,
       );
       if (ctl.signal.aborted) return;
@@ -467,7 +469,7 @@ function GapCard({
           ) : null}
         </ScrollView>
         {/* Show me never closes the card: it hands the pen straight back. */}
-        <PillButton label={shown ? "Now tell Fenny in your own words" : "Explain it again now"} variant="solid" onPress={onExplain} style={{ marginTop: 20 }} />
+        <PillButton label={shown ? TELL_ME_BUTTON : "Explain it again now"} variant="solid" onPress={onExplain} style={{ marginTop: 20 }} />
         {!shown && (
           <Pressable onPress={reveal} disabled={loading} accessibilityRole="button" style={styles.showMe} hitSlop={6}>
             {loading ? <ActivityIndicator color={colour.soft} /> : <T size={14} tone="soft">Show me</T>}

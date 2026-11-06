@@ -64,6 +64,13 @@ describe("POST /api/analyse", () => {
     expect(sent.messages[1].content).toContain("have not added notes");
   });
 
+  it("passes on the key ideas that never came up", async () => {
+    const fetchImpl = vi.fn(async () => chatReply({ strengths: [], gaps: [], shakiestDetail: "", focusExplained: false, thenAndNow: null }));
+    await handleAnalyse(request("/api/analyse", { topic: "x", turns, missedIdeas: ["Non-competitive inhibitors bind elsewhere"] }), env, fetchImpl as never);
+    const sent = JSON.parse((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(sent.messages[1].content).toContain("- Non-competitive inhibitors bind elsewhere");
+  });
+
   it("passes provider errors on as 502", async () => {
     const fetchImpl = vi.fn(async () => new Response("rate limited", { status: 429 }));
     const res = await handleAnalyse(request("/api/analyse", { topic: "x", turns }), env, fetchImpl as never);

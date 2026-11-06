@@ -32,6 +32,8 @@ export interface AnalyseRequest {
   firstAttempt?: string;
   /** The gap this call went back over, when it was opened from a gap card. */
   focus?: string;
+  /** Key ideas from the conversation engine that never came up in the call. */
+  missedIdeas?: string[];
 }
 
 export interface Strength {
@@ -283,6 +285,9 @@ export async function handleAnalyse(req: Request, env: Env = process.env, fetchI
     `Topic: ${clip(body.topic, 200) || "not given"}`,
     body.goal?.trim() ? `What they want to be able to explain: ${clip(body.goal, 400)}` : "",
     body.shakiest?.trim() ? `The part they said felt shakiest, in their words: ${clip(body.shakiest, 300)}` : "They did not name a part that felt shakiest.",
+    body.missedIdeas?.length
+      ? `Key ideas this topic needs that never came up in the call (good candidates for "skipped" gaps, if they matter for this topic and goal):\n${body.missedIdeas.slice(0, 8).map((i) => `- ${clip(i, 200)}`).join("\n")}`
+      : "",
     body.focus?.trim() ? `This call went back over one part (the focus): ${clip(body.focus, 300)}` : "",
     body.notes?.trim() ? `<notes>\n${clip(body.notes, MAX_NOTES_CHARS)}\n</notes>` : "They have not added notes for this topic.",
     body.firstAttempt?.trim() ? `<earlier_attempt>\n${clip(body.firstAttempt, 3000)}\n</earlier_attempt>` : "",
