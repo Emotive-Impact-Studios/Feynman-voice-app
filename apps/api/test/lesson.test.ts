@@ -102,6 +102,23 @@ describe("POST /api/lesson", () => {
     expect((sent.output_config as { format: { type: string } }).format.type).toBe("json_schema");
   });
 
+  it("falls back to OpenAI when Claude refuses the key", async () => {
+    const mixed = (async (url: string) => {
+      if (String(url).includes("anthropic")) {
+        return new Response(JSON.stringify({ type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return openAIFetch([draft()])(url);
+    }) as unknown as typeof fetch;
+    const res = await handleLesson(post({ ...req, idea: "idea four" }), { ANTHROPIC_API_KEY: "bad", OPENAI_API_KEY: "k" }, mixed);
+    expect(res.status).toBe(200);
+    const j = await res.json();
+    expect(j.model).not.toMatch(/claude/);
+    expect(j.lesson.bites).toHaveLength(2);
+  });
+
   it("needs a topic and an idea", async () => {
     expect((await handleLesson(post({ topic: "x" }), { OPENAI_API_KEY: "k" })).status).toBe(400);
   });

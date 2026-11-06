@@ -56,7 +56,8 @@ export default function Session() {
   const { width } = useWindowDimensions();
   // The view is chosen in Me, under Settings. The session itself has no switch.
   const [view] = useState<View3>(() => profile.sessionView ?? "light");
-  const voice: LiveVoice = "sonic";
+  // Chosen in Settings (Me): Cartesia Sonic, or Phonon on the phone for demos.
+  const [voice] = useState<LiveVoice>(() => profile.voice ?? "sonic");
   const ears: LiveEars = "auto";
   const loop = useLiveCall(brainTopic, { voice, ears });
 
