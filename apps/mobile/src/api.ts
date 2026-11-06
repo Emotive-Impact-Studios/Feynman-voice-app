@@ -1,5 +1,6 @@
 import { NdjsonReader } from "@feynman/audio";
 import type { PhonemeChunk } from "@feynman/kitten-tts";
+import type { Play, Scene } from "./teach/scene/types";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 const TOKEN = process.env.EXPO_PUBLIC_PROTOTYPE_TOKEN ?? "";
@@ -123,9 +124,19 @@ export interface LessonBite {
   title: string;
   text: string;
   picture: { kind: PictureKind; labels: string[] };
+  /** A live drawing from the kit, or null (older servers leave it out). */
+  scene?: Scene | null;
+  /** A slider that changes the scene, on at most one bite. */
+  play?: Play | null;
+  /** One short sentence under the drawing that states its point. */
+  caption?: string;
   quote: string;
   fromNotes: boolean;
   puzzle: LessonPuzzle;
+  /** What Fenny says while the drawing builds, one sentence per part (older servers leave it out). */
+  film?: { say: string; cue: string }[];
+  /** "What happens next?", asked before the last sentence, on at most one bite. */
+  guess?: { ask: string; options: string[]; answer: string } | null;
 }
 
 export interface Lesson {

@@ -34,6 +34,7 @@ export function speakable(text: string): string {
   s = s.replace(/([.?!…])\s*,/g, "$1");
   s = s.replace(/^[\s,.:]+/, "");
   s = s.replace(/[\s,:]+$/, "");
-  s = s.replace(/,(?=\S)/g, ", ");
+  // A space after each comma, except inside numbers like 1,000.
+  s = s.replace(/(?<!\d),(?=\S)|,(?=[^\s\d])/g, ", ");
   return s.trim();
 }

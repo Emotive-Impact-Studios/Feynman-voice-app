@@ -14,6 +14,8 @@ import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { chatJSON } from "./engine/chat";
 import { openAIPricesFromEnv, type CostLine } from "./pricing";
+import { checkFilm, checkGuess, FILM_PROMPT, FILM_SCHEMA, GUESS_SCHEMA, type FilmBeat, type Guess } from "./film";
+import { checkPlay, checkScene, PLAY_SCHEMA, SCENE_PROMPT, SCENE_SCHEMA, type Play, type Scene } from "./scene";
 
 type Env = Record<string, string | undefined>;
 
@@ -42,12 +44,23 @@ export interface Puzzle {
 export interface Bite {
   title: string;
   text: string;
+  /** The simple diagram, used when there is no scene or the app can't draw it. */
   picture: { kind: (typeof PICTURES)[number]; labels: string[] };
+  /** A live drawing from the kit in scene.ts, or null. */
+  scene: Scene | null;
+  /** A slider that changes the scene, on at most one bite. */
+  play: Play | null;
+  /** One short sentence under the drawing that states its point. */
+  caption: string;
   /** Words copied from the notes that back this bite up, or "" with no notes. */
   quote: string;
   /** True when quote was found in the notes. */
   fromNotes: boolean;
   puzzle: Puzzle;
+  /** What Fenny says while the scene draws itself, one sentence per part. */
+  film: FilmBeat[];
+  /** "What happens next?", asked before the last sentence, on at most one bite. */
+  guess: Guess | null;
 }
 
 export interface Lesson {
@@ -71,7 +84,7 @@ const SYSTEM = `You write tiny lessons for Fenny, a learning app for UK universi
 Write 2 or 3 bites that build up to the idea. Each bite:
 - title: 2 to 5 words.
 - text: at most 45 words. Plain, warm, concrete. One thought per bite. Use an everyday comparison when it helps. Explain any technical word the first time it appears.
-- picture: pick the simplest diagram that shows the bite, and give its labels (2 to 5, each 1 to 3 words). flow = things in sequence, labels in order. compare = two sides, labels [left, right] or [left, right, what differs]. cycle = a loop, labels in order. layers = a stack from top to bottom. parts = a whole then its parts, first label is the whole. none = no diagram helps.
+- picture: a fallback diagram, used when scene is null or cannot be drawn. Pick the simplest diagram that shows the bite, and give its labels (2 to 5, each 1 to 3 words). flow = things in sequence, labels in order. compare = two sides, labels [left, right] or [left, right, what differs]. cycle = a loop, labels in order. layers = a stack from top to bottom. parts = a whole then its parts, first label is the whole. none = no diagram helps.
 - quote: when notes are given, copy a short phrase (5 to 25 words) from the notes, word for word, that backs this bite up. With no notes, use "".
 - puzzle: one quick check of that bite, answerable in a few seconds. Use a mix of kinds across the lesson, and make the last one the hardest.
   true_false: options ["True","False"], answer is one of them.
@@ -87,7 +100,15 @@ Rules:
 - Teach only what the notes say when notes are given. Never add facts the notes do not support. With no notes, stick to standard first-year university understanding.
 - If the student said something wrong, the bites should quietly fix it without naming their mistake.
 - British English. Proper sentences with ordinary punctuation. No dashes as pauses, no semicolons, no emoji, no markdown.
-- Wrong options must be believable, never silly.`;
+- Wrong options must be believable, never silly.
+
+${SCENE_PROMPT}
+
+${FILM_PROMPT}`;
+
+const CLAUDE_SYSTEM = `${SYSTEM}
+
+Write each scene as JSON text holding the scene object, for example {"family":"stairs","steps":["Seed","Shoot","Tree"],"at":2}, or the text null when no device fits.`;
 
 const str = { type: "string" };
 const strs = { type: "array", items: str };
@@ -107,6 +128,11 @@ export const LESSON_SCHEMA = {
             required: ["kind", "labels"],
             additionalProperties: false,
           },
+          scene: SCENE_SCHEMA,
+          play: PLAY_SCHEMA,
+          caption: str,
+          film: FILM_SCHEMA,
+          guess: GUESS_SCHEMA,
           quote: str,
           puzzle: {
             type: "object",
@@ -115,7 +141,7 @@ export const LESSON_SCHEMA = {
             additionalProperties: false,
           },
         },
-        required: ["title", "text", "picture", "quote", "puzzle"],
+        required: ["title", "text", "picture", "scene", "play", "caption", "film", "guess", "quote", "puzzle"],
         additionalProperties: false,
       },
     },
@@ -126,7 +152,31 @@ export const LESSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-type Draft = { bites: Omit<Bite, "fromNotes">[]; recap: string; explainBack: string };
+/**
+ * Claude's structured output refuses a grammar as large as the fourteen scene
+ * shapes, so Claude writes the scene as JSON text instead, and checkScene reads
+ * it like any other scene. Everything else is the same schema.
+ */
+const biteItems = LESSON_SCHEMA.properties.bites.items;
+export const CLAUDE_LESSON_SCHEMA = {
+  ...LESSON_SCHEMA,
+  properties: {
+    ...LESSON_SCHEMA.properties,
+    bites: { ...LESSON_SCHEMA.properties.bites, items: { ...biteItems, properties: { ...biteItems.properties, scene: str } } },
+  },
+} as const;
+
+/** A scene written as JSON text (Claude) or as an object (OpenAI). */
+function sceneOf(raw: unknown): unknown {
+  if (typeof raw !== "string") return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+type Draft = { bites: (Omit<Bite, "fromNotes" | "scene" | "play" | "caption" | "film" | "guess"> & { scene?: unknown; play?: unknown; caption?: string; film?: unknown; guess?: unknown })[]; recap: string; explainBack: string };
 
 /** Lower case, plain quotes, single spaces, no punctuation: for checking quotes against notes. */
 function flat(s: string): string {
@@ -165,8 +215,32 @@ export function checkLesson(d: Draft, req: LessonRequest): Lesson {
       // Each side is a set of cards tapped once, so a repeat can't be matched.
       if (new Set(p.options).size !== p.options.length || new Set(p.answer).size !== p.answer.length) throw new Error(`${where}: match has repeated items, every card must be different`);
     }
-    return { ...b, quote: req.notes?.trim() ? b.quote : "", fromNotes: quoteInNotes(b.quote, req.notes) };
+    const scene = checkScene(sceneOf(b.scene));
+    const film = checkFilm(b.film, b.text);
+    return {
+      ...b,
+      scene,
+      play: checkPlay(b.play, scene),
+      caption: String(b.caption ?? "").trim(),
+      quote: req.notes?.trim() ? b.quote : "",
+      fromNotes: quoteInNotes(b.quote, req.notes),
+      film,
+      // A guess needs a picture to watch.
+      guess: scene ? checkGuess(b.guess, film) : null,
+    };
   });
+  // One guess per lesson: a question to predict, not a quiz.
+  let guessed = false;
+  for (const b of bites) {
+    if (b.guess && guessed) b.guess = null;
+    if (b.guess) guessed = true;
+  }
+  // One slider per lesson keeps it a moment, not a game.
+  let played = false;
+  for (const b of bites) {
+    if (b.play && played) b.play = null;
+    if (b.play) played = true;
+  }
   return { idea: req.idea, bites, recap: d.recap, explainBack: d.explainBack };
 }
 
@@ -200,12 +274,12 @@ async function draftClaude(env: Env, req: LessonRequest, retry?: string, fetchIm
   const model = env.LESSON_MODEL ?? "claude-sonnet-5-5";
   const r = await client.beta.messages.create({
     model,
-    max_tokens: 6000,
+    max_tokens: 7000,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     // The instructions are the same for every lesson, so they are cached.
-    system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-    output_config: { effort: (env.LESSON_EFFORT ?? "medium") as "low" | "medium" | "high", format: { type: "json_schema", schema: LESSON_SCHEMA } },
+    system: [{ type: "text", text: CLAUDE_SYSTEM, cache_control: { type: "ephemeral" } }],
+    output_config: { effort: (env.LESSON_EFFORT ?? "medium") as "low" | "medium" | "high", format: { type: "json_schema", schema: CLAUDE_LESSON_SCHEMA } },
     messages: [{ role: "user", content: userMessage(req, retry) }],
   });
   if (r.stop_reason === "refusal") throw new Error("Claude declined to write this lesson");
@@ -232,7 +306,7 @@ async function draftOpenAI(env: Env, req: LessonRequest, retry?: string, fetchIm
       { role: "user", content: userMessage(req, retry) },
     ],
     { name: "lesson", schema: LESSON_SCHEMA },
-    4000,
+    8000,
   );
   const p = openAIPricesFromEnv(env);
   const cached = r.usage.prompt_tokens_details?.cached_tokens ?? 0;
