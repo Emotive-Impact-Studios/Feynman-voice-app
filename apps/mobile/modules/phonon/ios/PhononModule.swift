@@ -86,6 +86,12 @@ public class PhononModule: Module {
       ]
     }
 
+    /// Headphones or earbuds, so the mic can't hear the student's voice.
+    Function("usesHeadphones") { () -> Bool in
+      let headphones: Set<AVAudioSession.Port> = [.headphones, .bluetoothA2DP, .bluetoothHFP, .bluetoothLE]
+      return AVAudioSession.sharedInstance().currentRoute.outputs.contains { headphones.contains($0.portType) }
+    }
+
     /// Stop talking now: cancel generation and drop queued audio.
     Function("stop") {
       self.lock.lock()

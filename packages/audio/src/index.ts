@@ -161,14 +161,23 @@ export class EndOfTurn {
 export const TURN_QUIET_SECONDS = 2;
 /** Quiet that ends a turn after a "why" or "how" question, which needs thinking time. */
 export const THINKING_QUIET_SECONDS = 3;
+/**
+ * The faster-replies trial: a shorter wait. Safe because the server holds a
+ * turn that stopped mid-thought ("wait") and talking on while Fenny thinks
+ * carries the turn on.
+ */
+export const FAST_TURN_QUIET_SECONDS = 1.2;
+export const FAST_THINKING_QUIET_SECONDS = 2;
 
 /**
  * How long to wait in silence before the learner's answer to this question
  * counts as finished. "Why" and "how" questions get longer, so a learner who
  * stops to think is not cut off.
  */
-export function quietAfter(question: string): number {
-  return /\b(why|how)\b/i.test(question) ? THINKING_QUIET_SECONDS : TURN_QUIET_SECONDS;
+export function quietAfter(question: string, fast = false): number {
+  const thinking = /\b(why|how)\b/i.test(question);
+  if (fast) return thinking ? FAST_THINKING_QUIET_SECONDS : FAST_TURN_QUIET_SECONDS;
+  return thinking ? THINKING_QUIET_SECONDS : TURN_QUIET_SECONDS;
 }
 
 /**

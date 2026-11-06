@@ -19,6 +19,8 @@ interface PhononNative {
   setVoice(name: string): Promise<void>;
   speak(text: string): Promise<SpeakResult>;
   stop(): void;
+  /** True when sound goes to headphones or earbuds (wired or Bluetooth), not the phone's speaker. Missing on older builds. */
+  usesHeadphones?(): boolean;
   addListener(event: "onProgress", listener: (e: { fraction: number }) => void): EventSubscription;
 }
 
