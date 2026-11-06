@@ -412,39 +412,87 @@ function drawLinks(c: SkCanvas, p: SkPaint, font: SkFont | null, s: LinksScene, 
     }
     lit[1] = on > 0.3;
   } else {
+    // Light passes (kit v6): cause links are quiet lines, and one light
+    // travels them in the order things happen, lighting each node as it
+    // arrives. Where the light goes shows the direction, so the lines need
+    // no arrowheads. Under Reduce Motion the path is lit at once, with small
+    // heads, and the end node is lit.
+    // The path the light takes: in a fork only the first outcome, else every cause link in order.
+    const path: number[] = [];
+    for (let i = 0; i < m; i++) {
+      const l = s.links[i];
+      if (l.kind === "cause" && (s.layout !== "fork" || l.to === s.links[0].to)) path.push(i);
+    }
+    const ends = (i: number) => {
+      "worklet";
+      const l = s.links[i];
+      const a1 = pos[l.from];
+      const a2 = pos[l.to];
+      const ang = Math.atan2(a2[1] - a1[1], a2[0] - a1[0]);
+      return [a1[0] + Math.cos(ang) * (R + 5), a1[1] + Math.sin(ang) * (R + 5), a2[0] - Math.cos(ang) * (R + 5), a2[1] - Math.sin(ang) * (R + 5)];
+    };
+    // Stepping (a slider): the newest link draws on lit, and the node it reaches is lit.
+    let newest = -1;
     for (let i = 0; i < m; i++) {
       const l = s.links[i];
       const k = stepping ? clamp(f.v * m * 1.15 - i) : beat(f, 1 + (i / Math.max(1, m)) * 1.5, 3);
       if (k <= 0) continue;
-      const a1 = pos[l.from];
-      const a2 = pos[l.to];
-      const ang = Math.atan2(a2[1] - a1[1], a2[0] - a1[0]);
-      const sx = a1[0] + Math.cos(ang) * (R + 5);
-      const sy = a1[1] + Math.sin(ang) * (R + 5);
-      const ex = a2[0] - Math.cos(ang) * (R + 5);
-      const ey = a2[1] - Math.sin(ang) * (R + 5);
-      // In a fork, the first outcome is the one that's lit.
-      const main = s.layout !== "fork" || l.to === s.links[0].to;
+      const e = ends(i);
+      const onPath = path.indexOf(i) >= 0;
       if (l.kind === "tie") {
-        line(c, p, sx, sy, ex, ey, 0.25, SIL, k, [2, 5]);
+        line(c, p, e[0], e[1], e[2], e[3], 0.25, SIL, k, [2, 5]);
         continue;
       }
       if (l.kind === "cause") {
-        arrow(c, p, sx, sy, ex, ey, main ? 0.85 : 0.35, main ? BLUE : SIL, k);
-        if (k >= 1 && main && !f.still) {
-          const q = (tm * 0.4 + i * 0.37) % 1;
-          dot(c, p, sx + (ex - sx) * q, sy + (ey - sy) * q, 2.2, Math.sin(q * Math.PI), BLUE);
+        const drawing = k < 0.98;
+        line(c, p, e[0], e[1], e[2], e[3], onPath ? 0.55 : 0.3, SIL, k);
+        // The pen tip carries the light while a line draws.
+        if (drawing && onPath) dot(c, p, e[0] + (e[2] - e[0]) * k, e[1] + (e[3] - e[1]) * k, 2.6, 1, BLUE);
+        if (f.still && !drawing) {
+          const ang = Math.atan2(e[3] - e[1], e[2] - e[0]);
+          const hs = 5.5;
+          const col = onPath ? BLUE : SIL;
+          const ha = onPath ? 0.9 : 0.35;
+          if (onPath) line(c, p, e[0], e[1], e[2], e[3], 0.9, BLUE);
+          line(c, p, e[2] - Math.cos(ang - 0.5) * hs, e[3] - Math.sin(ang - 0.5) * hs, e[2], e[3], ha, col);
+          line(c, p, e[2] - Math.cos(ang + 0.5) * hs, e[3] - Math.sin(ang + 0.5) * hs, e[2], e[3], ha, col);
         }
+        if (!drawing && onPath) newest = i;
       } else {
-        line(c, p, sx, sy, ex, ey, 0.15 * k);
+        line(c, p, e[0], e[1], e[2], e[3], 0.15 * k);
         for (let d = 0; d < 5; d++) {
           const q = (d / 5 + tm * 0.2) % 1;
-          dot(c, p, sx + (ex - sx) * q, sy + (ey - sy) * q, 2.4, k * Math.sin(q * Math.PI));
+          dot(c, p, e[0] + (e[2] - e[0]) * q, e[1] + (e[3] - e[1]) * q, 2.4, k * Math.sin(q * Math.PI));
         }
       }
-      if (k > 0.5 && main) {
-        lit[l.to] = true;
-        if (stepping) lit[l.from] = true;
+    }
+    if (path.length > 0) {
+      const built = stepping ? newest >= 0 : f.intro >= 0.999;
+      if (f.still || stepping) {
+        // At rest: the end of the path so far is lit.
+        if (built) lit[s.links[stepping ? newest : path[path.length - 1]].to] = true;
+      } else if (built) {
+        // One light, one link at a time: travel, pause on the node it reached, move on.
+        const TRAVEL = 1.1;
+        const DWELL = 0.35;
+        const loop = s.layout === "loop";
+        const cycle = path.length * (TRAVEL + DWELL) + (loop ? 0 : 1.2);
+        const u = tm % cycle;
+        const at = Math.floor(u / (TRAVEL + DWELL));
+        if (at >= path.length) {
+          lit[s.links[path[path.length - 1]].to] = true;
+        } else {
+          const w = u - at * (TRAVEL + DWELL);
+          const e = ends(path[at]);
+          if (w < TRAVEL) {
+            const q = ease2(w / TRAVEL);
+            const q0 = Math.max(0, q - 0.3);
+            line(c, p, e[0] + (e[2] - e[0]) * q0, e[1] + (e[3] - e[1]) * q0, e[0] + (e[2] - e[0]) * q, e[1] + (e[3] - e[1]) * q, 1, BLUE, 1, undefined, W0 + 0.6);
+            dot(c, p, e[0] + (e[2] - e[0]) * q, e[1] + (e[3] - e[1]) * q, 2.6, 1, BLUE);
+          } else {
+            lit[s.links[path[at]].to] = true;
+          }
+        }
       }
     }
   }
@@ -454,7 +502,7 @@ function drawLinks(c: SkCanvas, p: SkPaint, font: SkFont | null, s: LinksScene, 
     const y = pos[i][1];
     const a = beat(f, (i / s.nodes.length) * 0.8, 3);
     dot(c, p, x, y, R, a, PANEL);
-    if (lit[i]) dot(c, p, x, y, R, a, BLUE);
+    if (lit[i]) dot(c, p, x, y, 6.5, a, BLUE);
     else ring(c, p, x, y, R, a * 0.7);
     // Labels sit outside the shape: under a line, away from the middle of a loop, fork or web.
     const below = s.layout === "line" ? true : y >= 80;

@@ -198,7 +198,7 @@ Pick the device by the question the idea answers:
 
 The devices:
 particles: zones (1 to 3 area labels, left to right, "" for none), divider (none, wall, membrane = dashed and crossable, sieve = gaps), things (1 to 3 groups: name, mark dot = something that moves, ring = an object, blocked = something stopped, at most one group; count 1 to 16; zone it starts in; to = zone it heads to, same as zone if it stays; motion still, drift, jiggle like heat, cross from zone to "to", rise, fall, orbit, pulse, flow).
-links: layout line, fork, loop or web. nodes 2 to 7 labels. links from and to node indexes, in the order they happen, kind cause (arrow with a pulse), flow (stream of dots), tie (faint dashed bond, like an alliance).
+links: layout line, fork, loop or web. nodes 2 to 7 labels. links from and to node indexes, in the order they happen, kind cause (one light travels the cause links in the order listed, lighting each node it reaches, so list them in the order things happen), flow (stream of dots), tie (faint dashed bond, like an alliance).
 graph: x and y axis labels. curves 1 or 2: name, shape (rise, fall = straight lines, saturate = rises then levels off, decay = falls then levels off, bell, s_curve), label of 1 or 2 letters or a short word. highlight ride (a lit point travels the curve), crossing (where two curves meet), half (half height of a saturate curve, like Km), end (value at the right), none.
 balance: left and right labels, leftWeight and rightWeight 0 to 6, middle = a short label under the pivot or "".
 compare: style circles or bars. items 2 to 6 with a label and a positive value in real proportion (Earth 1, Sun 109). The biggest or most important item is lit.
