@@ -13,6 +13,10 @@ import { Backdrop, Icon, Label, PillButton, T } from "../ui/kit";
 import { HoldButton } from "../ui/HoldButton";
 import { LivingLight } from "../ui/LivingLight";
 import { moodFor } from "../ui/mood";
+import { useFennyCue } from "../ui/FennyOrb";
+import { reactionFor } from "../ui/reactions";
+import { GotChip, IdeaBar } from "../ui/IdeaProgress";
+import * as Haptics from "expo-haptics";
 import { RecordDisc } from "../ui/RecordDisc";
 import { ScreenIn } from "../ui/ScreenIn";
 import { VoiceGlow } from "../ui/VoiceGlow";
@@ -76,6 +80,25 @@ export default function Session() {
   // Nodding along while they talk.
   const nod = loop.phase === "listening" && loop.isTalking ? 1 : 0;
   const voiceLevel = loop.phase === "listening" ? (loop.isTalking ? 1 : 0.25) : 0;
+  // Fenny's reactions: hello as the call starts, aha when you finish a turn,
+  // hmm when it's lost, yay when it gets it. Talking while it speaks.
+  const talk = loop.phase === "speaking" ? 1 : 0;
+  const [cue, react] = useFennyCue();
+  const was = useRef({ phase: loop.phase as string, move: loop.move });
+  useEffect(() => {
+    const next = { phase: loop.phase as string, move: loop.move };
+    const r = reactionFor(was.current, next);
+    was.current = next;
+    if (r) react(r);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loop.phase, loop.move]);
+  // The got it moment: each key idea they nail gets a hop, a buzz and a chip.
+  useEffect(() => {
+    if (!loop.got) return;
+    react("yay");
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loop.got?.n]);
 
   // Gently animate the dot wave while you talk.
   const [tick, setTick] = useState(0);
@@ -103,12 +126,13 @@ export default function Session() {
   // feedback returns with gap analysis, build step 4.)
   // Saved once, whether you tap End, close, or go back with the system.
   const saved = useRef(false);
-  const latest = useRef({ spoken, questions: 0 });
-  latest.current = { spoken, questions: loop.turns.filter((t) => t.speaker === "student").length };
+  const latest = useRef({ spoken, questions: 0, ideas: [] as { id: string; idea: string; label?: string }[], covered: [] as string[] });
+  latest.current = { spoken, questions: loop.turns.filter((t) => t.speaker === "student").length, ideas: loop.ideas, covered: loop.covered };
   const save = useCallback(() => {
     if (saved.current) return;
     saved.current = true;
-    recordSession(topic, latest.current.spoken, latest.current.questions, goal);
+    const l = latest.current;
+    recordSession(topic, l.spoken, l.questions, goal, l.ideas.length ? { ideas: l.ideas, covered: l.covered } : undefined);
   }, [topic, goal]);
   useEffect(() => save, [save]);
   const end = () => {
@@ -144,8 +168,8 @@ export default function Session() {
           <VoiceGlow level={voiceLevel} height={230} dim />
           {/* Calm and empty, like a voice mode: one small living light and
               one line in the middle of the screen, nothing else lit. */}
-          <View style={[StyleSheet.absoluteFill, styles.centre, { justifyContent: "center", paddingBottom: 140 }]} pointerEvents="none">
-            <LivingLight size={120} energy={studentEnergy} mood={mood} nod={nod} />
+          <View style={[StyleSheet.absoluteFill, styles.centre, { justifyContent: "center", paddingBottom: 140 }]} pointerEvents="box-none">
+            <LivingLight size={120} energy={studentEnergy} mood={mood} nod={nod} talk={talk} cue={cue} touchable />
             <T size={22} weight="medium" style={{ textAlign: "center", marginTop: 26, maxWidth: 320, lineHeight: 30 }}>
               {question}
             </T>
@@ -158,7 +182,7 @@ export default function Session() {
           <VoiceGlow level={voiceLevel} height={260} />
           <View style={{ paddingTop: insets.top + 130, paddingHorizontal: 26 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <LivingLight size={30} energy={studentEnergy} mood={mood} nod={nod} />
+              <LivingLight size={30} energy={studentEnergy} mood={mood} nod={nod} talk={talk} cue={cue} />
               <Label tone="student">Student</Label>
             </View>
             <T size={36} weight="medium" style={{ marginTop: 14, lineHeight: 40 }}>
@@ -188,6 +212,8 @@ export default function Session() {
                     // Only the latest question has a face; older ones rest.
                     mood={i === loop.turns.length - 1 || !loop.turns.length ? mood : "rest"}
                     nod={i === loop.turns.length - 1 ? nod : 0}
+                    talk={i === loop.turns.length - 1 ? talk : 0}
+                    cue={i === loop.turns.length - 1 ? cue : null}
                   />
                   <View style={styles.studentBubble}>
                     <T size={16.5}>{t.text}</T>
@@ -219,6 +245,9 @@ export default function Session() {
           </View>
           <View style={styles.side} />
         </View>
+        {/* The topic's key ideas, filling as they explain each one. */}
+        <IdeaBar total={loop.ideas.length} done={loop.covered.length} />
+        <GotChip got={loop.got} />
       </View>
 
       {/* Teach me, when Fenny can tell this bit is new to them. */}

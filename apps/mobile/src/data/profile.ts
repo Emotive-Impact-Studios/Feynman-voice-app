@@ -18,6 +18,19 @@ export interface TopicRecord {
   questions: number;
   /** What they want to be able to explain, in their own words. */
   goal?: string;
+  /** The topic's key ideas (from Fenny's engine) and the ids they have explained. */
+  ideas?: KeyIdea[];
+  known?: string[];
+  /** Ideas first explained in the latest session, so the topic page can light them up. */
+  fresh?: string[];
+}
+
+export interface KeyIdea {
+  id: string;
+  /** The idea itself (the answer). */
+  idea: string;
+  /** A short name for it that doesn't give the answer away. */
+  label?: string;
 }
 
 export interface Profile {
@@ -101,14 +114,21 @@ export function replayIntro() {
 }
 
 /** Record a finished session. Sessions with no speaking are not saved. */
-export function recordSession(title: string, seconds: number, questions: number, goal?: string) {
+export function recordSession(
+  title: string,
+  seconds: number,
+  questions: number,
+  goal?: string,
+  map?: { ideas: KeyIdea[]; covered: string[] },
+) {
   const t = title.trim();
   if (!t || seconds < 1) return;
   const old = findTopic(t);
   const g = goal?.trim() || old?.goal;
-  const rec: TopicRecord = old
+  const base: TopicRecord = old
     ? { ...old, at: Date.now(), seconds: old.seconds + seconds, sessions: old.sessions + 1, questions: old.questions + questions, goal: g }
     : { title: t, at: Date.now(), seconds, sessions: 1, questions, goal: g };
+  const rec = map ? { ...base, ...mergeIdeas(old, map) } : { ...base, fresh: [] };
   const today = dayNumber(Date.now());
   set({
     ...state,
@@ -116,6 +136,19 @@ export function recordSession(title: string, seconds: number, questions: number,
     topics: [rec, ...state.topics.filter((x) => x !== old)],
     days: state.days.includes(today) ? state.days : [...state.days, today].slice(-120),
   });
+}
+
+/**
+ * The topic's ideas after a session. The server builds the checklist once per
+ * topic, so it is normally the same list each time and what they knew adds up.
+ * If it came back different (the server restarted), the new list starts over
+ * with what they explained this time. Lasting maps come with accounts.
+ */
+function mergeIdeas(old: TopicRecord | undefined, map: { ideas: KeyIdea[]; covered: string[] }): Pick<TopicRecord, "ideas" | "known" | "fresh"> {
+  const same = !!old?.ideas && old.ideas.length === map.ideas.length && old.ideas.every((k, i) => k.idea === map.ideas[i].idea);
+  const before = same ? (old?.known ?? []) : [];
+  const fresh = map.covered.filter((id) => !before.includes(id));
+  return { ideas: map.ideas, known: [...before, ...fresh], fresh };
 }
 
 export function findTopic(title: string): TopicRecord | undefined {

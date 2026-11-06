@@ -71,6 +71,19 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const [teach, setTeach] = useState<{ idea: string; open: boolean } | null>(null);
   /** The engine's move for the reply being spoken ("why", "puzzled", "close"...). Sets Fenny's face. */
   const [move, setMove] = useState<string | null>(null);
+  /** The topic's key ideas (the engine's private checklist) and the ids explained so far this call. */
+  const [ideas, setIdeas] = useState<{ id: string; idea: string; label?: string }[]>([]);
+  const [covered, setCovered] = useState<string[]>([]);
+  const coveredRef = useRef<string[]>([]);
+  const gotTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  /** Drop chips still waiting their turn (the answer was taken back, or the call ended). */
+  const clearGotTimers = () => {
+    gotTimers.current.forEach(clearTimeout);
+    gotTimers.current = [];
+  };
+  useEffect(() => () => gotTimers.current.forEach(clearTimeout), []);
+  /** The latest idea they nailed, with a counter so each one celebrates once. */
+  const [got, setGot] = useState<{ idea: string; n: number } | null>(null);
 
   const phaseRef = useRef<CallPhase>("loading");
   const setPhase = useCallback((p: CallPhase) => {
@@ -105,7 +118,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   // work checks it after each await and drops out if it has changed.
   const turnId = useRef(0);
   // The turn in flight, so carrying on can take back what the server recorded.
-  const sent = useRef<{ id: number; recorded: boolean; seconds: number } | null>(null);
+  const sent = useRef<{ id: number; recorded: boolean; seconds: number; coveredBefore: string[] } | null>(null);
   const waits = useRef(0);
   const request = useRef<AbortController | null>(null);
   const clips = useRef(new ClipQueue());
@@ -342,6 +355,12 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       setTurns((t) => t.slice(0, -2));
       setHeardSeconds((n) => Math.max(0, n - s.seconds));
     }
+    // The answer is being taken back: so are any ideas it was credited with.
+    if (s && coveredRef.current !== s.coveredBefore) {
+      coveredRef.current = s.coveredBefore;
+      setCovered(s.coveredBefore);
+      clearGotTimers();
+    }
     sent.current = null;
     if (more) {
       parts.current.push(more);
@@ -384,7 +403,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     let phononRemaining = 0;
     let wrapped = false;
     let waited = false;
-    sent.current = { id, recorded: false, seconds: speakingSeconds };
+    sent.current = { id, recorded: false, seconds: speakingSeconds, coveredBefore: coveredRef.current };
     const markStart = () => {
       if (id !== turnId.current) return;
       if (!firstWordMs) firstWordMs = Date.now() - quietAt;
@@ -428,6 +447,25 @@ export function useLiveCall(topic: string, settings: CallSettings) {
         if (sent.current?.id === id) sent.current.recorded = true;
       }
       if (e.type === "engine" && e.move !== "wait") setMove(e.move);
+      if (e.type === "engine" && e.ideas?.length) {
+        const list = e.ideas;
+        setIdeas(list);
+        const before = coveredRef.current;
+        const fresh = (e.covered ?? []).filter((id) => !before.includes(id));
+        if (fresh.length) {
+          coveredRef.current = [...before, ...fresh];
+          setCovered(coveredRef.current);
+          // One chip each, a few seconds apart, so every idea gets its moment.
+          // The short label names the idea without giving the answer away.
+          fresh.forEach((fid, i) => {
+            const k = list.find((x) => x.id === fid);
+            if (!k) return;
+            const show = () => setGot((g) => ({ idea: k.label || k.idea, n: (g?.n ?? 0) + 1 }));
+            if (i === 0) show();
+            else gotTimers.current.push(setTimeout(show, i * 3300));
+          });
+        }
+      }
       if (e.type === "engine" && e.move === "wrap") wrapped = true;
       // The server heard them stop mid-thought: keep listening instead of asking.
       if (e.type === "engine" && e.move === "wait") waited = true;
@@ -511,6 +549,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   /** End the call: microphone off, reply dropped. Safe to call twice. Runs on unmount. */
   const cancel = useCallback(() => {
     silence();
+    clearGotTimers();
     if (callOn.current) {
       callOn.current = false;
       streamRef.current.stop();
@@ -558,6 +597,9 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     liveSpeaking,
     finished,
     move,
+    ideas,
+    covered,
+    got,
     isTalking,
     start,
     /** "Done, ask me": send now instead of waiting for the pause. */
