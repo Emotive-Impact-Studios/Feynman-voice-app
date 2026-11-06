@@ -28,6 +28,7 @@ import { finishIntro, getProfile, SUBJECTS } from "../data/profile";
 import { colour, font } from "../theme";
 import { Glass, Icon, Label, PillButton, T } from "../ui/kit";
 import { LivingLight } from "../ui/LivingLight";
+import { useFennyCue } from "../ui/FennyOrb";
 import { smooth, snappy, spring } from "../ui/motion";
 import { Soft } from "../ui/Soft";
 
@@ -89,6 +90,15 @@ export default function Intro() {
 
   const onStage = STAGE.includes(screen);
   const slide = screen === "s0" ? 0 : screen === "s1" ? 1 : screen === "s2" ? 2 : -1;
+
+  // Fenny says hello as it meets them on the second slide.
+  const [cue, react] = useFennyCue();
+  useEffect(() => {
+    if (screen !== "s1") return;
+    const id = setTimeout(() => react("hello"), 350);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen]);
 
   // The splash moves on by itself, as on the board.
   useEffect(() => {
@@ -163,7 +173,7 @@ export default function Intro() {
           <Pressable style={StyleSheet.absoluteFill} onPress={screen === "auth" ? undefined : next} accessibilityLabel="Next" accessibilityRole="button">
             <Animated.View pointerEvents="none" style={[styles.hero, heroStyle]}>
               {(screen === "splash" || screen === "s0" || screen === "s1") && <Ripples size={HERO_SIZE} />}
-              <LivingLight size={HERO_SIZE} energy={screen === "s1" ? 1 : 0} mood={screen === "s1" ? "curious" : "rest"} peek />
+              <LivingLight size={HERO_SIZE} energy={screen === "s1" ? 1 : 0} mood={screen === "s1" ? "curious" : "rest"} peek cue={cue} />
             </Animated.View>
 
             {screen === "splash" && <Splash bottom={insets.bottom} />}

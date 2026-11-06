@@ -91,7 +91,7 @@ Write 2 or 3 bites that build up to the idea. Each bite:
   choose: 3 options, answer is the right option, copied exactly.
   fill_gap: prompt is a sentence with ___ for the missing word or phrase, 3 options, answer is the right option.
   order: 3 or 4 steps; options and answer are both the steps in the right order.
-  match: 3 pairs; options are the left items, answer the matching right items in the same order.
+  match: 3 pairs; options are the left items, answer the matching right items in the same order. Every left item and every right item must be different, because each one is a card the student taps once.
   why: one short sentence on why the answer is right.
 
 Then recap (one sentence that ties the bites together) and explainBack (the question Fenny, a curious student, asks when they return, in under 15 words).
@@ -184,6 +184,8 @@ export function checkLesson(d: Draft, req: LessonRequest): Lesson {
       p.answer = [...p.options];
     } else if (p.kind === "match") {
       if (p.options.length < 2 || p.options.length !== p.answer.length) throw new Error(`${where}: match pairs do not line up`);
+      // Each side is a set of cards tapped once, so a repeat can't be matched.
+      if (new Set(p.options).size !== p.options.length || new Set(p.answer).size !== p.answer.length) throw new Error(`${where}: match has repeated items, every card must be different`);
     }
     const scene = checkScene(b.scene);
     const film = checkFilm(b.film, b.text);

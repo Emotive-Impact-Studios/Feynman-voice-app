@@ -63,7 +63,7 @@ export default function NewTopic() {
                 {"\n"}I'll learn from you.
               </T>
               <View style={{ width: 44, height: 44 }}>
-                <LivingLight size={44} mood="listen" />
+                <LivingLight size={44} mood="listen" touchable />
               </View>
             </View>
           </Rise>

@@ -57,7 +57,7 @@ export type LiveEvent =
     }
   | { type: "error"; error: string; detail?: string }
   /** Fenny's conversation engine: the move it made this turn. "wrap" is the goodbye. */
-  | { type: "engine"; move: string; covered: string[]; ideas: { id: string; idea: string }[] }
+  | { type: "engine"; move: string; covered: string[]; ideas: { id: string; idea: string; label?: string }[]; verdict?: string }
   /** They clearly don't know this bit yet: show Teach me. */
   | { type: "teach_offer"; gap: { title: string } }
   /** They said yes to the offer: open teach mode now. */

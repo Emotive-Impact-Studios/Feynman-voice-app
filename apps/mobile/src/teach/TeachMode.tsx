@@ -23,6 +23,7 @@ import type { SpeakOptions } from "../live/useLiveCall";
 import { colour } from "../theme";
 import { Backdrop, Label, PillButton, Stat, T } from "../ui/kit";
 import { LivingLight } from "../ui/LivingLight";
+import { useFennyCue } from "../ui/FennyOrb";
 import { Press } from "../ui/Press";
 import { riseIn, STAGGER_MS } from "../ui/motion";
 import { Picture } from "./Picture";
@@ -78,6 +79,15 @@ export function TeachMode({
   const [step, setStep] = useState<Step>({ kind: "read", i: 0 });
   const [answered, setAnswered] = useState<boolean | null>(null);
   const [right, setRight] = useState(0);
+  // Fenny reacts to each puzzle answer, and cheers at the end.
+  const [cue, react] = useFennyCue();
+  // The finish screen's Fenny mounts after the last puzzle's cue, so cheer afresh.
+  useEffect(() => {
+    if (step.kind !== "finish") return;
+    const id = setTimeout(() => react("yay"), 450);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step.kind]);
   const [attempt, setAttempt] = useState(0);
   const scroll = useRef<ScrollViewInstance>(null);
   const slider = useSharedValue(0);
@@ -261,7 +271,7 @@ export function TeachMode({
       <ScrollView ref={scroll} contentContainerStyle={{ paddingTop: insets.top + 84, paddingHorizontal: 24, paddingBottom: 200, flexGrow: 1 }}>
         {!lesson && !error && (
           <View style={styles.centre}>
-            <LivingLight size={90} energy={0.5} mood="think" />
+            <LivingLight size={90} energy={0.5} mood="think" touchable />
             <T size={18} weight="medium" style={{ textAlign: "center", marginTop: 26 }}>
               Making a short lesson
             </T>
@@ -400,6 +410,8 @@ export function TeachMode({
               onDone={(ok) => {
                 setAnswered(ok);
                 if (ok) setRight((n) => n + 1);
+                // After the sheet's Fenny has risen in.
+                setTimeout(() => react(ok ? "yay" : "oops"), 260);
               }}
             />
           </Animated.View>
@@ -407,7 +419,7 @@ export function TeachMode({
 
         {lesson && step.kind === "finish" && (
           <Animated.View entering={riseIn()} style={[styles.centre, { gap: 0 }]}>
-            <LivingLight size={110} energy={1} mood="got" />
+            <LivingLight size={110} energy={1} mood="got" cue={cue} touchable />
             <T size={30} weight="medium" style={{ textAlign: "center", marginTop: 28, lineHeight: 35 }}>
               You've got it.{"\n"}
               <T size={30} weight="medium" tone="student">
@@ -445,9 +457,12 @@ export function TeachMode({
         <View style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 14) + 8 }]} pointerEvents="box-none">
           {step.kind === "try" && answered !== null && (
             <Animated.View entering={riseIn()} style={[styles.sheet, { backgroundColor: answered ? "rgba(169,190,230,0.14)" : "rgba(240,154,128,0.14)" }]}>
-              <T size={16} weight="semibold" style={{ color: answered ? colour.student : colour.gap }}>
-                {answered ? "Nice, that's it." : "Not quite, here's the right one."}
-              </T>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <LivingLight size={30} mood={answered ? "got" : "curious"} cue={cue} />
+                <T size={16} weight="semibold" style={{ color: answered ? colour.student : colour.gap, flex: 1 }}>
+                  {answered ? "Nice, that's it." : "Not quite, here's the right one."}
+                </T>
+              </View>
               <T size={14.5} tone="soft" style={{ marginTop: 4, lineHeight: 21 }}>
                 {lesson.bites[step.i].puzzle.why}
               </T>
