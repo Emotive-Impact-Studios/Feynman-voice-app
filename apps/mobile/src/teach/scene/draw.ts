@@ -17,7 +17,7 @@
 //   Under Reduce Motion nothing loops and only the slider changes the scene.
 // The panel is 300 x 176; the view scales it to fit the screen.
 import { Skia, type SkCanvas, type SkFont, type SkPaint } from "@shopify/react-native-skia";
-import type { BalanceScene, Change, CompareScene, GraphScene, LinksScene, ParticlesScene, Scene, Shape, SpectrumScene, StairsScene, VennScene } from "./types";
+import type { BalanceScene, Change, CompareScene, GraphScene, LinksScene, PairScene, PairSide, ParticlesScene, Scene, Shape, SpectrumScene, StairsScene, VennScene } from "./types";
 
 export const VIEW_W = 300;
 export const VIEW_H = 176;
@@ -731,6 +731,133 @@ function drawVenn(c: SkCanvas, p: SkPaint, font: SkFont | null, s: VennScene, ch
 }
 
 /** Draws one frame of a scene in the 300 x 176 view. */
+// ---- pair: the difference between X and Y ----
+/** A polyline through points (x, y) pairs, drawn on up to k of its length. */
+function poly(c: SkCanvas, p: SkPaint, pts: number[], a: number, colour: string, k: number) {
+  "worklet";
+  const n = pts.length / 2 - 1;
+  const upto = k * n;
+  for (let i = 0; i < n; i++) {
+    const seg = clamp(upto - i);
+    if (seg <= 0) break;
+    line(c, p, pts[i * 2], pts[i * 2 + 1], pts[i * 2 + 2], pts[i * 2 + 3], a, colour, seg);
+  }
+}
+/** One small picture for one side of a pair. Each shape has one meaning. */
+function glyph(c: SkCanvas, p: SkPaint, side: PairSide, cx: number, cy: number, colour: string, k: number, live: boolean, f: Frame) {
+  "worklet";
+  if (k <= 0) return;
+  const a = colour === BLUE ? 1 : 0.7;
+  const pts: number[] = [];
+  switch (side.shape) {
+    case "line":
+      line(c, p, cx - 44, cy + 30, cx + 44, cy - 30, a, colour, k);
+      break;
+    case "curve":
+      for (let i = 0; i <= 24; i++) {
+        const u = i / 24;
+        pts.push(cx - 44 + u * 88, cy + 30 - (64 * (Math.exp(3 * u) - 1)) / (Math.exp(3) - 1));
+      }
+      poly(c, p, pts, a, colour, k);
+      break;
+    case "jagged":
+      for (let i = 0; i <= 16; i++) {
+        const u = i / 16;
+        pts.push(cx - 44 + u * 88, cy + 14 - u * 28 + (rnd(i + 5) - 0.5) * 34);
+      }
+      poly(c, p, pts, a, colour, k);
+      break;
+    case "smooth":
+      for (let i = 0; i <= 24; i++) {
+        const u = i / 24;
+        pts.push(cx - 44 + u * 88, cy + 14 - u * 28 + Math.sin(u * TAU) * 3);
+      }
+      poly(c, p, pts, a, colour, k);
+      break;
+    case "split":
+    case "join": {
+      const n = Math.max(2, side.count);
+      const one = side.shape === "split" ? cx - 38 : cx + 38;
+      const many = side.shape === "split" ? cx + 36 : cx - 36;
+      dot(c, p, one, cy, 6, a * ease(k * 2), colour);
+      for (let i = 0; i < n; i++) {
+        const y = cy + (n === 1 ? 0 : -34 + (i * 68) / (n - 1));
+        const kk = clamp(k * 2 - 0.6 - i * 0.08);
+        if (side.shape === "split") line(c, p, one + 7, cy, many - 6, y, a * 0.5, colour, kk);
+        else line(c, p, many + 6, y, one - 7, cy, a * 0.5, colour, kk);
+        dot(c, p, many, y, 4, a * kk, colour);
+      }
+      break;
+    }
+    case "scatter":
+    case "aligned":
+      for (let i = 0; i < 7; i++) {
+        const gx = cx - 36 + (i % 3) * 36 + (i >= 6 ? 36 : 0);
+        const gy = cy - 26 + Math.floor(i / 3) * 26;
+        const ang = side.shape === "aligned" ? 0 : rnd(i + 11) * TAU;
+        const kk = clamp(k * 1.6 - i * 0.08);
+        arrow(c, p, gx - Math.cos(ang) * 10, gy - Math.sin(ang) * 10, gx + Math.cos(ang) * 10, gy + Math.sin(ang) * 10, a * 0.85, colour, kk);
+      }
+      break;
+    case "one":
+      if (colour === BLUE) dot(c, p, cx, cy, 26 * ease(k), a, BLUE);
+      else ring(c, p, cx, cy, 26 * ease(k), a);
+      break;
+    case "many": {
+      const n = Math.max(6, Math.min(24, side.count * 3));
+      for (let i = 0; i < n; i++) {
+        const col = i % 6;
+        const row = Math.floor(i / 6);
+        dot(c, p, cx - 40 + col * 16, cy - 24 + row * 16, 3.2, a * clamp(k * 1.5 - i / n), colour);
+      }
+      break;
+    }
+    case "loop": {
+      const r = 30;
+      const sweep = 300 * k;
+      if (sweep > 1) {
+        const b = Skia.PathBuilder.Make();
+        b.addArc({ x: cx - r, y: cy - r, width: 2 * r, height: 2 * r }, -90, sweep);
+        stroke(p, colour, a);
+        c.drawPath(b.build(), p);
+      }
+      if (live && !f.still && k >= 1) {
+        const ang = -Math.PI / 2 + f.t * 0.6;
+        dot(c, p, cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, 4, a, colour);
+      }
+      break;
+    }
+    case "path":
+    default: {
+      arrow(c, p, cx - 44, cy, cx + 44, cy, a, colour, k);
+      if (live && !f.still && k >= 1) {
+        const q = (f.t * 0.25) % 1;
+        dot(c, p, cx - 40 + q * 80, cy, 3.4, a * Math.sin(q * Math.PI), colour);
+      }
+      break;
+    }
+  }
+}
+function drawPair(c: SkCanvas, p: SkPaint, font: SkFont | null, s: PairScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const kL = beat(f, 0.4, 3);
+  // With a step slider, the right side builds in as the slider rises.
+  const kR = stepping ? ease(clamp(f.v * 1.25)) * beat(f, 1, 3) : beat(f, 1.4, 3);
+  const cy = 80;
+  line(c, p, 150, 24, 150, 140, 0.16, SIL, beat(f, 0, 3));
+  const sides = [s.left, s.right];
+  for (let i = 0; i < 2; i++) {
+    const side = sides[i];
+    const cx = i === 0 ? 75 : 225;
+    const lit = (i === 0 && s.lit === "left") || (i === 1 && s.lit === "right");
+    const k = i === 0 ? kL : kR;
+    glyph(c, p, side, cx, cy, lit ? BLUE : SIL, k, lit, f);
+    label(c, p, font, side.label, cx, 18, "center", lit ? SIL : LAB, ease(k * 2));
+    if (side.note) label(c, p, font, side.note, cx, 150, "center", lit ? BLUE : LAB, beat(f, i === 0 ? 2 : 2.5, 3) * ease(k * 1.5));
+  }
+}
+
 export function drawScene(c: SkCanvas, scene: Scene, changes: Change[], f: Frame, font: SkFont | null) {
   "worklet";
   const p = Skia.Paint();
@@ -759,6 +886,9 @@ export function drawScene(c: SkCanvas, scene: Scene, changes: Change[], f: Frame
       break;
     case "venn":
       drawVenn(c, p, font, scene, changes, f);
+      break;
+    case "pair":
+      drawPair(c, p, font, scene, changes, f);
       break;
   }
 }

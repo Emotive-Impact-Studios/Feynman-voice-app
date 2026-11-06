@@ -1,7 +1,7 @@
 // Drawn scenes for Teach me. The lesson writer never draws pixels: for each
-// bite it fills in one scene from a fixed kit (eight families covering twelve
+// bite it fills in one scene from a fixed kit (nine families covering thirteen
 // devices: scale, comparison, path, fork, loop, network, container, plot,
-// stairs, spectrum, Venn and balance), and the app draws it live with Skia.
+// stairs, spectrum, Venn, balance and pair), and the app draws it live with Skia.
 // The look follows the principles of Visual Value, softened for Fenny: one
 // idea per picture, silver lines on near-black, only one thing lit.
 // One bite per lesson may also carry a "play" slider that changes the scene.
@@ -11,7 +11,7 @@
 // app could not draw well. A broken scene becomes null, and the app falls back
 // to the simple diagram.
 
-export const FAMILIES = ["particles", "links", "graph", "balance"] as const;
+export const FAMILIES = ["particles", "links", "graph", "balance", "compare", "stairs", "spectrum", "venn", "pair"] as const;
 export const MARKS = ["dot", "ring", "blocked"] as const;
 export const MOTIONS = ["still", "drift", "jiggle", "cross", "rise", "fall", "orbit", "pulse", "flow"] as const;
 export const DIVIDERS = ["none", "wall", "membrane", "sieve"] as const;
@@ -21,6 +21,8 @@ export const SHAPES = ["rise", "fall", "saturate", "decay", "bell", "s_curve"] a
 export const HIGHLIGHTS = ["ride", "crossing", "half", "end", "none"] as const;
 export const CHANGES = ["appear", "cross", "speed", "grow", "step", "shift", "stretch", "ride", "weigh", "climb", "slide", "overlap"] as const;
 export const COMPARE_STYLES = ["circles", "bars"] as const;
+/** The little pictures a pair can set side by side. Each has one meaning. */
+export const PAIR_SHAPES = ["line", "curve", "jagged", "smooth", "split", "join", "scatter", "aligned", "one", "many", "loop", "path"] as const;
 
 export interface Thing {
   name: string;
@@ -88,7 +90,22 @@ export interface VennScene {
   both: string;
   overlap: number;
 }
-export type Scene = ParticlesScene | LinksScene | GraphScene | BalanceScene | CompareScene | StairsScene | SpectrumScene | VennScene;
+/** The difference between X and Y: two small pictures side by side, one lit. */
+export interface PairSide {
+  label: string;
+  shape: (typeof PAIR_SHAPES)[number];
+  /** For split, join and many: how many. */
+  count: number;
+  /** A word or two under the picture, or "". */
+  note: string;
+}
+export interface PairScene {
+  family: "pair";
+  left: PairSide;
+  right: PairSide;
+  lit: "left" | "right";
+}
+export type Scene = ParticlesScene | LinksScene | GraphScene | BalanceScene | CompareScene | StairsScene | SpectrumScene | VennScene | PairScene;
 
 export interface Play {
   prompt: string;
@@ -134,6 +151,12 @@ export const SCENE_SCHEMA = {
     obj({ family: en(["stairs"]), steps: strs, at: int }),
     obj({ family: en(["spectrum"]), left: str, right: str, min: num, max: num, marks: { type: "array", items: obj({ label: str, at: num }) }, at: num }),
     obj({ family: en(["venn"]), a: str, b: str, both: str, overlap: num }),
+    obj({
+      family: en(["pair"]),
+      left: obj({ label: str, shape: en(PAIR_SHAPES), count: int, note: str }),
+      right: obj({ label: str, shape: en(PAIR_SHAPES), count: int, note: str }),
+      lit: en(["left", "right"]),
+    }),
     { type: "null" },
   ],
 } as const;
@@ -153,6 +176,12 @@ export const PLAY_SCHEMA = {
 
 export const SCENE_PROMPT = `Each bite also gets a scene: one small live drawing that makes one point. You do not draw. You pick one device and fill in its slots, and the app draws it in Fenny's style (soft silver lines on near-black, one thing lit, built in a few beats). Use a scene for almost every bite. Use null only when no device fits, and then the picture field is used instead.
 
+How to choose, in this order:
+1. Find the question the idea answers (who or what, how much, where, when, how, why). How much: compare, spectrum or graph. When: links line or stairs. How: links, particles or loop. Why: graph or balance. What kind: venn or pair.
+2. If the idea is "the difference between X and Y", use pair.
+3. If no picture comes to mind, turn the key sentence into a chart: "A and B overlap" is a venn, "more X gives more Y" is a graph.
+4. Check it before you answer. Clear at a glance? Builds left to right in the order it is spoken? Uses a real example the student knows? Simple but never wrong, so a lecturer could not mark it wrong? If any answer is no, simplify or use null.
+
 Pick the device by the question the idea answers:
 - How big compared with what? compare (style circles for size, bars for amounts).
 - What steps, in what order? links with layout line.
@@ -165,6 +194,7 @@ Pick the device by the question the idea answers:
 - Where does it sit between two ends? spectrum.
 - What do two things share? venn.
 - Which of two sides wins? balance.
+- What is the difference between two things? pair.
 
 The devices:
 particles: zones (1 to 3 area labels, left to right, "" for none), divider (none, wall, membrane = dashed and crossable, sieve = gaps), things (1 to 3 groups: name, mark dot = something that moves, ring = an object, blocked = something stopped, at most one group; count 1 to 16; zone it starts in; to = zone it heads to, same as zone if it stays; motion still, drift, jiggle like heat, cross from zone to "to", rise, fall, orbit, pulse, flow).
@@ -175,6 +205,7 @@ compare: style circles or bars. items 2 to 6 with a label and a positive value i
 stairs: steps 2 to 6 labels, bottom step first. at = index of the step that is lit.
 spectrum: left and right end labels, min and max numbers, marks 0 to 4 reference points (label, at), at = where the lit marker sits.
 venn: a and b labels, both = the label for the overlap, overlap 0 to 1.
+pair: left and right, each with a label, a shape and count (2 to 8, only for split, join and many) and a short note or "". lit = the side the lesson points to. Shapes, each with one meaning: line = steady, linear growth; curve = compounding, exponential; jagged = noisy, short-term ups and downs; smooth = the long-run trend; split = one becomes several; join = several become one; scatter = random, unfocused; aligned = ordered, all one way; one = a single whole; many = lots of small parts; loop = repeats in a cycle; path = one way, start to end.
 
 play: at most one bite per lesson (usually the first or second) gets a slider that changes its scene, so the student tries the idea with their own hands. Others get null.
   prompt: an instruction under 8 words, like "Add sugar to the right." low and high: 1 to 3 word slider end labels.
@@ -186,6 +217,7 @@ play: at most one bite per lesson (usually the first or second) gets a slider th
     balance: weigh (that side goes from nothing to 6).
     compare: grow (that item's value rises from small to its value), step (items appear one at a time).
     stairs: climb. spectrum: slide (marker moves from min to max). venn: overlap (from apart to mostly shared).
+    pair: step (the right side builds in as the slider rises, so the difference appears).
 
 caption: one short sentence under 9 words that states the point, ending with a full stop, like "Water follows the sugar."
 
@@ -208,7 +240,9 @@ Maslow: {"family":"stairs","steps":["Body","Safety","Belonging","Esteem","Growth
 pH: {"family":"spectrum","left":"Acid","right":"Alkaline","min":0,"max":14,"marks":[{"label":"Lemon","at":2},{"label":"Water","at":7},{"label":"Bleach","at":13}],"at":7}
 Probability of A and B: {"family":"venn","a":"Rain","b":"Wind","both":"Both","overlap":0.4}
 Km: {"family":"graph","x":"Substrate","y":"Rate","curves":[{"name":"rate","shape":"saturate","label":""}],"highlight":"half"}
-Civil burden of proof: {"family":"balance","left":"Defendant","right":"Claimant","leftWeight":3,"rightWeight":4,"middle":"51%"}`;
+Civil burden of proof: {"family":"balance","left":"Defendant","right":"Claimant","leftWeight":3,"rightWeight":4,"middle":"51%"}
+Mitosis and meiosis: {"family":"pair","left":{"label":"Mitosis","shape":"split","count":2,"note":"2 identical cells"},"right":{"label":"Meiosis","shape":"split","count":4,"note":"4 different cells"},"lit":"right"}
+Weather and climate: {"family":"pair","left":{"label":"Weather","shape":"jagged","count":0,"note":"Day to day"},"right":{"label":"Climate","shape":"smooth","count":0,"note":"Over 30 years"},"lit":"right"}`;
 
 // ---- checking ----
 
@@ -234,6 +268,7 @@ const ALLOWED: Record<Scene["family"], readonly Play["changes"][number]["does"][
   stairs: ["climb"],
   spectrum: ["slide"],
   venn: ["overlap"],
+  pair: ["step"],
 };
 
 /** Trims a scene to what the app can draw well, or returns null if there is nothing usable. */
@@ -333,6 +368,21 @@ export function checkScene(s: unknown): Scene | null {
       const marks = (Array.isArray(r.marks) ? r.marks : []).slice(0, 4).map((m: Record<string, unknown>) => ({ label: short(m.label, 2), at: inRange(m.at) })).filter((m) => m.label);
       return { family: "spectrum", left: short(r.left), right: short(r.right), min, max, marks, at: inRange(r.at) };
     }
+    if (r.family === "pair") {
+      const side = (x: unknown): PairSide | null => {
+        if (!x || typeof x !== "object") return null;
+        const o = x as Record<string, unknown>;
+        const label = short(o.label);
+        if (!label) return null;
+        const shape = oneOf(o.shape, PAIR_SHAPES, "path");
+        const counted = shape === "split" || shape === "join" || shape === "many";
+        return { label, shape, count: counted ? clampInt(o.count, 2, 8, shape === "many" ? 8 : 2) : 0, note: short(o.note, 4).slice(0, 26) };
+      };
+      const left = side(r.left);
+      const right = side(r.right);
+      if (!left || !right) return null;
+      return { family: "pair", left, right, lit: r.lit === "left" ? "left" : "right" };
+    }
     if (r.family === "venn") {
       const a = short(r.a);
       const b = short(r.b);
@@ -356,7 +406,7 @@ export function checkPlay(p: unknown, scene: Scene | null): Play | null {
     .slice(0, 2)
     .map((c: Record<string, unknown>) => ({ target: String(c.target ?? "").trim().toLowerCase(), does: c.does as Play["changes"][number]["does"] }))
     .filter((c) => ALLOWED[scene.family].includes(c.does))
-    .map((c) => (["links", "stairs", "spectrum", "venn"].includes(scene.family) || (scene.family === "compare" && c.does === "step") ? { ...c, target: "" } : c))
+    .map((c) => (["links", "stairs", "spectrum", "venn", "pair"].includes(scene.family) || (scene.family === "compare" && c.does === "step") ? { ...c, target: "" } : c))
     .filter((c) => names.includes(c.target));
   const readouts = (Array.isArray(r.readouts) ? r.readouts : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 3);
   if (!changes.length || readouts.length < 2) return null;

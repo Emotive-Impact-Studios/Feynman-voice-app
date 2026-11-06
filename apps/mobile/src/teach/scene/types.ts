@@ -76,7 +76,24 @@ export interface VennScene {
   overlap: number;
 }
 
-export type Scene = ParticlesScene | LinksScene | GraphScene | BalanceScene | CompareScene | StairsScene | SpectrumScene | VennScene;
+export type PairShape = "line" | "curve" | "jagged" | "smooth" | "split" | "join" | "scatter" | "aligned" | "one" | "many" | "loop" | "path";
+
+export interface PairSide {
+  label: string;
+  shape: PairShape;
+  count: number;
+  note: string;
+}
+
+/** The difference between X and Y: two small pictures side by side, one lit. */
+export interface PairScene {
+  family: "pair";
+  left: PairSide;
+  right: PairSide;
+  lit: "left" | "right";
+}
+
+export type Scene = ParticlesScene | LinksScene | GraphScene | BalanceScene | CompareScene | StairsScene | SpectrumScene | VennScene | PairScene;
 
 export type ChangeKind = "appear" | "cross" | "speed" | "grow" | "step" | "shift" | "stretch" | "ride" | "weigh" | "climb" | "slide" | "overlap";
 export interface Change {
