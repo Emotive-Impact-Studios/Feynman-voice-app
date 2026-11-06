@@ -1,11 +1,13 @@
 // Teach me: when the learner clearly doesn't know a bit yet, the call steps
 // aside for a two minute lesson on just that idea. A few bites, each with a
 // picture and a quick puzzle, built from their notes on the server. Then
-// back to Fenny to explain it in their own words. Fenny never teaches: this
+// back to Fenny to explain it in their own words. Each bite's picture is a
+// live drawing from the scene kit (scene/), and one bite may add a slider so
+// the learner can play with the idea before the puzzle. Fenny never teaches: this
 // screen is the notes talking, and Fenny only listens again afterwards.
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, View, type ScrollViewInstance } from "react-native";
-import Animated from "react-native-reanimated";
+import Animated, { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { fetchLesson, type Lesson } from "../api";
@@ -16,8 +18,15 @@ import { Press } from "../ui/Press";
 import { riseIn, STAGGER_MS } from "../ui/motion";
 import { Picture } from "./Picture";
 import { Puzzle } from "./Puzzle";
+import { SceneView } from "./scene/SceneView";
+import { Slider } from "./Slider";
 
-type Step = { kind: "read"; i: number } | { kind: "try"; i: number } | { kind: "finish" };
+type Step = { kind: "read"; i: number } | { kind: "play"; i: number } | { kind: "try"; i: number } | { kind: "finish" };
+
+/** Every step of a lesson in order: read, maybe play, then the puzzle, for each bite. */
+function stepsOf(lesson: Lesson): Step[] {
+  return lesson.bites.flatMap((b, i): Step[] => [{ kind: "read", i }, ...(b.play && b.scene ? [{ kind: "play" as const, i }] : []), { kind: "try", i }]);
+}
 
 export function TeachMode({
   topic,
@@ -50,6 +59,9 @@ export function TeachMode({
   const [right, setRight] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const scroll = useRef<ScrollViewInstance>(null);
+  const slider = useSharedValue(0);
+  const [band, setBand] = useState(0);
+  const [played, setPlayed] = useState(false);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -69,6 +81,9 @@ export function TeachMode({
     if (step.kind === "read") {
       const b = lesson.bites[step.i];
       speak(`${b.title}. ${b.text}`);
+    } else if (step.kind === "play") {
+      const p = lesson.bites[step.i].play;
+      if (p) speak(p.prompt);
     }
     return () => hush?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,18 +91,23 @@ export function TeachMode({
 
   const go = (s: Step) => {
     setAnswered(null);
+    slider.value = 0;
+    setBand(0);
+    setPlayed(false);
     setStep(s);
     scroll.current?.scrollTo({ y: 0, animated: false });
     Haptics.selectionAsync().catch(() => {});
   };
   const next = () => {
-    if (!lesson) return;
-    if (step.kind === "read") go({ kind: "try", i: step.i });
-    else if (step.kind === "try") go(step.i + 1 < lesson.bites.length ? { kind: "read", i: step.i + 1 } : { kind: "finish" });
+    if (!lesson || step.kind === "finish") return;
+    const all = stepsOf(lesson);
+    const at = all.findIndex((x) => x.kind === step.kind && x.i === step.i);
+    go(all[at + 1] ?? { kind: "finish" });
   };
 
-  const total = lesson ? lesson.bites.length * 2 : 4;
-  const done = !lesson ? 0 : step.kind === "finish" ? total : step.i * 2 + (step.kind === "try" ? 1 : 0);
+  const all = lesson ? stepsOf(lesson) : [];
+  const total = lesson ? all.length : 4;
+  const done = !lesson ? 0 : step.kind === "finish" ? total : all.findIndex((x) => x.kind === step.kind && "i" in x && x.i === (step as { i: number }).i);
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -132,7 +152,11 @@ export function TeachMode({
               {lesson.bites[step.i].text}
             </T>
             <Animated.View entering={riseIn(STAGGER_MS * 3)} style={{ marginTop: 8 }}>
-              <Picture kind={lesson.bites[step.i].picture.kind} labels={lesson.bites[step.i].picture.labels} />
+              {lesson.bites[step.i].scene ? (
+                <SceneView scene={lesson.bites[step.i].scene!} label={lesson.bites[step.i].title} />
+              ) : (
+                <Picture kind={lesson.bites[step.i].picture.kind} labels={lesson.bites[step.i].picture.labels} />
+              )}
             </Animated.View>
             {lesson.bites[step.i].fromNotes && lesson.bites[step.i].quote ? (
               <View style={styles.quote}>
@@ -141,6 +165,28 @@ export function TeachMode({
                 </T>
               </View>
             ) : null}
+          </Animated.View>
+        )}
+
+        {lesson && step.kind === "play" && lesson.bites[step.i].play && lesson.bites[step.i].scene && (
+          <Animated.View key={`play${step.i}`} entering={riseIn()} style={{ gap: 20 }}>
+            <Label tone="student">Try it</Label>
+            <T size={28} weight="medium" style={{ lineHeight: 33 }}>
+              {lesson.bites[step.i].play!.prompt}
+            </T>
+            <SceneView scene={lesson.bites[step.i].scene!} changes={lesson.bites[step.i].play!.changes} value={slider} label={lesson.bites[step.i].play!.prompt} />
+            <Slider
+              value={slider}
+              low={lesson.bites[step.i].play!.low}
+              high={lesson.bites[step.i].play!.high}
+              onBand={(b, v) => {
+                setBand(b);
+                if (v >= 0.6) setPlayed(true);
+              }}
+            />
+            <T size={16} style={{ lineHeight: 23, minHeight: 46 }}>
+              {lesson.bites[step.i].play!.readouts[band] ?? ""}
+            </T>
           </Animated.View>
         )}
 
@@ -206,6 +252,7 @@ export function TeachMode({
             </Animated.View>
           )}
           {step.kind === "read" && <PillButton label="Got it" variant="solid" onPress={next} />}
+          {step.kind === "play" && (played ? <PillButton label="Next" variant="solid" onPress={next} /> : <PillButton label="Slide to see it" onPress={next} />)}
           {step.kind === "try" && answered !== null && <PillButton label="Continue" variant="solid" onPress={next} />}
           {step.kind === "finish" && <PillButton label="Back to Fenny" variant="solid" onPress={() => onDone(`Welcome back! ${lesson.explainBack}`)} />}
         </View>

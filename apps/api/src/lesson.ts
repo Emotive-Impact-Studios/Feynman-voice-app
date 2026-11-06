@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { chatJSON } from "./engine/chat";
 import { openAIPricesFromEnv, type CostLine } from "./pricing";
+import { checkPlay, checkScene, PLAY_SCHEMA, SCENE_PROMPT, SCENE_SCHEMA, type Play, type Scene } from "./scene";
 
 type Env = Record<string, string | undefined>;
 
@@ -42,7 +43,12 @@ export interface Puzzle {
 export interface Bite {
   title: string;
   text: string;
+  /** The simple diagram, used when there is no scene or the app can't draw it. */
   picture: { kind: (typeof PICTURES)[number]; labels: string[] };
+  /** A live drawing from the kit in scene.ts, or null. */
+  scene: Scene | null;
+  /** A slider that changes the scene, on at most one bite. */
+  play: Play | null;
   /** Words copied from the notes that back this bite up, or "" with no notes. */
   quote: string;
   /** True when quote was found in the notes. */
@@ -71,7 +77,7 @@ const SYSTEM = `You write tiny lessons for Fenny, a learning app for UK universi
 Write 2 or 3 bites that build up to the idea. Each bite:
 - title: 2 to 5 words.
 - text: at most 45 words. Plain, warm, concrete. One thought per bite. Use an everyday comparison when it helps. Explain any technical word the first time it appears.
-- picture: pick the simplest diagram that shows the bite, and give its labels (2 to 5, each 1 to 3 words). flow = things in sequence, labels in order. compare = two sides, labels [left, right] or [left, right, what differs]. cycle = a loop, labels in order. layers = a stack from top to bottom. parts = a whole then its parts, first label is the whole. none = no diagram helps.
+- picture: a fallback diagram, used when scene is null or cannot be drawn. Pick the simplest diagram that shows the bite, and give its labels (2 to 5, each 1 to 3 words). flow = things in sequence, labels in order. compare = two sides, labels [left, right] or [left, right, what differs]. cycle = a loop, labels in order. layers = a stack from top to bottom. parts = a whole then its parts, first label is the whole. none = no diagram helps.
 - quote: when notes are given, copy a short phrase (5 to 25 words) from the notes, word for word, that backs this bite up. With no notes, use "".
 - puzzle: one quick check of that bite, answerable in a few seconds. Use a mix of kinds across the lesson, and make the last one the hardest.
   true_false: options ["True","False"], answer is one of them.
@@ -87,7 +93,9 @@ Rules:
 - Teach only what the notes say when notes are given. Never add facts the notes do not support. With no notes, stick to standard first-year university understanding.
 - If the student said something wrong, the bites should quietly fix it without naming their mistake.
 - British English. Proper sentences with ordinary punctuation. No dashes as pauses, no semicolons, no emoji, no markdown.
-- Wrong options must be believable, never silly.`;
+- Wrong options must be believable, never silly.
+
+${SCENE_PROMPT}`;
 
 const str = { type: "string" };
 const strs = { type: "array", items: str };
@@ -107,6 +115,8 @@ export const LESSON_SCHEMA = {
             required: ["kind", "labels"],
             additionalProperties: false,
           },
+          scene: SCENE_SCHEMA,
+          play: PLAY_SCHEMA,
           quote: str,
           puzzle: {
             type: "object",
@@ -115,7 +125,7 @@ export const LESSON_SCHEMA = {
             additionalProperties: false,
           },
         },
-        required: ["title", "text", "picture", "quote", "puzzle"],
+        required: ["title", "text", "picture", "scene", "play", "quote", "puzzle"],
         additionalProperties: false,
       },
     },
@@ -126,7 +136,7 @@ export const LESSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-type Draft = { bites: Omit<Bite, "fromNotes">[]; recap: string; explainBack: string };
+type Draft = { bites: (Omit<Bite, "fromNotes" | "scene" | "play"> & { scene?: unknown; play?: unknown })[]; recap: string; explainBack: string };
 
 /** Lower case, plain quotes, single spaces, no punctuation: for checking quotes against notes. */
 function flat(s: string): string {
@@ -163,8 +173,15 @@ export function checkLesson(d: Draft, req: LessonRequest): Lesson {
     } else if (p.kind === "match") {
       if (p.options.length < 2 || p.options.length !== p.answer.length) throw new Error(`${where}: match pairs do not line up`);
     }
-    return { ...b, quote: req.notes?.trim() ? b.quote : "", fromNotes: quoteInNotes(b.quote, req.notes) };
+    const scene = checkScene(b.scene);
+    return { ...b, scene, play: checkPlay(b.play, scene), quote: req.notes?.trim() ? b.quote : "", fromNotes: quoteInNotes(b.quote, req.notes) };
   });
+  // One slider per lesson keeps it a moment, not a game.
+  let played = false;
+  for (const b of bites) {
+    if (b.play && played) b.play = null;
+    if (b.play) played = true;
+  }
   return { idea: req.idea, bites, recap: d.recap, explainBack: d.explainBack };
 }
 
@@ -230,7 +247,7 @@ async function draftOpenAI(env: Env, req: LessonRequest, retry?: string, fetchIm
       { role: "user", content: userMessage(req, retry) },
     ],
     { name: "lesson", schema: LESSON_SCHEMA },
-    4000,
+    7000,
   );
   const p = openAIPricesFromEnv(env);
   const cached = r.usage.prompt_tokens_details?.cached_tokens ?? 0;
