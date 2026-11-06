@@ -12,6 +12,7 @@ import { DotWave } from "../ui/Dots";
 import { Backdrop, Icon, Label, T } from "../ui/kit";
 import { HoldButton } from "../ui/HoldButton";
 import { LivingLight } from "../ui/LivingLight";
+import { moodFor } from "../ui/mood";
 import { RecordDisc } from "../ui/RecordDisc";
 import { ScreenIn } from "../ui/ScreenIn";
 import { VoiceGlow } from "../ui/VoiceGlow";
@@ -61,6 +62,9 @@ export default function Session() {
   const lastYou = [...loop.turns].reverse().find((t) => t.speaker === "learner")?.text;
 
   const studentEnergy = loop.phase === "speaking" ? 1 : loop.phase === "thinking" ? 0.5 : 0;
+  // Fenny's eyes: on you while you talk, up while it thinks, and the face for
+  // what it is saying while it speaks.
+  const mood = moodFor(loop.phase, loop.move);
   const voiceLevel = loop.phase === "listening" ? (loop.isTalking ? 1 : 0.25) : 0;
 
   // Gently animate the dot wave while you talk.
@@ -112,7 +116,7 @@ export default function Session() {
           {/* Calm and empty, like a voice mode: one small living light and
               one line in the middle of the screen, nothing else lit. */}
           <View style={[StyleSheet.absoluteFill, styles.centre, { justifyContent: "center", paddingBottom: 140 }]} pointerEvents="none">
-            <LivingLight size={120} energy={studentEnergy} />
+            <LivingLight size={120} energy={studentEnergy} mood={mood} />
             <T size={22} weight="medium" style={{ textAlign: "center", marginTop: 26, maxWidth: 320, lineHeight: 30 }}>
               {question}
             </T>
