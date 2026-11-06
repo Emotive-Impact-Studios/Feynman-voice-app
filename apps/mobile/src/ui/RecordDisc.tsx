@@ -1,5 +1,6 @@
-// The record button's face (build 12): one clean soft disc. No ring, no
-// outline and no top highlight. While listening it tints silver-blue and a
+// The record button's face (build 13): one plain soft-silver disc with a
+// dark icon, like a voice mode's mic. No ring, no outline and no top
+// highlight. While listening it tints silver-blue and a
 // soft blurred light breathes behind it, with no line round it. While held,
 // the light hides so the coral hold ring (HoldButton) reads on its own.
 import { useEffect, type ReactNode } from "react";
@@ -52,7 +53,7 @@ export function RecordDisc({ size, listening, hold, children }: { size: number; 
         </Canvas>
       </Animated.View>
       <View style={[styles.disc, { width: size, height: size, borderRadius: r }]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: r, backgroundColor: "rgba(169,190,230,0.22)" }, tint]} />
+        <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: r, backgroundColor: "#B9C8E6" }, tint]} />
         <View style={[StyleSheet.absoluteFill, styles.centre]}>{children}</View>
       </View>
     </View>
@@ -61,6 +62,7 @@ export function RecordDisc({ size, listening, hold, children }: { size: number; 
 
 const styles = StyleSheet.create({
   abs: { position: "absolute" },
-  disc: { backgroundColor: "rgba(40,43,50,0.92)", overflow: "hidden" },
+  // A plain soft-silver disc with a dark icon: the one thing to press.
+  disc: { backgroundColor: "#D3D7DD", shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
   centre: { alignItems: "center", justifyContent: "center" },
 });

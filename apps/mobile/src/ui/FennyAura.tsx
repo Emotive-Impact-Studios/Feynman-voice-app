@@ -20,8 +20,8 @@ const SCENES: Record<AuraScene, Light> = {
   topics: { x: 0.8, y: 0.08, w: 0.95, h: 0.18, o: 0.85 },
   me: { x: 0.18, y: 0.1, w: 0.95, h: 0.17, o: 0.8 },
   topic: { x: 0.5, y: 0.06, w: 1.0, h: 0.17, o: 0.7 },
-  // Like horizon.webp: a low band of light under the conversation.
-  session: { x: 0.5, y: 0.9, w: 1.4, h: 0.1, o: 0.5 },
+  // A soft wash rising from the bottom edge only, under the button.
+  session: { x: 0.5, y: 1.0, w: 1.7, h: 0.32, o: 0.7 },
   intro: { x: 0.5, y: 0.07, w: 1.2, h: 0.24, o: 0.7 },
 };
 

@@ -109,12 +109,11 @@ export default function Session() {
       {view === "light" && (
         <>
           <VoiceGlow level={voiceLevel} height={230} dim />
-          <View style={[styles.centre, { paddingTop: insets.top + 96 }]}>
-            <LivingLight size={200} energy={studentEnergy} />
-            <Label tone="student" style={{ marginTop: 28 }}>
-              Student
-            </Label>
-            <T size={22} weight="medium" style={{ textAlign: "center", marginTop: 10, maxWidth: 330, lineHeight: 30 }}>
+          {/* Calm and empty, like a voice mode: one small living light and
+              one line in the middle of the screen, nothing else lit. */}
+          <View style={[StyleSheet.absoluteFill, styles.centre, { justifyContent: "center", paddingBottom: 140 }]} pointerEvents="none">
+            <LivingLight size={120} energy={studentEnergy} />
+            <T size={22} weight="medium" style={{ textAlign: "center", marginTop: 26, maxWidth: 320, lineHeight: 30 }}>
               {question}
             </T>
           </View>
@@ -185,15 +184,13 @@ export default function Session() {
 
       {/* One button at the bottom, with no panel: what it does sits just above it. */}
       <View pointerEvents="box-none" style={[styles.controls, { bottom: Math.max(insets.bottom, 12) + 8 }]}>
-        <T size={15} weight="medium" lines={1} style={{ textAlign: "center" }}>
-          {loop.phase === "error" && loop.error ? loop.error : HINTS[loop.phase][0]}
-        </T>
+        {/* One quiet line: what is happening, or the dots while you talk. */}
         <View style={styles.hintLine}>
           {loop.phase === "listening" ? (
-            <DotWave width={Math.min(220, width - 80)} height={22} level={loop.isTalking ? 1 : 0.3} tick={tick} />
+            <DotWave width={Math.min(200, width - 80)} height={20} level={loop.isTalking ? 1 : 0.3} tick={tick} />
           ) : (
-            <T size={13} tone="muted" lines={1} style={{ textAlign: "center" }}>
-              {loop.notice ?? HINTS[loop.phase][1]}
+            <T size={13.5} tone="soft" lines={1} style={{ textAlign: "center" }}>
+              {loop.phase === "error" && loop.error ? loop.error : loop.notice ?? HINTS[loop.phase][0]}
             </T>
           )}
         </View>
@@ -201,7 +198,7 @@ export default function Session() {
           {(hold) => (
             <View style={{ opacity: canTap ? 1 : 0.4 }}>
               <RecordDisc size={76} listening={loop.phase === "listening"} hold={hold}>
-                <Icon name={ringIcon} size={24} />
+                <Icon name={ringIcon} size={26} color={colour.onLight} />
               </RecordDisc>
             </View>
           )}
