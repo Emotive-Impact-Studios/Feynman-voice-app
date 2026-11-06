@@ -4,10 +4,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { handleLiveTurn } from "./live";
 import { handleTurn } from "./turn";
+import { handleLesson } from "./lesson";
 
 const ROUTES: Record<string, (req: Request) => Promise<Response>> = {
   "/api/turn": (r) => handleTurn(r),
   "/api/live-turn": (r) => handleLiveTurn(r),
+  "/api/lesson": (r) => handleLesson(r),
 };
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {

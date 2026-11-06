@@ -14,7 +14,7 @@
 import { askStudent, GeminiError, type PastTurn } from "./gemini";
 import { speakSonic, SONIC_SAMPLE_RATE, transcribeCartesia } from "./cartesia";
 import { ProviderError, transcribeOpenAI } from "./openai";
-import { costOf, openAIPricesFromEnv, pricesFromEnv, wavSeconds, type CostLine } from "./pricing";
+import { chatPricesFor, costOf, openAIPricesFromEnv, pricesFromEnv, wavSeconds, type CostLine } from "./pricing";
 import { notesBlock, STUDENT_SYSTEM_PROMPT } from "./prompt";
 import { SentenceSplitter } from "./sentences";
 import { speakable } from "./speakable";
@@ -76,6 +76,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
   const brain = (env.BRAIN ?? "openai").toLowerCase();
   if (brain !== "openai" && brain !== "gemini") return json(500, { error: `Unknown BRAIN ${brain}` });
   if (brain === "openai" && !env.OPENAI_API_KEY) return json(500, { error: "OPENAI_API_KEY is not set on the server" });
+  if (env.FENNY_MODEL?.startsWith("claude-") && !env.ANTHROPIC_API_KEY) return json(500, { error: "FENNY_MODEL is a Claude model but ANTHROPIC_API_KEY is not set on the server" });
   if (brain === "gemini" && !env.GEMINI_API_KEY) return json(500, { error: "GEMINI_API_KEY is not set on the server" });
   let body: LiveTurnRequest;
   try {
@@ -112,7 +113,10 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
       const credit = Number(env.CARTESIA_USD_PER_CREDIT) || 0.00003;
       const chatModel = env.OPENAI_CHAT_MODEL ?? "gpt-5.4-mini";
       const useEngine = brain === "openai" && (env.FENNY_ENGINE ?? "on") !== "off";
-      const chatCfg = { apiKey: env.OPENAI_API_KEY!, model: chatModel, reasoningEffort: env.OPENAI_REASONING_EFFORT ?? "none", fetchImpl: f };
+      // Fenny's engine can run on another model, e.g. FENNY_MODEL=claude-haiku-5-5.
+      const fennyModel = env.FENNY_MODEL ?? chatModel;
+      const fp = chatPricesFor(fennyModel, env);
+      const chatCfg = { apiKey: env.OPENAI_API_KEY!, anthropicKey: env.ANTHROPIC_API_KEY, model: fennyModel, reasoningEffort: env.OPENAI_REASONING_EFFORT ?? "none", fetchImpl: f };
       // The topic's key ideas, built while we listen (cached after the first turn).
       const ideasReady = useEngine ? keyIdeas(chatCfg, body.topic?.trim() || "a topic of their choice", body.notes) : undefined;
       ideasReady?.catch(() => {});
@@ -171,13 +175,13 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         let waited = false;
         if (holdOn && wantsWait) {
           const { usage: ideasUsage } = await ideasReady!;
-          if (ideasUsage) lines.push(engineCost(chatModel, ideasUsage, p));
+          if (ideasUsage) lines.push(engineCost(fennyModel, ideasUsage, fp));
           question = "";
           waited = true;
           send({ type: "engine", move: "wait" });
         } else if (holdOn) {
           const { ideas, usage: ideasUsage } = await ideasReady!;
-          if (ideasUsage) lines.push(engineCost(chatModel, ideasUsage, p));
+          if (ideasUsage) lines.push(engineCost(fennyModel, ideasUsage, fp));
           question = "Go on.";
           speak(question);
           send({ type: "engine", move: "listen", covered: [], ideas });
@@ -204,7 +208,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
           if (r.move === "show_me" && r.gap) send({ type: "show_me", gap: r.gap });
           // Teach me: the phone shows the button on an offer, and opens teach mode on "teach".
           if ((r.move === "offer_teach" || r.move === "teach") && r.gap) send({ type: r.move === "teach" ? "teach" : "teach_offer", gap: r.gap });
-          for (const u of ideasUsage ? [ideasUsage, ...r.usage] : r.usage) lines.push(engineCost(chatModel, u, p));
+          for (const u of ideasUsage ? [ideasUsage, ...r.usage] : r.usage) lines.push(engineCost(fennyModel, u, fp));
         } else if (brain === "openai") {
           const splitter = new SentenceSplitter();
           const r = await streamQuestionOpenAI(

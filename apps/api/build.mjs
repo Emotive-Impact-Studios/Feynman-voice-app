@@ -31,6 +31,10 @@ writeFileSync(`${fn}/.vc-config.json`, JSON.stringify(config, null, 2));
 const live = `${out}/functions/api/live-turn.func`;
 cpSync(fn, live, { recursive: true });
 writeFileSync(`${live}/.vc-config.json`, JSON.stringify({ ...config, supportsResponseStreaming: true }, null, 2));
+// Lessons take longer to write, so they get their own function with more time.
+const lesson = `${out}/functions/api/lesson.func`;
+cpSync(fn, lesson, { recursive: true });
+writeFileSync(`${lesson}/.vc-config.json`, JSON.stringify({ ...config, maxDuration: 60 }, null, 2));
 // The iPhone voice model, served as static files for the app to download.
 if (process.env.SKIP_PHONON_BUNDLE !== "1") {
   const { out: dir, files } = await writePhononBundle(`${out}/static`);
