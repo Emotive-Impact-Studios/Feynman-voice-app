@@ -26,6 +26,8 @@ export function TeachMode({
   notes,
   onClose,
   onDone,
+  speak,
+  hush,
 }: {
   topic: string;
   idea: string;
@@ -35,6 +37,10 @@ export function TeachMode({
   onClose: () => void;
   /** Finished: Fenny's question about what they just learnt. */
   onDone: (question: string) => void;
+  /** Read a line aloud in Fenny's chosen voice (Cartesia or Phonon). */
+  speak?: (text: string) => Promise<void>;
+  /** Stop reading aloud. */
+  hush?: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -55,6 +61,18 @@ export function TeachMode({
       });
     return () => abort.abort();
   }, [topic, idea, said, notes, attempt]);
+
+  // Fenny reads each bite aloud as it appears, in the voice chosen in Me.
+  useEffect(() => {
+    if (!lesson || !speak) return;
+    // The finish is said once back in the call, as Fenny's question.
+    if (step.kind === "read") {
+      const b = lesson.bites[step.i];
+      speak(`${b.title}. ${b.text}`);
+    }
+    return () => hush?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lesson, step]);
 
   const go = (s: Step) => {
     setAnswered(null);

@@ -48,7 +48,7 @@ export default function Dev() {
 
         <Pressable
           disabled={!canTap}
-          onPress={loop.phase === "listening" ? loop.finish : loop.start}
+          onPress={loop.phase === "listening" ? loop.finish : () => loop.start()}
           style={[styles.button, { backgroundColor: loop.phase === "listening" ? "#c0392b" : c.fg, opacity: canTap ? 1 : 0.4 }]}
         >
           <Text style={[styles.buttonText, { color: loop.phase === "listening" ? "#fff" : c.bg }]}>

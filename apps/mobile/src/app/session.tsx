@@ -84,7 +84,12 @@ export default function Session() {
   // Holding it ends the session.
   const canTap = loop.phase !== "loading";
   const onRing =
-    loop.phase === "listening" ? loop.finish : loop.phase === "thinking" || loop.phase === "speaking" ? loop.interrupt : loop.start;
+    loop.phase === "listening"
+      ? loop.finish
+      : loop.phase === "thinking" || loop.phase === "speaking"
+        ? loop.interrupt
+        : // First start: Fenny says its opening question out loud.
+          () => loop.start(loop.turns.length ? undefined : opening).catch(() => {});
   const ringIcon = loop.phase === "listening" ? "check" : loop.phase === "thinking" || loop.phase === "speaking" ? "pause" : "mic";
   const ringLabel =
     loop.phase === "listening" ? "Done, ask me" : loop.phase === "thinking" || loop.phase === "speaking" ? "Cut in" : "Start the call";
@@ -245,6 +250,8 @@ export default function Session() {
           topic={topic}
           idea={teaching.idea}
           said={teaching.said}
+          speak={loop.speak}
+          hush={loop.hush}
           onClose={() => {
             setTeaching(null);
             loop.dismissTeach();

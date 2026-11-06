@@ -14,7 +14,7 @@ import {
 import { BargeIn, concatFloat32, EndOfTurn, fromBase64, pcm16ToFloat32, quietAfter, Resampler, SpeechMeter, toBase64, TURN_QUIET_SECONDS } from "@feynman/audio";
 import { encodeWav, SAMPLE_RATE as KITTEN_RATE, synthesise } from "@feynman/kitten-tts";
 import { Phonon, PHONON_DEFAULT_VOICE } from "../../modules/phonon";
-import { PHONON_BUNDLE_URL, streamLiveTurn, type LiveEars, type LiveEvent, type LiveVoice, type Turn } from "../api";
+import { PHONON_BUNDLE_URL, speakLine, streamLiveTurn, type LiveEars, type LiveEvent, type LiveVoice, type Turn } from "../api";
 import { loadKitten } from "../kitten";
 import { ClipQueue } from "./clipQueue";
 
@@ -246,16 +246,67 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     prepareVoice(settings.voice).catch((e) => setError(message(e)));
   }, [settings.voice, prepareVoice]);
 
-  /** Start the call: open the microphone and listen. */
-  const start = useCallback(async () => {
-    setError(null);
-    nextQuiet.current = TURN_QUIET_SECONDS;
-    freshTurn();
-    resampler.current = null;
-    await streamRef.current.start();
-    callOn.current = true;
-    setPhase("listening");
-  }, [setPhase]);
+  /**
+   * Fenny says a line it already knows (the opening question, the question
+   * after a lesson), then listens. The mic is open but ignored while it
+   * speaks, and a tap cuts in as usual.
+   */
+  const sayThenListen = async (text: string) => {
+    const id = turnId.current;
+    setLiveQuestion(text);
+    setPhase("speaking");
+    await speakOnly(text);
+    if (id !== turnId.current) return; // they tapped to cut in, or ended
+    nextQuiet.current = quietAfter(text);
+    resumeListening(true);
+  };
+  const sayRef = useRef(sayThenListen);
+  sayRef.current = sayThenListen;
+
+  /**
+   * Says one line in the chosen voice and resolves when it has finished.
+   * Never throws: a silent line is better than a stuck screen. Used for
+   * lines Fenny already knows, and to read Teach me lessons aloud.
+   */
+  const speakOnly = async (text: string) => {
+    const id = turnId.current;
+    const chosen = settingsRef.current;
+    const voice: LiveVoice = chosen.voice === "phonon" && !phononReady.current ? "kitten" : chosen.voice;
+    try {
+      if (voice === "phonon") {
+        const r = await Phonon!.speak(text);
+        if (id === turnId.current) await wait(r.remainingMs);
+      } else {
+        const r = await speakLine({ text, voice });
+        if (id !== turnId.current) return;
+        if (voice === "sonic" && r.audio) {
+          clips.current.add(pcm16ToFloat32(fromBase64(r.audio)), r.sampleRate ?? 24000);
+        } else if (r.speech) {
+          const { runner, voices } = await loadKitten();
+          if (id !== turnId.current) return;
+          clips.current.add(await synthesise(runner, voices, r.speech, KITTEN_VOICE, KITTEN_SPEED), KITTEN_RATE);
+        }
+        await clips.current.whenIdle();
+      }
+    } catch {
+      // Carry on without the voice.
+    }
+  };
+
+  /** Start the call: open the microphone, say the opening line if given, and listen. */
+  const start = useCallback(
+    async (opening?: string) => {
+      setError(null);
+      nextQuiet.current = TURN_QUIET_SECONDS;
+      freshTurn();
+      resampler.current = null;
+      await streamRef.current.start();
+      callOn.current = true;
+      setPhase("listening");
+      if (opening) await sayRef.current(opening);
+    },
+    [setPhase],
+  );
 
   /**
    * The learner wasn't finished: drop any reply, take back the turn the
@@ -452,7 +503,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     async (question: string) => {
       setTeach(null);
       setTurns((t) => [...t, { speaker: "student", text: question }]);
-      await start();
+      // Fenny asks for the explanation back out loud.
+      await start(question);
     },
     [start],
   );
@@ -462,6 +514,15 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     teach,
     /** Not now: hide the offer and carry on. */
     dismissTeach: () => setTeach(null),
+    /** Read a line aloud in Fenny's voice (Teach me). */
+    speak: (text: string) => speakOnly(text),
+    /** Stop whatever Fenny is saying. */
+    hush: () => {
+      // Audio only: the call's turn state is left alone, so a question
+      // starting at the same moment is not cancelled.
+      clips.current.stop();
+      if (phononReady.current) Phonon?.stop();
+    },
     resumeAfterLesson,
     error,
     notice,
