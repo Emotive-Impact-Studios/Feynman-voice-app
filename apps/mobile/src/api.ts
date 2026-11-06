@@ -148,3 +148,20 @@ export async function fetchLesson(input: { topic: string; idea: string; notes?: 
   if (!res.ok) throw new Error((body as { error?: string }).error ?? `Server returned ${res.status}`);
   return (body as { lesson: Lesson }).lesson;
 }
+
+/** One line in Fenny's voice, without a turn (the opening question, a lesson bite). */
+export async function speakLine(
+  input: { text: string; voice: LiveVoice },
+  signal?: AbortSignal,
+): Promise<{ text: string; audio?: string; sampleRate?: number; speech?: PhonemeChunk[] }> {
+  if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in apps/mobile/.env");
+  const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/speak`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify(input),
+    signal,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((body as { error?: string }).error ?? `Server returned ${res.status}`);
+  return body as { text: string; audio?: string; sampleRate?: number; speech?: PhonemeChunk[] };
+}
