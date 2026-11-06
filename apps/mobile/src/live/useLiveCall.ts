@@ -52,6 +52,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const [liveQuestion, setLiveQuestion] = useState<string | null>(null);
   const [liveSpeaking, setLiveSpeaking] = useState(0);
   const [isTalking, setIsTalking] = useState(false);
+  /** Fenny has said goodbye and finished speaking: the call is over. */
+  const [finished, setFinished] = useState(false);
 
   const phaseRef = useRef<CallPhase>("loading");
   const setPhase = useCallback((p: CallPhase) => {
@@ -255,6 +257,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     let spoken = "";
     let voiced: Promise<unknown> = Promise.resolve();
     let phononRemaining = 0;
+    let wrapped = false;
     const markStart = () => {
       if (id !== turnId.current) return;
       if (!firstWordMs) firstWordMs = Date.now() - quietAt;
@@ -293,6 +296,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
         setHeardSeconds((n) => n + speakingSeconds);
         setTurns((t) => [...t, { speaker: "learner", text: e.transcript }, { speaker: "student", text: e.question }]);
       }
+      if (e.type === "engine" && e.move === "wrap") wrapped = true;
       if (e.type === "error") throw new Error(e.error);
     };
 
@@ -323,6 +327,12 @@ export function useLiveCall(topic: string, settings: CallSettings) {
             brainMs: d.timingMs.brain,
           },
         ]);
+      }
+      // Fenny said goodbye: the call is over once it has finished speaking.
+      if (wrapped) {
+        cancel();
+        setFinished(true);
+        return;
       }
       resumeListening(true);
     } catch (e) {
@@ -366,6 +376,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     stats,
     liveQuestion,
     liveSpeaking,
+    finished,
     isTalking,
     start,
     /** "Done, ask me": send now instead of waiting for the pause. */
