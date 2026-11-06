@@ -283,3 +283,4 @@ export function softLimit(x: number): number {
   const over = (a - knee) / (1 - knee);
   return Math.sign(x) * (knee + (1 - knee) * Math.tanh(over));
 }
+export * from "./film";

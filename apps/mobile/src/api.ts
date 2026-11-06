@@ -133,6 +133,10 @@ export interface LessonBite {
   quote: string;
   fromNotes: boolean;
   puzzle: LessonPuzzle;
+  /** What Fenny says while the drawing builds, one sentence per part (older servers leave it out). */
+  film?: { say: string; cue: string }[];
+  /** "What happens next?", asked before the last sentence, on at most one bite. */
+  guess?: { ask: string; options: string[]; answer: string } | null;
 }
 
 export interface Lesson {

@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { chatJSON } from "./engine/chat";
 import { openAIPricesFromEnv, type CostLine } from "./pricing";
+import { checkFilm, checkGuess, FILM_PROMPT, FILM_SCHEMA, GUESS_SCHEMA, type FilmBeat, type Guess } from "./film";
 import { checkPlay, checkScene, PLAY_SCHEMA, SCENE_PROMPT, SCENE_SCHEMA, type Play, type Scene } from "./scene";
 
 type Env = Record<string, string | undefined>;
@@ -56,6 +57,10 @@ export interface Bite {
   /** True when quote was found in the notes. */
   fromNotes: boolean;
   puzzle: Puzzle;
+  /** What Fenny says while the scene draws itself, one sentence per part. */
+  film: FilmBeat[];
+  /** "What happens next?", asked before the last sentence, on at most one bite. */
+  guess: Guess | null;
 }
 
 export interface Lesson {
@@ -97,7 +102,9 @@ Rules:
 - British English. Proper sentences with ordinary punctuation. No dashes as pauses, no semicolons, no emoji, no markdown.
 - Wrong options must be believable, never silly.
 
-${SCENE_PROMPT}`;
+${SCENE_PROMPT}
+
+${FILM_PROMPT}`;
 
 const str = { type: "string" };
 const strs = { type: "array", items: str };
@@ -120,6 +127,8 @@ export const LESSON_SCHEMA = {
           scene: SCENE_SCHEMA,
           play: PLAY_SCHEMA,
           caption: str,
+          film: FILM_SCHEMA,
+          guess: GUESS_SCHEMA,
           quote: str,
           puzzle: {
             type: "object",
@@ -128,7 +137,7 @@ export const LESSON_SCHEMA = {
             additionalProperties: false,
           },
         },
-        required: ["title", "text", "picture", "scene", "play", "caption", "quote", "puzzle"],
+        required: ["title", "text", "picture", "scene", "play", "caption", "film", "guess", "quote", "puzzle"],
         additionalProperties: false,
       },
     },
@@ -139,7 +148,7 @@ export const LESSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-type Draft = { bites: (Omit<Bite, "fromNotes" | "scene" | "play" | "caption"> & { scene?: unknown; play?: unknown; caption?: string })[]; recap: string; explainBack: string };
+type Draft = { bites: (Omit<Bite, "fromNotes" | "scene" | "play" | "caption" | "film" | "guess"> & { scene?: unknown; play?: unknown; caption?: string; film?: unknown; guess?: unknown })[]; recap: string; explainBack: string };
 
 /** Lower case, plain quotes, single spaces, no punctuation: for checking quotes against notes. */
 function flat(s: string): string {
@@ -177,8 +186,25 @@ export function checkLesson(d: Draft, req: LessonRequest): Lesson {
       if (p.options.length < 2 || p.options.length !== p.answer.length) throw new Error(`${where}: match pairs do not line up`);
     }
     const scene = checkScene(b.scene);
-    return { ...b, scene, play: checkPlay(b.play, scene), caption: String(b.caption ?? "").trim(), quote: req.notes?.trim() ? b.quote : "", fromNotes: quoteInNotes(b.quote, req.notes) };
+    const film = checkFilm(b.film, b.text);
+    return {
+      ...b,
+      scene,
+      play: checkPlay(b.play, scene),
+      caption: String(b.caption ?? "").trim(),
+      quote: req.notes?.trim() ? b.quote : "",
+      fromNotes: quoteInNotes(b.quote, req.notes),
+      film,
+      // A guess needs a picture to watch.
+      guess: scene ? checkGuess(b.guess, film) : null,
+    };
   });
+  // One guess per lesson: a question to predict, not a quiz.
+  let guessed = false;
+  for (const b of bites) {
+    if (b.guess && guessed) b.guess = null;
+    if (b.guess) guessed = true;
+  }
   // One slider per lesson keeps it a moment, not a game.
   let played = false;
   for (const b of bites) {
@@ -218,7 +244,7 @@ async function draftClaude(env: Env, req: LessonRequest, retry?: string, fetchIm
   const model = env.LESSON_MODEL ?? "claude-sonnet-5-5";
   const r = await client.beta.messages.create({
     model,
-    max_tokens: 6000,
+    max_tokens: 7000,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     // The instructions are the same for every lesson, so they are cached.
@@ -250,7 +276,7 @@ async function draftOpenAI(env: Env, req: LessonRequest, retry?: string, fetchIm
       { role: "user", content: userMessage(req, retry) },
     ],
     { name: "lesson", schema: LESSON_SCHEMA },
-    7000,
+    8000,
   );
   const p = openAIPricesFromEnv(env);
   const cached = r.usage.prompt_tokens_details?.cached_tokens ?? 0;

@@ -5,12 +5,21 @@
 // live drawing from the scene kit (scene/), and one bite may add a slider so
 // the learner can play with the idea before the puzzle. Fenny never teaches: this
 // screen is the notes talking, and Fenny only listens again afterwards.
+//
+// When a lesson has drawings it plays as a short narrated film first: the
+// bites one after another, each sentence building the next part of the
+// drawing so it lands on the word that names it. One bite stops before its
+// last sentence to ask what will happen, so the student commits to a guess
+// before seeing it. Then the slider, the puzzles and the explain back, as
+// before. Lessons without drawings keep the cards.
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, View, type ScrollViewInstance } from "react-native";
-import Animated, { useSharedValue } from "react-native-reanimated";
+import Animated, { cancelAnimation, Easing, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { fetchLesson, type Lesson } from "../api";
+import { buildAfter, estimateMs, filmLines, rampFor, type FilmLine } from "@feynman/audio";
+import { fetchLesson, type Lesson, type LessonBite } from "../api";
+import type { SpeakOptions } from "../live/useLiveCall";
 import { colour } from "../theme";
 import { Backdrop, Label, PillButton, Stat, T } from "../ui/kit";
 import { LivingLight } from "../ui/LivingLight";
@@ -21,10 +30,22 @@ import { Puzzle } from "./Puzzle";
 import { SceneView } from "./scene/SceneView";
 import { Slider } from "./Slider";
 
-type Step = { kind: "read"; i: number } | { kind: "play"; i: number } | { kind: "try"; i: number } | { kind: "finish" };
+type Step = { kind: "watch" } | { kind: "read"; i: number } | { kind: "play"; i: number } | { kind: "try"; i: number } | { kind: "finish" };
+type Guess = NonNullable<LessonBite["guess"]>;
 
-/** Every step of a lesson in order: read, maybe play, then the puzzle, for each bite. */
+const stepKey = (s: Step) => ("i" in s ? `${s.kind}${s.i}` : s.kind);
+
+/** A lesson with any drawing plays as a film; one with none keeps the cards. */
+const isFilm = (lesson: Lesson) => lesson.bites.some((b) => b.scene);
+
+/**
+ * Every step of a lesson in order. Film: the narrated film, then any slider,
+ * then a puzzle for each bite. Cards: read, maybe play, then the puzzle, for each bite.
+ */
 function stepsOf(lesson: Lesson): Step[] {
+  if (isFilm(lesson)) {
+    return [{ kind: "watch" }, ...lesson.bites.flatMap((b, i): Step[] => (b.play && b.scene ? [{ kind: "play", i }] : [])), ...lesson.bites.map((_, i): Step => ({ kind: "try", i }))];
+  }
   return lesson.bites.flatMap((b, i): Step[] => [{ kind: "read", i }, ...(b.play && b.scene ? [{ kind: "play" as const, i }] : []), { kind: "try", i }]);
 }
 
@@ -46,8 +67,8 @@ export function TeachMode({
   onClose: () => void;
   /** Finished: Fenny's question about what they just learnt. */
   onDone: (question: string) => void;
-  /** Read a line aloud in Fenny's chosen voice (Cartesia or Phonon). */
-  speak?: (text: string) => Promise<void>;
+  /** Read a line aloud in Fenny's chosen voice (Cartesia or Phonon). onStart times the film's drawing. */
+  speak?: (text: string, opts?: SpeakOptions) => Promise<void>;
   /** Stop reading aloud. */
   hush?: () => void;
 }) {
@@ -62,12 +83,29 @@ export function TeachMode({
   const slider = useSharedValue(0);
   const [band, setBand] = useState(0);
   const [played, setPlayed] = useState(false);
+  const reduce = useReducedMotion();
+
+  // The film: which bite is on screen, what Fenny is saying, and the guess.
+  const [filmBite, setFilmBite] = useState(0);
+  const [sub, setSub] = useState("");
+  const [asking, setAsking] = useState<Guess | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [biteDone, setBiteDone] = useState(false);
+  const [filmOver, setFilmOver] = useState(false);
+  const [filmRun, setFilmRun] = useState(0);
+  const build = useSharedValue(0);
+  const moving = useSharedValue(0);
+  const pick = useRef<((option: string) => void) | null>(null);
 
   useEffect(() => {
     const abort = new AbortController();
     setError(null);
     fetchLesson({ topic, idea, said, notes }, abort.signal)
-      .then(setLesson)
+      .then((l) => {
+        setLesson(l);
+        setStep(stepsOf(l)[0] ?? { kind: "finish" });
+      })
       .catch((e) => {
         if (!abort.signal.aborted) setError(String(e instanceof Error ? e.message : e));
       });
@@ -89,6 +127,96 @@ export function TeachMode({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lesson, step]);
 
+  // The film. Each line is spoken in Fenny's voice; when its sound starts,
+  // the drawing builds its next part so it arrives just before the cue word.
+  // Nothing in the drawing moves until the last line of a bite, the one that
+  // names the change. Without a voice it runs on subtitles at speaking pace.
+  useEffect(() => {
+    if (!lesson || step.kind !== "watch") return;
+    let alive = true;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const later = (ms: number, fn: () => void) => timers.push(setTimeout(() => alive && fn(), ms));
+    const sleep = (ms: number) => new Promise<void>((resolve) => timers.push(setTimeout(resolve, ms)));
+    const ease = Easing.bezier(0.65, 0, 0.35, 1);
+
+    /** Says one line. If target is set, the drawing reaches it as the cue word is said. */
+    const sayLine = async (line: FilmLine, target: number | null, last: boolean) => {
+      setSub(line.say);
+      let started = false;
+      const begin = (durationMs: number, elapsedMs: number) => {
+        if (started || !alive) return;
+        started = true;
+        if (target === null) return;
+        const r = rampFor(line, durationMs, elapsedMs);
+        later(r.delayMs, () => {
+          build.value = reduce ? target : withTiming(target, { duration: r.rampMs, easing: ease });
+        });
+        if (last) later(r.delayMs + r.rampMs, () => (moving.value = 1));
+      };
+      if (speak) await speak(line.say, { onStart: ({ durationMs, elapsedMs }) => begin(durationMs, elapsedMs) });
+      if (!alive || started) return;
+      // No sound came out (or no voice at all): keep going on the subtitles.
+      const est = estimateMs(line.say);
+      begin(est, 0);
+      await sleep(est);
+    };
+
+    (async () => {
+      setFilmOver(false);
+      for (let i = 0; i < lesson.bites.length; i++) {
+        const b = lesson.bites[i];
+        const lines = filmLines(b.film, b.text);
+        cancelAnimation(build);
+        build.value = 0;
+        moving.value = 0;
+        setFilmBite(i);
+        setBiteDone(false);
+        setSub("");
+        setAsking(null);
+        setPicked(null);
+        setRevealed(false);
+        await sleep(i === 0 ? 500 : 700);
+        if (!alive) return;
+        for (let k = 0; k < lines.length; k++) {
+          const last = k === lines.length - 1;
+          if (last && b.guess && b.scene) {
+            // Guess first, then see it.
+            setAsking(b.guess);
+            await sayLine({ say: b.guess.ask, cue: "" }, null, false);
+            if (!alive) return;
+            await new Promise<void>((resolve) => {
+              pick.current = (option) => {
+                pick.current = null;
+                setPicked(option);
+                resolve();
+              };
+            });
+            if (!alive) return;
+          }
+          await sayLine(lines[k], buildAfter(k, lines.length), last);
+          if (!alive) return;
+          await sleep(250);
+          if (!alive) return;
+        }
+        build.value = withTiming(1, { duration: reduce ? 0 : 300 });
+        moving.value = 1;
+        if (b.guess && b.scene) setRevealed(true);
+        setBiteDone(true);
+        await sleep(1600);
+        if (!alive) return;
+      }
+      setFilmOver(true);
+    })();
+
+    return () => {
+      alive = false;
+      timers.forEach(clearTimeout);
+      pick.current = null;
+      hush?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lesson, step.kind, filmRun]);
+
   const go = (s: Step) => {
     setAnswered(null);
     slider.value = 0;
@@ -101,13 +229,17 @@ export function TeachMode({
   const next = () => {
     if (!lesson || step.kind === "finish") return;
     const all = stepsOf(lesson);
-    const at = all.findIndex((x) => x.kind === step.kind && x.i === step.i);
+    const at = all.findIndex((x) => stepKey(x) === stepKey(step));
     go(all[at + 1] ?? { kind: "finish" });
   };
 
+  // The progress bar: in a film, each bite of the film is a segment of its own.
   const all = lesson ? stepsOf(lesson) : [];
-  const total = lesson ? all.length : 4;
-  const done = !lesson ? 0 : step.kind === "finish" ? total : all.findIndex((x) => x.kind === step.kind && "i" in x && x.i === (step as { i: number }).i);
+  const filmSegments = lesson && isFilm(lesson) ? lesson.bites.length - 1 : 0;
+  const total = lesson ? all.length + filmSegments : 4;
+  const at = all.findIndex((x) => stepKey(x) === stepKey(step));
+  const done = !lesson ? 0 : step.kind === "finish" ? total : step.kind === "watch" ? filmBite : at + filmSegments;
+  const filmNow = lesson?.bites[filmBite];
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -138,6 +270,52 @@ export function TeachMode({
             <PillButton label="Try again" variant="solid" style={{ marginTop: 26, alignSelf: "stretch" }} onPress={() => setAttempt((n) => n + 1)} />
             <PillButton label="Back to the call" style={{ marginTop: 10, alignSelf: "stretch" }} onPress={onClose} />
           </View>
+        )}
+
+        {lesson && step.kind === "watch" && filmNow && (
+          <Animated.View key={`watch${filmBite}-${filmRun}`} entering={riseIn()} style={{ gap: 20 }}>
+            <Label tone="student">
+              {filmNow.fromNotes ? "From your notes · " : ""}Idea {filmBite + 1} of {lesson.bites.length}
+            </Label>
+            <T size={30} weight="medium" style={{ lineHeight: 35 }}>
+              {filmNow.title}
+            </T>
+            {filmNow.scene ? (
+              <SceneView scene={filmNow.scene} build={build} moving={moving} label={filmNow.caption || filmNow.title} caption={biteDone ? filmNow.caption : undefined} />
+            ) : (
+              <Picture kind={filmNow.picture.kind} labels={filmNow.picture.labels} />
+            )}
+            <T size={17} tone={asking && !picked ? "text" : "soft"} style={{ lineHeight: 26, minHeight: 52 }}>
+              {sub}
+            </T>
+            {asking && (
+              <View style={{ gap: 10 }}>
+                <View style={styles.choices}>
+                  {asking.options.map((option) => (
+                    <PillButton
+                      key={option}
+                      label={option}
+                      variant={picked === option ? "solid" : "glass"}
+                      style={{ flex: 1, opacity: picked && picked !== option ? 0.5 : 1 }}
+                      onPress={
+                        picked
+                          ? undefined
+                          : () => {
+                              Haptics.selectionAsync().catch(() => {});
+                              pick.current?.(option);
+                            }
+                      }
+                    />
+                  ))}
+                </View>
+                {revealed && (
+                  <T size={14.5} style={{ color: picked === asking.answer ? colour.student : colour.gap }}>
+                    {picked === asking.answer ? "You called it." : `Not quite. It was "${asking.answer}".`}
+                  </T>
+                )}
+              </View>
+            )}
+          </Animated.View>
         )}
 
         {lesson && step.kind === "read" && (
@@ -251,6 +429,21 @@ export function TeachMode({
               </T>
             </Animated.View>
           )}
+          {step.kind === "watch" &&
+            (filmOver ? (
+              <>
+                <PillButton label="Next" variant="solid" onPress={next} />
+                <PillButton
+                  label="Watch again"
+                  onPress={() => {
+                    setFilmOver(false);
+                    setFilmRun((n) => n + 1);
+                  }}
+                />
+              </>
+            ) : (
+              !(asking && !picked) && <PillButton label="Skip to the puzzles" onPress={next} />
+            ))}
           {step.kind === "read" && <PillButton label="Got it" variant="solid" onPress={next} />}
           {step.kind === "play" && (played ? <PillButton label="Next" variant="solid" onPress={next} /> : <PillButton label="Slide to see it" onPress={next} />)}
           {step.kind === "try" && answered !== null && <PillButton label="Continue" variant="solid" onPress={next} />}
@@ -273,4 +466,5 @@ const styles = StyleSheet.create({
   stats: { flexDirection: "row", gap: 44, marginTop: 30 },
   bottom: { position: "absolute", left: 20, right: 20, bottom: 0, gap: 12 },
   sheet: { borderRadius: 24, padding: 18 },
+  choices: { flexDirection: "row", gap: 10 },
 });

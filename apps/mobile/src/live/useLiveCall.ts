@@ -33,6 +33,11 @@ const KITTEN_SPEED = 1;
 
 export type CallPhase = "loading" | "ready" | "listening" | "thinking" | "speaking" | "error";
 
+/** For Teach me's film: when a spoken line's sound begins, how long it lasts and how much has played. */
+export interface SpeakOptions {
+  onStart?: (line: { durationMs: number; elapsedMs: number }) => void;
+}
+
 export interface CallSettings {
   voice: LiveVoice;
   ears: LiveEars;
@@ -288,24 +293,35 @@ export function useLiveCall(topic: string, settings: CallSettings) {
    * Says one line in the chosen voice and resolves when it has finished.
    * Never throws: a silent line is better than a stuck screen. Used for
    * lines Fenny already knows, and to read Teach me lessons aloud.
+   * onStart says when the line's sound begins: how long it lasts, and how
+   * much has already played (negative if it starts after something queued).
+   * Teach me uses it to time each part of a drawing to the words.
    */
-  const speakOnly = async (text: string) => {
+  const speakOnly = async (text: string, opts?: SpeakOptions) => {
     const id = turnId.current;
     const chosen = settingsRef.current;
     const voice: LiveVoice = chosen.voice === "phonon" && !phononReady.current ? "kitten" : chosen.voice;
     try {
       if (voice === "phonon") {
         const r = await Phonon!.speak(text);
-        if (id === turnId.current) await wait(r.remainingMs);
+        if (id !== turnId.current) return;
+        const durationMs = r.audioSeconds * 1000;
+        opts?.onStart?.({ durationMs, elapsedMs: durationMs - r.remainingMs });
+        await wait(r.remainingMs);
       } else {
         const r = await speakLine({ text, voice });
         if (id !== turnId.current) return;
+        // The clip plays as soon as it is queued (nothing else plays during a lesson).
+        const play = (samples: Float32Array, rate: number) => {
+          clips.current.add(samples, rate);
+          opts?.onStart?.({ durationMs: (samples.length / rate) * 1000, elapsedMs: 0 });
+        };
         if (voice === "sonic" && r.audio) {
-          clips.current.add(pcm16ToFloat32(fromBase64(r.audio)), r.sampleRate ?? 24000);
+          play(pcm16ToFloat32(fromBase64(r.audio)), r.sampleRate ?? 24000);
         } else if (r.speech) {
           const { runner, voices } = await loadKitten();
           if (id !== turnId.current) return;
-          clips.current.add(await synthesise(runner, voices, r.speech, KITTEN_VOICE, KITTEN_SPEED), KITTEN_RATE);
+          play(await synthesise(runner, voices, r.speech, KITTEN_VOICE, KITTEN_SPEED), KITTEN_RATE);
         }
         await clips.current.whenIdle();
       }
@@ -539,7 +555,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     /** Not now: hide the offer and carry on. */
     dismissTeach: () => setTeach(null),
     /** Read a line aloud in Fenny's voice (Teach me). */
-    speak: (text: string) => speakOnly(text),
+    speak: (text: string, opts?: SpeakOptions) => speakOnly(text, opts),
     /** Stop whatever Fenny is saying. */
     hush: () => {
       // Audio only: the call's turn state is left alone, so a question
