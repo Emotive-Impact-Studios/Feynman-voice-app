@@ -580,14 +580,22 @@ const short = (s: unknown, words = 3, max = 22) => {
   // Whole words only, up to max characters, so a cut never leaves half a word.
   const ws = String(s ?? "").trim().split(/\s+/).filter(Boolean).slice(0, words);
   let out = ws.length ? ws[0].slice(0, max) : "";
-  for (let i = 1; i < ws.length && out.length + 1 + ws[i].length <= max; i++) out += " " + ws[i];
+  let cut = ws.length > 0 && ws[0].length > max;
+  for (let i = 1; i < ws.length; i++) {
+    if (out.length + 1 + ws[i].length > max) { cut = true; break; }
+    out += " " + ws[i];
+  }
+  if (String(s ?? "").trim().split(/\s+/).filter(Boolean).length > ws.length) cut = true;
   // A cut that leaves a bracket open drops the bracketed part: "Before (per" is "Before".
-  return out.replace(/\s*\([^)]*$/, "");
+  out = out.replace(/\s*\([^)]*$/, "").replace(/[\s,;:]+$/, "");
+  // A cut never ends on a little joining word: "Add to cart" cut short is "Add", not "Add to".
+  if (cut) while (/\s(to|of|the|a|an|and|or|for|in|on|at|by|with|from|into|as|is|are)$/i.test(out)) out = out.replace(/\s+\S+$/, "");
+  return out;
 };
 const oneOf = <T extends string>(v: unknown, list: readonly T[], d: T): T => (list.includes(v as T) ? (v as T) : d);
 
 const num01 = (x: unknown, d: number, lo = 0, hi = 1) => (Number.isFinite(Number(x)) ? Math.max(lo, Math.min(hi, Number(x))) : d);
-const labels = (x: unknown, max: number, words = 2) => (Array.isArray(x) ? x : []).map((v) => short(v, words)).filter(Boolean).slice(0, max);
+const labels = (x: unknown, max: number, words = 3) => (Array.isArray(x) ? x : []).map((v) => short(v, words)).filter(Boolean).slice(0, max);
 /** Shares as fractions adding to 1, or equal shares if they are missing. */
 const isThing = (x: unknown) => typeof x === "string" && (THING_NAMES as readonly string[]).includes(x);
 const shares = (xs: number[]) => {
@@ -688,7 +696,7 @@ export function checkScene(s: unknown): Scene | null {
       const curves = (Array.isArray(r.curves) ? r.curves : []).slice(0, 2).map((c: Record<string, unknown>, i) => ({
         name: String(c.name ?? "").trim().toLowerCase() || `curve${i + 1}`,
         shape: oneOf(c.shape, SHAPES, "rise"),
-        label: short(c.label, 2).slice(0, 10),
+        label: short(c.label, 2, 10),
       }));
       if (!curves.length) return null;
       let highlight = oneOf(r.highlight, HIGHLIGHTS, "ride");
@@ -703,7 +711,7 @@ export function checkScene(s: unknown): Scene | null {
         right: short(r.right),
         leftWeight: clampInt(r.leftWeight, 0, 6, 3),
         rightWeight: clampInt(r.rightWeight, 0, 6, 3),
-        middle: short(r.middle).slice(0, 8),
+        middle: short(r.middle, 3, 8),
       };
     }
     if (r.family === "compare") {
@@ -736,7 +744,7 @@ export function checkScene(s: unknown): Scene | null {
         if (!label) return null;
         const shape = oneOf(o.shape, PAIR_SHAPES, "path");
         const counted = shape === "split" || shape === "join" || shape === "many";
-        return { label, shape, count: counted ? clampInt(o.count, 2, 8, shape === "many" ? 8 : 2) : 0, note: short(o.note, 4).slice(0, 26) };
+        return { label, shape, count: counted ? clampInt(o.count, 2, 8, shape === "many" ? 8 : 2) : 0, note: short(o.note, 4, 26) };
       };
       const left = side(r.left);
       const right = side(r.right);
@@ -767,12 +775,12 @@ export function checkScene(s: unknown): Scene | null {
     }
     if (r.family === "threshold") {
       const unit = (x: unknown, d: number) => (Number.isFinite(Number(x)) ? Math.max(0.05, Math.min(0.95, Number(x))) : d);
-      return { family: "threshold", level: short(r.level), line: short(r.line, 4).slice(0, 26), at: unit(r.at, 0.6), value: unit(r.value, 0.8) };
+      return { family: "threshold", level: short(r.level), line: short(r.line, 4, 26), at: unit(r.at, 0.6), value: unit(r.value, 0.8) };
     }
     if (r.family === "units") {
-      const label = short(r.label, 4).slice(0, 26);
+      const label = short(r.label, 4, 26);
       if (!label) return null;
-      return { family: "units", lit: clampInt(r.lit, 1, 99, 10), label, rest: short(r.rest, 4).slice(0, 26), thing: isThing(r.thing) ? (r.thing as string) : "" };
+      return { family: "units", lit: clampInt(r.lit, 1, 99, 10), label, rest: short(r.rest, 4, 26), thing: isThing(r.thing) ? (r.thing as string) : "" };
     }
     if (r.family === "crowd") {
       const lit = short(r.lit, 2);
@@ -797,7 +805,7 @@ export function checkScene(s: unknown): Scene | null {
     if (r.family === "timeline") {
       const events = (Array.isArray(r.events) ? r.events : [])
         .slice(0, 6)
-        .map((e: Record<string, unknown>) => ({ label: short(e.label, 3).slice(0, 18), when: short(e.when, 2).slice(0, 12), t: Number(e.t) }))
+        .map((e: Record<string, unknown>) => ({ label: short(e.label, 3, 18), when: short(e.when, 2, 12), t: Number(e.t) }))
         .filter((e) => e.label);
       if (events.length < 2) return null;
       // True spacing needs times in order with real gaps; otherwise space them evenly.
@@ -816,7 +824,7 @@ export function checkScene(s: unknown): Scene | null {
     if (r.family === "mirror") {
       const pairs = (Array.isArray(r.pairs) ? r.pairs : [])
         .slice(0, 4)
-        .map((x: Record<string, unknown>) => ({ left: short(x.left, 2).slice(0, 16), right: short(x.right, 2).slice(0, 16) }))
+        .map((x: Record<string, unknown>) => ({ left: short(x.left, 2, 16), right: short(x.right, 2, 16) }))
         .filter((x) => x.left && x.right);
       if (pairs.length < 2) return null;
       return { family: "mirror", leftTitle: short(r.leftTitle, 3), rightTitle: short(r.rightTitle, 3), pairs, lit: clampInt(r.lit, 0, pairs.length - 1, 0) };
@@ -827,9 +835,9 @@ export function checkScene(s: unknown): Scene | null {
       return { family: "stack", label: short(r.label, 3), items, action: oneOf(r.action, STACK_ACTIONS, "push") };
     }
     if (r.family === "radial") {
-      const spokes = labels(r.spokes, 8);
+      const spokes = labels(r.spokes, 8, 2);
       if (spokes.length < 3) return null;
-      return { family: "radial", centre: short(r.centre, 2).slice(0, 12), spokes, lit: clampInt(r.lit, 0, spokes.length - 1, 0), cycle: r.cycle === true };
+      return { family: "radial", centre: short(r.centre, 2, 12), spokes, lit: clampInt(r.lit, 0, spokes.length - 1, 0), cycle: r.cycle === true };
     }
     if (r.family === "cutaway" || r.family === "sankey") {
       const list = (Array.isArray(r.family === "cutaway" ? r.parts : r.splits) ? ((r.family === "cutaway" ? r.parts : r.splits) as Record<string, unknown>[]) : [])
@@ -847,7 +855,7 @@ export function checkScene(s: unknown): Scene | null {
     if (r.family === "funnel") {
       const stages = (Array.isArray(r.stages) ? r.stages : [])
         .slice(0, 6)
-        .map((x: Record<string, unknown>) => ({ label: short(x.label, 2), value: Math.abs(Number(x.value)) }))
+        .map((x: Record<string, unknown>) => ({ label: short(x.label, 3, 18), value: Math.abs(Number(x.value)) }))
         .filter((x) => x.label && Number.isFinite(x.value) && x.value > 0);
       if (stages.length < 2) return null;
       // A funnel only narrows.
@@ -858,20 +866,20 @@ export function checkScene(s: unknown): Scene | null {
       return { family: "fan", x: short(r.x), y: short(r.y), shape: oneOf(r.shape, CROWD_SHAPES, "rise"), now: num01(r.now, 0.55, 0.3, 0.8), label: short(r.label, 2) };
     }
     if (r.family === "spiral") {
-      const stages = labels(r.stages, 5);
+      const stages = labels(r.stages, 5, 2);
       if (stages.length < 2) return null;
       return { family: "spiral", stages, turns: clampInt(r.turns, 2, 3, 2), label: short(r.label, 5, 32) };
     }
     if (r.family === "zoom") {
       const levels = (Array.isArray(r.levels) ? r.levels : [])
         .slice(0, 5)
-        .map((x: Record<string, unknown>) => ({ label: short(x.label, 2).slice(0, 14), size: short(x.size, 2).slice(0, 10) }))
+        .map((x: Record<string, unknown>) => ({ label: short(x.label, 2, 18), size: short(x.size, 2, 12) }))
         .filter((x) => x.label);
       if (levels.length < 2) return null;
       return { family: "zoom", levels, at: clampInt(r.at, 0, levels.length - 1, levels.length - 1) };
     }
     if (r.family === "brace") {
-      const items = labels(r.items, 7);
+      const items = labels(r.items, 7, 2);
       if (items.length < 3) return null;
       const ii = (n: unknown, d: number) => clampInt(n, 0, items.length - 1, d);
       const groups: { label: string; from: number; to: number }[] = [];

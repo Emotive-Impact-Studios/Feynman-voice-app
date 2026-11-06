@@ -39,7 +39,21 @@ describe("the newer devices", () => {
   });
   it("keeps whole words when it shortens a label", () => {
     const s = checkScene({ family: "spiral", stages: ["Plan", "Build", "Test"], turns: 3, label: "Understanding grows deeper with practice" });
-    expect(s?.family === "spiral" && s.label).toBe("Understanding grows deeper with");
+    expect(s?.family === "spiral" && s.label).toBe("Understanding grows deeper");
+  });
+  it("never cuts a word in half, and drops a dangling comma", () => {
+    const m = checkScene({ family: "mirror", leftTitle: "Nucleus", rightTitle: "Around it", pairs: [{ left: "Proton, positive", right: "Electron, negatively charged" }, { left: "Neutron", right: "Pulled in" }], lit: 0 });
+    expect(m?.family === "mirror" && m.pairs[0].right).toBe("Electron");
+    const z = checkScene({ family: "zoom", levels: [{ label: "Atom", size: "1e-10 m" }, { label: "Electron region", size: "1e-12 m" }], at: 1 });
+    expect(z?.family === "zoom" && z.levels[1].label).toBe("Electron region");
+  });
+  it("never ends a cut label on a little joining word", () => {
+    const f = checkScene({ family: "funnel", stages: [{ label: "Visitors", value: 1000 }, { label: "Add to cart and pay later", value: 100 }], lit: 1 });
+    expect(f?.family === "funnel" && f.stages[1].label).toBe("Add to cart");
+    const g = checkScene({ family: "funnel", stages: [{ label: "Visitors", value: 1000 }, { label: "Add to basket quickly", value: 100 }], lit: 1 });
+    expect(g?.family === "funnel" && g.stages[1].label).toBe("Add to basket");
+    const h = checkScene({ family: "funnel", stages: [{ label: "Visitors", value: 1000 }, { label: "Put into the basket", value: 100 }], lit: 1 });
+    expect(h?.family === "funnel" && h.stages[1].label).toBe("Put");
   });
   it("blanks slider targets for devices that light parts in order", () => {
     const t = checkScene({ family: "timeline", events: [{ label: "A", when: "1900", t: 1900 }, { label: "B", when: "1950", t: 1950 }], scale: "even", at: 1 });

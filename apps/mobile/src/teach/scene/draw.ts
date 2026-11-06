@@ -167,6 +167,18 @@ function label(c: SkCanvas, p: SkPaint, font: SkFont | null, text: string, x: nu
   fill(p, colour, a);
   c.drawText(text, left, y + 3.3, p, font);
 }
+/** Drops whole words from the end until the text fits, so a label is never cut mid-word. */
+function fitText(font: SkFont | null, text: string, maxW: number) {
+  "worklet";
+  if (!font || font.getTextWidth(text) <= maxW) return text;
+  const ws = text.split(" ");
+  while (ws.length > 1) {
+    ws.pop();
+    const t = ws.join(" ");
+    if (font.getTextWidth(t) <= maxW) return t;
+  }
+  return ws[0];
+}
 function axes(c: SkCanvas, p: SkPaint, font: SkFont | null, f: Frame, L: number, T: number, R: number, B: number, xl: string, yl: string) {
   "worklet";
   const k = beat(f, 0, 4);
@@ -353,9 +365,9 @@ function nodePositions(s: LinksScene): number[][] {
   if (s.layout === "line") {
     for (let i = 0; i < n; i++) out.push([n === 1 ? 150 : 34 + (i * 232) / (n - 1), n > 3 ? 80 + (i % 2 === 0 ? -20 : 20) : 80]);
   } else if (s.layout === "fork") {
-    out.push([56, 84]);
+    out.push([48, 88]);
     const m = n - 1;
-    for (let i = 0; i < m; i++) out.push([236, m === 1 ? 84 : 30 + (i * 110) / (m - 1)]);
+    for (let i = 0; i < m; i++) out.push([206, m === 1 ? 88 : 28 + (i * 120) / (m - 1)]);
   } else if (s.layout === "loop") {
     if (n === 2) out.push([52, 84], [248, 84]);
     else for (let i = 0; i < n; i++) {
@@ -510,8 +522,14 @@ function drawLinks(c: SkCanvas, p: SkPaint, font: SkFont | null, s: LinksScene, 
     dot(c, p, x, y, R, a, PANEL);
     if (lit[i]) dot(c, p, x, y, 6.5, a, BLUE);
     else ring(c, p, x, y, R, a * 0.7);
-    // Labels sit outside the shape: under a line, away from the middle of a loop, fork or web.
-    const below = s.layout === "line" ? true : y >= 80;
+    // Labels sit outside the shape: a fork's outcomes are named to their right; elsewhere a
+    // label goes above a node in the top half and below one in the bottom half, so the links
+    // of a zigzag line never run through a name.
+    if (s.layout === "fork" && i > 0) {
+      label(c, p, font, fitText(font, s.nodes[i], 300 - x - 17), x + 13, y, "left", lit[i] ? SIL : LAB, a);
+      continue;
+    }
+    const below = y >= 80;
     const ly = below ? (y > 140 ? y - 20 : y + 20) : y < 30 ? y - 15 : y - 20;
     label(c, p, font, s.nodes[i], x, ly, x < 40 ? "left" : x > 260 ? "right" : "center", lit[i] ? SIL : LAB, a);
   }
@@ -817,8 +835,11 @@ function drawVenn(c: SkCanvas, p: SkPaint, font: SkFont | null, s: VennScene, ch
   }
   ring(c, p, ax, cy, r, beat(f, 0, 3));
   ring(c, p, bx, cy, r, beat(f, 1, 3));
-  label(c, p, font, s.a, ax - r * 0.55, cy, "center", SIL, beat(f, 0, 3));
-  label(c, p, font, s.b, bx + r * 0.55, cy, "center", SIL, beat(f, 1, 3));
+  // Each name sits in the middle of its circle's own part, and loses words rather than cross a line.
+  const aR = Math.min(bx - r, ax + r);
+  const bL = Math.max(ax + r, bx - r);
+  label(c, p, font, fitText(font, s.a, aR - (ax - r) - 12), (ax - r + aR) / 2, cy, "center", SIL, beat(f, 0, 3));
+  label(c, p, font, fitText(font, s.b, bx + r - bL - 12), (bL + bx + r) / 2, cy, "center", SIL, beat(f, 1, 3));
   if (d < 2 * r - 10) label(c, p, font, s.both, 150, cy + r + 18, "center", BLUE, beat(f, 2, 3));
 }
 
@@ -1515,8 +1536,8 @@ function drawMirror(c: SkCanvas, p: SkPaint, font: SkFont | null, s: MirrorScene
     const rightOn = lit && prog >= 0.999;
     dot(c, p, LX, y, leftOn ? 4.2 : 3, k, leftOn ? BLUE : SIL);
     dot(c, p, RX, y, rightOn ? 4.2 : 3, k, rightOn ? BLUE : SIL);
-    label(c, p, font, s.pairs[i].left, LX - 11, y, "right", lit ? SIL : LAB, k);
-    label(c, p, font, s.pairs[i].right, RX + 11, y, "left", lit ? SIL : LAB, k);
+    label(c, p, font, fitText(font, s.pairs[i].left, LX - 15), LX - 11, y, "right", lit ? SIL : LAB, k);
+    label(c, p, font, fitText(font, s.pairs[i].right, 300 - RX - 15), RX + 11, y, "left", lit ? SIL : LAB, k);
     if (lit) pass(c, p, LX + 5, y, RX - 5, y, prog);
   }
 }
@@ -1933,8 +1954,8 @@ function drawZoom(c: SkCanvas, p: SkPaint, font: SkFont | null, s: ZoomScene, ch
       line(c, p, sx + sq, sy + sq, nx - r * 0.72, Y + r * 0.7, 0.22, SIL, k2);
       if (i === litI - 1 && !stepping) pass(c, p, sx + sq, sy + sq / 2, nx - r, Y, beat(f, 2.2, 3));
     }
-    label(c, p, font, s.levels[i].label, x, Y + r + 13, "center", lit ? SIL : LAB, k);
-    label(c, p, font, s.levels[i].size, x, Y + r + 26, "center", LAB, k * 0.75);
+    label(c, p, font, fitText(font, s.levels[i].label, gap - 6), x, Y + r + 13, "center", lit ? SIL : LAB, k);
+    label(c, p, font, fitText(font, s.levels[i].size, gap - 6), x, Y + r + 26, "center", LAB, k * 0.75);
   }
 }
 
@@ -2078,7 +2099,7 @@ function thingHalo(c: SkCanvas, x: number, y: number, h: number, a: number) {
   c.drawCircle(x, y, h * 0.85, hp);
 }
 /** Draws a thing centred on (x, y), half its size h, built on mark by mark as k goes from 0 to 1. */
-function drawThing(c: SkCanvas, p: SkPaint, name: string, x: number, y: number, h: number, a: number, lit: boolean, k = 1, w = W0, glow = true) {
+export function drawThing(c: SkCanvas, p: SkPaint, name: string, x: number, y: number, h: number, a: number, lit: boolean, k = 1, w = W0, glow = true) {
   "worklet";
   const marks = THINGS[name];
   if (!marks || a <= 0.01 || k <= 0) return;
@@ -2148,16 +2169,18 @@ function drawThings(c: SkCanvas, p: SkPaint, font: SkFont | null, s: ThingsScene
     const CY = 80;
     const RX = 104;
     const RY = 46;
-    const tm = f.still ? 1.3 : (hasKind(changes, "speed") ? f.T : f.t) * 0.45 + 1.3;
+    // At rest the planet sits to the right of the sun, clear of every name.
+    const tm = (f.still ? 0 : (hasKind(changes, "speed") ? f.T : f.t) * 0.45) + 0.5;
     strokePts(c, p, ellipsePts(CX, CY, RX, RY, beat(f, 0.8, 3)), 0.22, SIL, W0, [2, 5]);
     drawThing(c, p, s.items[0].thing, CX, CY, 25, 1, isLit(0), kOf(0));
-    label(c, p, font, s.items[0].label, CX, CY + 36, "center", isLit(0) ? SIL : LAB, kOf(0));
+    // The centre's name sits to its left, where the orbit never passes close.
+    label(c, p, font, s.items[0].label, CX - 31, CY, "right", isLit(0) ? SIL : LAB, kOf(0));
     if (n > 1) {
       const k1 = kOf(1);
       const ex = CX + RX * Math.cos(tm);
       const ey = CY + RY * Math.sin(tm);
       if (n > 2) {
-        const tm2 = tm * 3.2;
+        const tm2 = tm * 3.2 - 2.4;
         strokePts(c, p, ellipsePts(ex, ey, 25, 25, beat(f, 1.6, 3)), 0.18, SIL, W0, [2, 4]);
         const mx = ex + 25 * Math.cos(tm2);
         const my = ey + 25 * Math.sin(tm2);
@@ -2166,7 +2189,11 @@ function drawThings(c: SkCanvas, p: SkPaint, font: SkFont | null, s: ThingsScene
         label(c, p, font, s.items[2].label, mx + Math.cos(tm2) * 14, my + Math.sin(tm2) * 12, Math.cos(tm2) > 0.3 ? "left" : Math.cos(tm2) < -0.3 ? "right" : "center", isLit(2) ? SIL : LAB, kOf(2));
       }
       drawThing(c, p, s.items[1].thing, ex, ey, 13, 1, isLit(1), k1);
-      label(c, p, font, s.items[1].label, ex, ey + (n > 2 ? 34 : 22), "center", isLit(1) ? SIL : LAB, k1);
+      if (n > 2) {
+        // With a moon, the planet's name rides on the side away from it, so the two never meet.
+        const d = tm * 3.2 - 2.4 + Math.PI;
+        label(c, p, font, s.items[1].label, ex + Math.cos(d) * 20, ey + Math.sin(d) * 23, Math.cos(d) > 0.3 ? "left" : Math.cos(d) < -0.3 ? "right" : "center", isLit(1) ? SIL : LAB, k1);
+      } else label(c, p, font, s.items[1].label, ex, ey + 22, "center", isLit(1) ? SIL : LAB, k1);
     }
     return;
   }
