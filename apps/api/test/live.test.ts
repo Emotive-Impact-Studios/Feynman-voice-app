@@ -45,6 +45,14 @@ async function events(res: Response) {
 }
 
 describe("SentenceSplitter", () => {
+  it("keeps a short reaction on its own when asked to", () => {
+    const s = new SentenceSplitter(4);
+    expect([...s.push("Oh, nice. So why does the plant need light at all? "), ...s.flush()]).toEqual([
+      "Oh, nice.",
+      "So why does the plant need light at all?",
+    ]);
+  });
+
   it("releases whole sentences as text streams in", () => {
     const s = new SentenceSplitter();
     expect(s.push("Wait, what does ")).toEqual([]);

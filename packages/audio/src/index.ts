@@ -244,3 +244,33 @@ export class NdjsonReader {
     this.pending = "";
   }
 }
+
+/**
+ * Makes the student's voice loud on a phone speaker. Each clip is lifted to
+ * a speech level well above what the voices send (about -14 dBFS RMS), and
+ * a soft limiter rounds off the peaks instead of clipping them, so it gets
+ * much louder without crackling. Quiet clips (near silence) are left alone.
+ */
+export const LOUD_TARGET_RMS = 0.2;
+export const LOUD_MAX_GAIN = 6; // about +15 dB
+
+export function louder(samples: Float32Array, targetRms = LOUD_TARGET_RMS, maxGain = LOUD_MAX_GAIN): Float32Array {
+  const level = rms(samples);
+  const out = new Float32Array(samples.length);
+  if (level < 1e-4) {
+    out.set(samples);
+    return out;
+  }
+  const gain = Math.min(maxGain, Math.max(1, targetRms / level));
+  for (let i = 0; i < samples.length; i++) out[i] = softLimit(samples[i] * gain);
+  return out;
+}
+
+/** Linear up to 0.6, then curves smoothly towards 1 and never passes it. */
+export function softLimit(x: number): number {
+  const knee = 0.6;
+  const a = Math.abs(x);
+  if (a <= knee) return x;
+  const over = (a - knee) / (1 - knee);
+  return Math.sign(x) * (knee + (1 - knee) * Math.tanh(over));
+}

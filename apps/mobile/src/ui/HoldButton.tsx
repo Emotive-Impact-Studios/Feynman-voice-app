@@ -5,7 +5,7 @@ import { useMemo, type ReactNode } from "react";
 import { View } from "react-native";
 import { Canvas, Group, Path, Skia, vec } from "@shopify/react-native-skia";
 import * as Haptics from "expo-haptics";
-import { cancelAnimation, Easing, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
+import { cancelAnimation, Easing, type SharedValue, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
 import { colour } from "../theme";
 import { Press } from "./Press";
 
@@ -28,7 +28,8 @@ export function HoldButton({
   onTap?: () => void;
   /** Held to the end: end the session. */
   onHold: () => void;
-  children: ReactNode;
+  /** The button's face. Given the hold's progress (0 to 1) if it wants it. */
+  children: ReactNode | ((hold: SharedValue<number>) => ReactNode);
 }) {
   const p = useSharedValue(0);
   const box = size + RING_GAP * 2;
@@ -61,7 +62,7 @@ export function HoldButton({
       }}
       style={{ width: size, height: size }}
     >
-      {children}
+      {typeof children === "function" ? children(p) : children}
       <View pointerEvents="none" style={{ position: "absolute", left: -RING_GAP, top: -RING_GAP }}>
         <Canvas style={{ width: box, height: box }}>
           <Group origin={vec(box / 2, box / 2)} transform={[{ rotate: -Math.PI / 2 }]}>

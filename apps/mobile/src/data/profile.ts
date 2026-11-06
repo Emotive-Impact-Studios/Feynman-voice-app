@@ -28,9 +28,13 @@ export interface Profile {
   topics: TopicRecord[];
   /** Local day numbers on which they explained something, for the soft streak. */
   days: number[];
+  /** How a session shows the conversation: the light, subtitles or the full chat. */
+  sessionView: SessionViewPref;
 }
 
-const EMPTY: Profile = { introDone: false, name: "", subjects: [], secondsUsed: 0, topics: [], days: [] };
+export type SessionViewPref = "light" | "subtitles" | "chat";
+
+const EMPTY: Profile = { introDone: false, name: "", subjects: [], secondsUsed: 0, topics: [], days: [], sessionView: "light" };
 const file = new File(Paths.document, "profile.json");
 
 function load(): Profile {
@@ -71,6 +75,11 @@ export function getProfile(): Profile {
 
 export function finishIntro(name: string, subjects: string[]) {
   set({ ...state, introDone: true, name: name.trim(), subjects });
+}
+
+/** Remember how sessions should look, from Me or from the session's own menu. */
+export function setSessionView(view: SessionViewPref) {
+  if (state.sessionView !== view) set({ ...state, sessionView: view });
 }
 
 export function replayIntro() {

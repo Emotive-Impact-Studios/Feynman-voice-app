@@ -9,7 +9,7 @@ import { ago, minutesLeft, softStreak, todaySentence, type Profile } from "../da
 import { colour, font } from "../theme";
 import { Glass, Icon, Label, PillButton, T } from "../ui/kit";
 import { riseIn, STAGGER_MS } from "../ui/motion";
-import { SilverRing } from "../ui/SilverRing";
+import { Soft } from "../ui/Soft";
 import { homeStyles } from "./styles";
 
 export function Today({ profile, top, bottom, onNew, onTopic }: { profile: Profile; top: number; bottom: number; onNew: () => void; onTopic: (t: string) => void }) {
@@ -45,9 +45,10 @@ export function Today({ profile, top, bottom, onNew, onTopic }: { profile: Profi
             <T size={16} tone="soft" style={{ flex: 1 }}>
               Pick a topic, or say one
             </T>
-            <SilverRing width={52} height={52}>
-              <Icon name="mic" />
-            </SilverRing>
+            {/* The pill clips, so no glow here: just the lit fill. */}
+            <Soft lit glow={false} style={{ width: 52, height: 52 }}>
+              <Icon name="mic" color={colour.onLight} />
+            </Soft>
           </Glass>
         </Press>
       </In>
