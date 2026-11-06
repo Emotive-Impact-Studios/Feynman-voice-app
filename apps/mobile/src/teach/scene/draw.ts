@@ -20,7 +20,7 @@
 //   Under Reduce Motion nothing loops and only the slider changes the scene.
 // The panel is 300 x 176; the view scales it to fit the screen.
 import { Skia, type SkCanvas, type SkFont, type SkPaint } from "@shopify/react-native-skia";
-import type { BalanceScene, Change, CompareScene, GraphScene, LinksScene, PairScene, PairSide, ParticlesScene, Scene, Shape, SpectrumScene, StairsScene, VennScene } from "./types";
+import type { BalanceScene, Change, CompareScene, CrowdScene, GraphScene, LinksScene, PairScene, PairSide, ParticlesScene, Scene, Shape, SpectrumScene, StairsScene, TestScene, ThresholdScene, TreeScene, UnitsScene, VennScene } from "./types";
 
 export const VIEW_W = 300;
 export const VIEW_H = 176;
@@ -923,6 +923,245 @@ function drawPair(c: SkCanvas, p: SkPaint, font: SkFont | null, s: PairScene, ch
   }
 }
 
+// ---- tree: what branches from what ----
+// A root on the left, branches, then leaves named on the right. A light
+// travels from the root down the one path the lesson is about, and the node
+// it reaches is lit.
+function drawTree(c: SkCanvas, p: SkPaint, font: SkFont | null, s: TreeScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const RX = 30;
+  const RY = 86;
+  const BX = 126;
+  const LX = 210;
+  let rows = 0;
+  for (let b = 0; b < s.branches.length; b++) rows += Math.max(1, s.branches[b].leaves.length);
+  const pitch = Math.min(26, 124 / Math.max(1, rows - 1));
+  const top = RY - (pitch * (rows - 1)) / 2;
+  const by: number[] = [];
+  const ly: number[][] = [];
+  let row = 0;
+  for (let b = 0; b < s.branches.length; b++) {
+    const n = Math.max(1, s.branches[b].leaves.length);
+    const ys: number[] = [];
+    for (let j = 0; j < n; j++) ys.push(top + (row + j) * pitch);
+    by.push((ys[0] + ys[n - 1]) / 2);
+    ly.push(s.branches[b].leaves.length ? ys : []);
+    row += n;
+  }
+  const lb = s.lit.branch;
+  const lf = s.lit.leaf;
+  // The light's journey: root to branch, then branch to leaf.
+  const lp = stepping ? f.v : beat(f, 3, 3);
+  const twoLegs = lf >= 0;
+  const leg1 = twoLegs ? clamp(lp * 2) : lp;
+  const leg2 = twoLegs ? clamp(lp * 2 - 1) : 0;
+  const arrived = lp >= 0.999;
+
+  for (let b = 0; b < s.branches.length; b++) {
+    const kB = beat(f, 0.8 + (b / s.branches.length) * 0.5, 3);
+    const onPath = b === lb;
+    const x1 = RX + 9;
+    const x2 = BX - 7;
+    line(c, p, x1, RY, x2, by[b], onPath && leg1 >= 1 ? 0.8 : 0.4, SIL, kB);
+    if (onPath && leg1 > 0 && leg1 < 1) {
+      const q0 = Math.max(0, leg1 - 0.35);
+      line(c, p, x1 + (x2 - x1) * q0, RY + (by[b] - RY) * q0, x1 + (x2 - x1) * leg1, RY + (by[b] - RY) * leg1, 1, BLUE, 1, undefined, W0 + 0.6);
+      dot(c, p, x1 + (x2 - x1) * leg1, RY + (by[b] - RY) * leg1, 2.6, 1, BLUE);
+    }
+    const leaves = s.branches[b].leaves;
+    for (let j = 0; j < leaves.length; j++) {
+      const kL = beat(f, 1.8 + (j / 3) * 0.4, 3);
+      const leafLit = onPath && j === lf;
+      line(c, p, BX + 7, by[b], LX - 5, ly[b][j], leafLit && leg2 >= 1 ? 0.8 : 0.4, SIL, kL);
+      if (leafLit && leg2 > 0 && leg2 < 1) {
+        const q0 = Math.max(0, leg2 - 0.35);
+        const ax = BX + 7;
+        const bx = LX - 5;
+        line(c, p, ax + (bx - ax) * q0, by[b] + (ly[b][j] - by[b]) * q0, ax + (bx - ax) * leg2, by[b] + (ly[b][j] - by[b]) * leg2, 1, BLUE, 1, undefined, W0 + 0.6);
+        dot(c, p, ax + (bx - ax) * leg2, by[b] + (ly[b][j] - by[b]) * leg2, 2.6, 1, BLUE);
+      }
+      const lit = leafLit && arrived;
+      dot(c, p, LX, ly[b][j], lit ? 5 : 3.4, kL, lit ? BLUE : SIL);
+      label(c, p, font, leaves[j], LX + 10, ly[b][j], "left", lit ? SIL : LAB, kL);
+    }
+    const branchLit = onPath && !twoLegs && arrived;
+    dot(c, p, BX, by[b], 7, kB, PANEL);
+    if (branchLit) dot(c, p, BX, by[b], 5, kB, BLUE);
+    else ring(c, p, BX, by[b], 7, kB * 0.8);
+    // Above the node for branches above the root, below for those under it, so no line runs through a label.
+    if (leaves.length) label(c, p, font, s.branches[b].label, BX, by[b] > RY + 4 ? by[b] + 16 : by[b] - 15, "center", onPath ? SIL : LAB, beat(f, 1.6, 3));
+    else label(c, p, font, s.branches[b].label, BX + 13, by[b], "left", branchLit ? SIL : LAB, beat(f, 1.6, 3));
+  }
+  const kR = beat(f, 0, 3);
+  dot(c, p, RX, RY, 9, kR, PANEL);
+  ring(c, p, RX, RY, 9, kR);
+  label(c, p, font, s.root, 14, RY + 22, "left", LAB, kR);
+}
+
+// ---- test: does it pass every condition? ----
+// A case travels a path through a row of gates. It stops at the first gate it
+// fails, and that gate is lit; if it passes them all it reaches the outcome.
+function drawTest(c: SkCanvas, p: SkPaint, font: SkFont | null, s: TestScene, changes: Change[], f: Frame) {
+  "worklet";
+  const stepping = hasKind(changes, "step");
+  const n = s.gates.length;
+  const Y = 84;
+  const X0 = 26;
+  const X1 = 280;
+  const G0 = 70;
+  const G1 = 210;
+  const fails = s.fails;
+  const stopX = fails >= 0 ? G0 + (fails * (G1 - G0)) / Math.max(1, n - 1) - 11 : X1;
+  const kT = stepping ? f.v : beat(f, 3, 3);
+  const done = kT >= 0.999;
+  const failedNow = done && fails >= 0;
+
+  line(c, p, X0, Y, X1, Y, 0.32, SIL, beat(f, 0, 3));
+  for (let i = 0; i < n; i++) {
+    const x = G0 + (i * (G1 - G0)) / Math.max(1, n - 1);
+    const a = beat(f, 0.8 + (i / n) * 0.8, 3) * (failedNow && i > fails ? 0.3 : 1);
+    const lit = failedNow && i === fails;
+    const col = lit ? BLUE : SIL;
+    const w = lit ? W0 + 0.6 : W0;
+    line(c, p, x, Y - 22, x, Y - 9, a * 0.9, col, 1, undefined, w);
+    line(c, p, x, Y + 9, x, Y + 22, a * 0.9, col, 1, undefined, w);
+    if (lit) dot(c, p, x, Y - 22, 3.2, 1, BLUE);
+    const gy = n >= 4 && i % 2 === 1 ? Y - 36 : Y + 36;
+    label(c, p, font, s.gates[i], x, gy, "center", lit ? SIL : LAB, beat(f, 2, 3) * (failedNow && i > fails ? 0.5 : 1));
+  }
+  label(c, p, font, s.case, 14, Y - 18, "left", LAB, beat(f, 1, 3));
+  // The case: lit while it travels, and at the end if it passes everything.
+  const x = X0 + (stopX - X0) * kT;
+  const moving = kT > 0.01 && !done;
+  if (moving && !f.still) {
+    for (let j = 1; j <= 3; j++) dot(c, p, x - j * 4.5, Y, 3 - j * 0.5, 0.5 - j * 0.12);
+  }
+  const caseLit = moving || (done && fails < 0);
+  dot(c, p, x, Y, caseLit ? 5 : 3.6, beat(f, 1, 3), caseLit ? BLUE : SIL);
+  if (done && s.outcome) {
+    if (fails >= 0) label(c, p, font, s.outcome, stopX + 24, Y - 14, "left", SIL, 1);
+    else label(c, p, font, s.outcome, X1, Y - 16, "right", SIL, 1);
+  }
+}
+
+// ---- threshold: has it crossed the line? ----
+// A level rises in a tube against one marked line. The level is lit while it
+// rises; once it crosses, the line is lit instead.
+function drawThreshold(c: SkCanvas, p: SkPaint, font: SkFont | null, s: ThresholdScene, changes: Change[], f: Frame) {
+  "worklet";
+  const filling = hasKind(changes, "fill");
+  const TX = 62;
+  const TW = 34;
+  const TT = 22;
+  const TB = 142;
+  const H = TB - TT;
+  const kTube = beat(f, 0, 3);
+  stroke(p, SIL, 0.5 * kTube);
+  c.drawRRect(Skia.RRectXY(Skia.XYWHRect(TX, TT, TW, H), 6, 6), p);
+  const lv = filling ? f.v : s.value * beat(f, 3, 3);
+  const yL = TB - H * lv;
+  const yT = TB - H * s.at;
+  const crossed = lv >= s.at;
+  if (lv > 0.04) {
+    fill(p, SIL, 0.1);
+    c.drawRRect(Skia.RRectXY(Skia.XYWHRect(TX + 3, yL, TW - 6, TB - 3 - yL), 3, 3), p);
+    line(c, p, TX + 4, yL, TX + TW - 4, yL, 1, crossed ? SIL : BLUE, 1, undefined, crossed ? W0 : W0 + 0.6);
+  }
+  const kLine = beat(f, 1, 3);
+  const LX2 = TX + TW + 58;
+  if (crossed) {
+    line(c, p, TX - 14, yT, LX2, yT, 1, BLUE, 1, undefined, W0 + 0.6);
+    dot(c, p, LX2, yT, 3.2, 1, BLUE);
+  } else {
+    line(c, p, TX - 14, yT, LX2, yT, 0.7, SIL, kLine, [6, 7]);
+  }
+  label(c, p, font, s.line, LX2 + 9, yT, "left", crossed ? SIL : LAB, kLine);
+  label(c, p, font, s.level, TX + TW / 2, TB + 14, "center", LAB, beat(f, 2, 3));
+}
+
+// ---- units: how many out of 100 ----
+// A ten by ten field of dots; the lit ones are counted in from the top left.
+// They are lit as a group, so they carry no halo.
+function drawUnits(c: SkCanvas, p: SkPaint, font: SkFont | null, s: UnitsScene, changes: Change[], f: Frame) {
+  "worklet";
+  const growing = hasKind(changes, "grow");
+  const X0 = 30;
+  const Y0 = 26;
+  const P = 12.6;
+  const shown = Math.round(s.lit * (growing ? f.v : beat(f, 2.4, 3)));
+  for (let i = 0; i < 100; i++) {
+    const r = Math.floor(i / 10);
+    const col = i % 10;
+    const a = beat(f, (r / 10) * 1.6, 3);
+    const lit = i < shown;
+    dot(c, p, X0 + col * P, Y0 + r * P, lit ? 2.9 : 2.5, lit ? a : a * 0.45, lit ? BLUE : SIL);
+  }
+  const kLab = beat(f, 2, 3);
+  label(c, p, font, `${shown} in 100`, 172, 64, "left", SIL, kLab);
+  label(c, p, font, s.label, 172, 78, "left", LAB, kLab);
+  if (s.rest) {
+    label(c, p, font, `${100 - shown} in 100`, 172, 106, "left", LAB, kLab);
+    label(c, p, font, s.rest, 172, 120, "left", LAB, kLab * 0.8);
+  }
+}
+
+// ---- crowd: which one stands out ----
+// Many quiet grey lines with the same shape, then one drawn on lit and named
+// at its end.
+function crowdY(shape: string, u: number, off: number) {
+  "worklet";
+  if (shape === "rise") return 0.18 + 0.55 * u + off;
+  if (shape === "fall") return 0.75 - 0.55 * u + off;
+  return 0.45 + off;
+}
+function standoutY(s: CrowdScene, u: number) {
+  "worklet";
+  const bump = Math.exp(-((u - 0.62) * (u - 0.62)) / 0.012);
+  if (s.litShape === "peak") return crowdY(s.crowd, u, 0) + 0.3 * bump;
+  if (s.litShape === "dip") return crowdY(s.crowd, u, 0) - 0.3 * bump;
+  return crowdY(s.litShape, u, 0);
+}
+function drawCrowd(c: SkCanvas, p: SkPaint, font: SkFont | null, s: CrowdScene, changes: Change[], f: Frame) {
+  "worklet";
+  const L = 36;
+  const R = 262;
+  const T = 18;
+  const B = 140;
+  axes(c, p, font, f, L, T, R, B, s.x, s.y);
+  const X = (u: number) => L + 6 + u * (R - L - 12);
+  const Y = (v: number) => B - 6 - clamp(v, 0, 1) * (B - T - 14);
+  const N = 14;
+  for (let j = 0; j < s.count; j++) {
+    const off = (rnd(j + 3) - 0.5) * 0.34;
+    const k = beat(f, 1 + (j / s.count) * 0.6, 3);
+    if (k <= 0.01) continue;
+    const path = Skia.PathBuilder.Make();
+    const m = Math.max(1, Math.round(N * k));
+    for (let i = 0; i <= m; i++) {
+      const u = i / N;
+      const v = crowdY(s.crowd, u, off) + (rnd(j * 31 + i) - 0.5) * 0.05;
+      if (i === 0) path.moveTo(X(u), Y(v));
+      else path.lineTo(X(u), Y(v));
+    }
+    stroke(p, SIL, 0.22);
+    c.drawPath(path.build(), p);
+  }
+  const kL = beat(f, 2.4, 3);
+  if (kL > 0.01) {
+    const path = Skia.PathBuilder.Make();
+    for (let i = 0; i <= 60; i++) {
+      const u = (kL * i) / 60;
+      if (i === 0) path.moveTo(X(u), Y(standoutY(s, u)));
+      else path.lineTo(X(u), Y(standoutY(s, u)));
+    }
+    stroke(p, BLUE, 1);
+    c.drawPath(path.build(), p);
+    dot(c, p, X(kL), Y(standoutY(s, kL)), kL < 0.99 ? 2.6 : 3.4, 1, BLUE);
+    label(c, p, font, s.lit, X(1), Y(standoutY(s, 1)) - 11, "right", SIL, clamp((kL - 0.9) * 10));
+  }
+}
+
 export function drawScene(c: SkCanvas, scene: Scene, changes: Change[], f: Frame, font: SkFont | null) {
   "worklet";
   const p = Skia.Paint();
@@ -954,6 +1193,21 @@ export function drawScene(c: SkCanvas, scene: Scene, changes: Change[], f: Frame
       break;
     case "pair":
       drawPair(c, p, font, scene, changes, f);
+      break;
+    case "tree":
+      drawTree(c, p, font, scene, changes, f);
+      break;
+    case "test":
+      drawTest(c, p, font, scene, changes, f);
+      break;
+    case "threshold":
+      drawThreshold(c, p, font, scene, changes, f);
+      break;
+    case "units":
+      drawUnits(c, p, font, scene, changes, f);
+      break;
+    case "crowd":
+      drawCrowd(c, p, font, scene, changes, f);
       break;
   }
 }

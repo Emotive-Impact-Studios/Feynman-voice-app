@@ -82,3 +82,49 @@ describe("the newer devices", () => {
     expect(checkPlay({ prompt: "p", low: "a", high: "b", readouts: ["a", "b", "c"], changes: [{ target: "", does: "grow" }] }, p)).toBeNull();
   });
 });
+
+describe("tree, test, threshold, units and crowd", () => {
+  it("keeps a tree to 6 leaves and a lit path that exists", () => {
+    const t = checkScene({
+      family: "tree",
+      root: "Animals",
+      branches: [
+        { label: "Vertebrates", leaves: ["Mammals", "Birds", "Fish", "Reptiles"] },
+        { label: "Invertebrates", leaves: ["Insects", "Molluscs", "Worms"] },
+        { label: "Sponges", leaves: [] },
+      ],
+      lit: { branch: 2, leaf: 1 },
+    });
+    expect(t?.family).toBe("tree");
+    if (t?.family !== "tree") return;
+    expect(t.branches.reduce((n, b) => n + b.leaves.length, 0)).toBeLessThanOrEqual(6);
+    expect(t.branches[0].leaves).toHaveLength(3);
+    // Sponges has no leaves, so the lit path ends at the branch.
+    expect(t.lit).toEqual({ branch: 2, leaf: -1 });
+    expect(checkScene({ family: "tree", root: "x", branches: [{ label: "only", leaves: [] }], lit: { branch: 0, leaf: 0 } })).toBeNull();
+  });
+
+  it("keeps a test's failing gate in range", () => {
+    const t = checkScene({ family: "test", case: "Claim", gates: ["Foreseeable", "Proximity", "Fair"], fails: 7, outcome: "No duty" });
+    expect(t).toEqual({ family: "test", case: "Claim", gates: ["Foreseeable", "Proximity", "Fair"], fails: 2, outcome: "No duty" });
+    const pass = checkScene({ family: "test", case: "Claim", gates: ["A", "B"], fails: -1, outcome: "Liable" });
+    expect(pass?.family === "test" && pass.fails).toBe(-1);
+  });
+
+  it("keeps threshold, units and crowd values sensible", () => {
+    const th = checkScene({ family: "threshold", level: "Voltage", line: "Threshold", at: 3, value: -1 });
+    expect(th).toEqual({ family: "threshold", level: "Voltage", line: "Threshold", at: 0.95, value: 0.05 });
+    const u = checkScene({ family: "units", lit: 140, label: "get a side effect", rest: "do not" });
+    expect(u?.family === "units" && u.lit).toBe(99);
+    const c = checkScene({ family: "crowd", x: "Year", y: "Life expectancy", count: 40, crowd: "wobbly", lit: "Russia", litShape: "dip" });
+    expect(c).toMatchObject({ family: "crowd", count: 16, crowd: "rise", litShape: "dip" });
+  });
+
+  it("gives each new device its slider, and none to a crowd", () => {
+    const th = checkScene({ family: "threshold", level: "Evidence", line: "51%", at: 0.5, value: 0.6 });
+    const play = { prompt: "Add evidence.", low: "None", high: "Lots", readouts: ["a", "b", "c"], changes: [{ target: "evidence", does: "fill" }] };
+    expect(checkPlay(play, th)?.changes).toEqual([{ target: "", does: "fill" }]);
+    const crowd = checkScene({ family: "crowd", x: "Year", y: "GDP", count: 10, crowd: "rise", lit: "Japan", litShape: "flat" });
+    expect(checkPlay({ ...play, changes: [{ target: "", does: "step" }] }, crowd)).toBeNull();
+  });
+});

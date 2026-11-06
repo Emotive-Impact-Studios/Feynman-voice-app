@@ -93,9 +93,70 @@ export interface PairScene {
   lit: "left" | "right";
 }
 
-export type Scene = ParticlesScene | LinksScene | GraphScene | BalanceScene | CompareScene | StairsScene | SpectrumScene | VennScene | PairScene;
+/** What branches from what: a root, branches and leaves, one path lit. */
+export interface TreeScene {
+  family: "tree";
+  root: string;
+  branches: { label: string; leaves: string[] }[];
+  /** leaf -1 means the branch itself. */
+  lit: { branch: number; leaf: number };
+}
 
-export type ChangeKind = "appear" | "cross" | "speed" | "grow" | "step" | "shift" | "stretch" | "ride" | "weigh" | "climb" | "slide" | "overlap";
+/** Does it pass every condition? A case meets each gate in turn. */
+export interface TestScene {
+  family: "test";
+  case: string;
+  gates: string[];
+  /** The first gate it fails, or -1 if it passes them all. */
+  fails: number;
+  outcome: string;
+}
+
+/** Has it crossed the line? A level rises against one marked line. */
+export interface ThresholdScene {
+  family: "threshold";
+  level: string;
+  line: string;
+  at: number;
+  value: number;
+}
+
+/** How many out of 100. */
+export interface UnitsScene {
+  family: "units";
+  lit: number;
+  label: string;
+  rest: string;
+}
+
+/** Which one stands out from many. */
+export interface CrowdScene {
+  family: "crowd";
+  x: string;
+  y: string;
+  count: number;
+  crowd: "rise" | "fall" | "flat";
+  lit: string;
+  litShape: "rise" | "fall" | "flat" | "peak" | "dip";
+}
+
+export type Scene =
+  | ParticlesScene
+  | LinksScene
+  | GraphScene
+  | BalanceScene
+  | CompareScene
+  | StairsScene
+  | SpectrumScene
+  | VennScene
+  | PairScene
+  | TreeScene
+  | TestScene
+  | ThresholdScene
+  | UnitsScene
+  | CrowdScene;
+
+export type ChangeKind = "appear" | "cross" | "speed" | "grow" | "step" | "shift" | "stretch" | "ride" | "weigh" | "climb" | "slide" | "overlap" | "fill";
 export interface Change {
   target: string;
   does: ChangeKind;

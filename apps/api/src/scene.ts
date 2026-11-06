@@ -1,7 +1,8 @@
 // Drawn scenes for Teach me. The lesson writer never draws pixels: for each
-// bite it fills in one scene from a fixed kit (nine families covering thirteen
-// devices: scale, comparison, path, fork, loop, network, container, plot,
-// stairs, spectrum, Venn, balance and pair), and the app draws it live with Skia.
+// bite it fills in one scene from a fixed kit (fourteen families covering
+// eighteen devices: scale, comparison, path, fork, loop, network, container,
+// plot, stairs, spectrum, Venn, balance, pair, tree, test, threshold, units
+// and crowd), and the app draws it live with Skia.
 // The look follows the principles of Visual Value, softened for Fenny: one
 // idea per picture, silver lines on near-black, only one thing lit.
 // One bite per lesson may also carry a "play" slider that changes the scene.
@@ -11,7 +12,7 @@
 // app could not draw well. A broken scene becomes null, and the app falls back
 // to the simple diagram.
 
-export const FAMILIES = ["particles", "links", "graph", "balance", "compare", "stairs", "spectrum", "venn", "pair"] as const;
+export const FAMILIES = ["particles", "links", "graph", "balance", "compare", "stairs", "spectrum", "venn", "pair", "tree", "test", "threshold", "units", "crowd"] as const;
 export const MARKS = ["dot", "ring", "blocked"] as const;
 export const MOTIONS = ["still", "drift", "jiggle", "cross", "rise", "fall", "orbit", "pulse", "flow"] as const;
 export const DIVIDERS = ["none", "wall", "membrane", "sieve"] as const;
@@ -19,10 +20,13 @@ export const LAYOUTS = ["line", "fork", "loop", "web"] as const;
 export const LINK_KINDS = ["cause", "flow", "tie"] as const;
 export const SHAPES = ["rise", "fall", "saturate", "decay", "bell", "s_curve"] as const;
 export const HIGHLIGHTS = ["ride", "crossing", "half", "end", "none"] as const;
-export const CHANGES = ["appear", "cross", "speed", "grow", "step", "shift", "stretch", "ride", "weigh", "climb", "slide", "overlap"] as const;
+export const CHANGES = ["appear", "cross", "speed", "grow", "step", "shift", "stretch", "ride", "weigh", "climb", "slide", "overlap", "fill"] as const;
 export const COMPARE_STYLES = ["circles", "bars"] as const;
 /** The little pictures a pair can set side by side. Each has one meaning. */
 export const PAIR_SHAPES = ["line", "curve", "jagged", "smooth", "split", "join", "scatter", "aligned", "one", "many", "loop", "path"] as const;
+/** The shape of the many grey lines in a crowd, and of the one that stands out. */
+export const CROWD_SHAPES = ["rise", "fall", "flat"] as const;
+export const STANDOUT_SHAPES = ["rise", "fall", "flat", "peak", "dip"] as const;
 
 export interface Thing {
   name: string;
@@ -105,7 +109,65 @@ export interface PairScene {
   right: PairSide;
   lit: "left" | "right";
 }
-export type Scene = ParticlesScene | LinksScene | GraphScene | BalanceScene | CompareScene | StairsScene | SpectrumScene | VennScene | PairScene;
+/** What branches from what: a root, 2 to 4 branches, a few leaves, one path lit. */
+export interface TreeScene {
+  family: "tree";
+  root: string;
+  branches: { label: string; leaves: string[] }[];
+  /** The path the lesson is about. leaf -1 means the branch itself. */
+  lit: { branch: number; leaf: number };
+}
+/** Does it pass every condition? A case meets each gate in turn. */
+export interface TestScene {
+  family: "test";
+  case: string;
+  gates: string[];
+  /** The first gate it fails, or -1 if it passes them all. */
+  fails: number;
+  outcome: string;
+}
+/** Has it crossed the line? A level rises against one marked line. */
+export interface ThresholdScene {
+  family: "threshold";
+  level: string;
+  line: string;
+  /** Where the line sits, 0 (bottom) to 1 (top). */
+  at: number;
+  /** Where the level ends, 0 to 1. Above at means it crosses. */
+  value: number;
+}
+/** How many out of 100: a grid of 100 dots, some lit. */
+export interface UnitsScene {
+  family: "units";
+  lit: number;
+  label: string;
+  rest: string;
+}
+/** Which one stands out from many: grey lines, one lit and named. */
+export interface CrowdScene {
+  family: "crowd";
+  x: string;
+  y: string;
+  count: number;
+  crowd: (typeof CROWD_SHAPES)[number];
+  lit: string;
+  litShape: (typeof STANDOUT_SHAPES)[number];
+}
+export type Scene =
+  | ParticlesScene
+  | LinksScene
+  | GraphScene
+  | BalanceScene
+  | CompareScene
+  | StairsScene
+  | SpectrumScene
+  | VennScene
+  | PairScene
+  | TreeScene
+  | TestScene
+  | ThresholdScene
+  | UnitsScene
+  | CrowdScene;
 
 export interface Play {
   prompt: string;
@@ -157,6 +219,11 @@ export const SCENE_SCHEMA = {
       right: obj({ label: str, shape: en(PAIR_SHAPES), count: int, note: str }),
       lit: en(["left", "right"]),
     }),
+    obj({ family: en(["tree"]), root: str, branches: { type: "array", items: obj({ label: str, leaves: strs }) }, lit: obj({ branch: int, leaf: int }) }),
+    obj({ family: en(["test"]), case: str, gates: strs, fails: int, outcome: str }),
+    obj({ family: en(["threshold"]), level: str, line: str, at: num, value: num }),
+    obj({ family: en(["units"]), lit: int, label: str, rest: str }),
+    obj({ family: en(["crowd"]), x: str, y: str, count: int, crowd: en(CROWD_SHAPES), lit: str, litShape: en(STANDOUT_SHAPES) }),
     { type: "null" },
   ],
 } as const;
@@ -195,6 +262,11 @@ Pick the device by the question the idea answers:
 - What do two things share? venn.
 - Which of two sides wins? balance.
 - What is the difference between two things? pair.
+- What branches from what (kinds of, a family, a classification)? tree.
+- Does it pass every condition (a legal test, diagnostic criteria)? test.
+- Has it crossed a line (a standard of proof, a quota, a firing threshold)? threshold.
+- How many out of how many (a risk, a probability, a proportion)? units.
+- Which one stands out from many (one country, case or patient against the rest)? crowd.
 
 The devices:
 particles: zones (1 to 3 area labels, left to right, "" for none), divider (none, wall, membrane = dashed and crossable, sieve = gaps), things (1 to 3 groups: name, mark dot = something that moves, ring = an object, blocked = something stopped, at most one group; count 1 to 16; zone it starts in; to = zone it heads to, same as zone if it stays; motion still, drift, jiggle like heat, cross from zone to "to", rise, fall, orbit, pulse, flow).
@@ -206,6 +278,11 @@ stairs: steps 2 to 6 labels, bottom step first. at = index of the step that is l
 spectrum: left and right end labels, min and max numbers, marks 0 to 4 reference points (label, at), at = where the lit marker sits.
 venn: a and b labels, both = the label for the overlap, overlap 0 to 1.
 pair: left and right, each with a label, a shape and count (2 to 8, only for split, join and many) and a short note or "". lit = the side the lesson points to. Shapes, each with one meaning: line = steady, linear growth; curve = compounding, exponential; jagged = noisy, short-term ups and downs; smooth = the long-run trend; split = one becomes several; join = several become one; scatter = random, unfocused; aligned = ordered, all one way; one = a single whole; many = lots of small parts; loop = repeats in a cycle; path = one way, start to end.
+tree: root label, branches 2 to 4 (label, leaves 0 to 3 labels, at most 6 leaves in all), lit = the path the lesson is about: branch index and leaf index (leaf -1 for the branch itself). A light travels from the root down that path.
+test: case = what is tested (1 to 3 words), gates = 2 to 5 conditions in the order they are applied (1 or 2 words each), fails = index of the first gate it fails, or -1 if it passes them all, outcome = what follows (1 to 3 words, like "No duty" or "Liable").
+threshold: level = what builds up, line = the name of the line, at = where the line sits (0 bottom to 1 top), value = where the level ends (0 to 1). It crosses when value is above at.
+units: lit = how many in 100 (a real figure from the notes or standard knowledge, rounded), label = what the lit ones are, rest = what the others are, each 1 to 4 words.
+crowd: x and y axis labels, count 8 to 16 grey lines, crowd = their shape (rise, fall, flat), lit = the label of the one that stands out, litShape = its shape (rise, fall, flat, peak, dip).
 
 play: at most one bite per lesson (usually the first or second) gets a slider that changes its scene, so the student tries the idea with their own hands. Others get null.
   prompt: an instruction under 8 words, like "Add sugar to the right." low and high: 1 to 3 word slider end labels.
@@ -218,6 +295,7 @@ play: at most one bite per lesson (usually the first or second) gets a slider th
     compare: grow (that item's value rises from small to its value), step (items appear one at a time).
     stairs: climb. spectrum: slide (marker moves from min to max). venn: overlap (from apart to mostly shared).
     pair: step (the right side builds in as the slider rises, so the difference appears).
+    tree: step (the light walks down the lit path). test: step (the case moves through the gates). threshold: fill (the level rises from empty to full). units: grow (the lit dots count up to lit).
 
 caption: one short sentence under 9 words that states the point, ending with a full stop, like "Water follows the sugar."
 
@@ -242,6 +320,11 @@ Probability of A and B: {"family":"venn","a":"Rain","b":"Wind","both":"Both","ov
 Km: {"family":"graph","x":"Substrate","y":"Rate","curves":[{"name":"rate","shape":"saturate","label":""}],"highlight":"half"}
 Civil burden of proof: {"family":"balance","left":"Defendant","right":"Claimant","leftWeight":3,"rightWeight":4,"middle":"51%"}
 Mitosis and meiosis: {"family":"pair","left":{"label":"Mitosis","shape":"split","count":2,"note":"2 identical cells"},"right":{"label":"Meiosis","shape":"split","count":4,"note":"4 different cells"},"lit":"right"}
+Kinds of animal: {"family":"tree","root":"Animals","branches":[{"label":"Vertebrates","leaves":["Mammals","Birds","Fish"]},{"label":"Invertebrates","leaves":["Insects","Molluscs"]}],"lit":{"branch":0,"leaf":0}}
+Duty of care (Caparo): {"family":"test","case":"Claim","gates":["Foreseeable","Proximity","Fair"],"fails":2,"outcome":"No duty"}
+Action potential: {"family":"threshold","level":"Voltage","line":"Threshold","at":0.6,"value":0.85}
+Side effect risk: {"family":"units","lit":4,"label":"get a side effect","rest":"do not"}
+Life expectancy in the 1990s: {"family":"crowd","x":"Year","y":"Life expectancy","count":12,"crowd":"rise","lit":"Russia","litShape":"dip"}
 Weather and climate: {"family":"pair","left":{"label":"Weather","shape":"jagged","count":0,"note":"Day to day"},"right":{"label":"Climate","shape":"smooth","count":0,"note":"Over 30 years"},"lit":"right"}`;
 
 // ---- checking ----
@@ -269,6 +352,11 @@ const ALLOWED: Record<Scene["family"], readonly Play["changes"][number]["does"][
   spectrum: ["slide"],
   venn: ["overlap"],
   pair: ["step"],
+  tree: ["step"],
+  test: ["step"],
+  threshold: ["fill"],
+  units: ["grow"],
+  crowd: [],
 };
 
 /** Trims a scene to what the app can draw well, or returns null if there is nothing usable. */
@@ -383,6 +471,50 @@ export function checkScene(s: unknown): Scene | null {
       if (!left || !right) return null;
       return { family: "pair", left, right, lit: r.lit === "left" ? "left" : "right" };
     }
+    if (r.family === "tree") {
+      let room = 6;
+      const branches = (Array.isArray(r.branches) ? r.branches : [])
+        .slice(0, 4)
+        .map((b: Record<string, unknown>) => {
+          const leaves = (Array.isArray(b.leaves) ? b.leaves : []).map((x) => short(x, 2)).filter(Boolean).slice(0, Math.min(3, room));
+          room -= leaves.length;
+          return { label: short(b.label, 2), leaves };
+        })
+        .filter((b) => b.label);
+      if (branches.length < 2) return null;
+      const lit = (r.lit ?? {}) as Record<string, unknown>;
+      const branch = clampInt(lit.branch, 0, branches.length - 1, 0);
+      const leaves = branches[branch].leaves.length;
+      const leaf = leaves ? clampInt(lit.leaf, -1, leaves - 1, 0) : -1;
+      return { family: "tree", root: short(r.root, 2) || "All", branches, lit: { branch, leaf } };
+    }
+    if (r.family === "test") {
+      const gates = (Array.isArray(r.gates) ? r.gates : []).slice(0, 5).map((g) => short(g, 2)).filter(Boolean);
+      if (gates.length < 2) return null;
+      return { family: "test", case: short(r.case) || "Case", gates, fails: clampInt(r.fails, -1, gates.length - 1, -1), outcome: short(r.outcome) };
+    }
+    if (r.family === "threshold") {
+      const unit = (x: unknown, d: number) => (Number.isFinite(Number(x)) ? Math.max(0.05, Math.min(0.95, Number(x))) : d);
+      return { family: "threshold", level: short(r.level), line: short(r.line, 4).slice(0, 26), at: unit(r.at, 0.6), value: unit(r.value, 0.8) };
+    }
+    if (r.family === "units") {
+      const label = short(r.label, 4).slice(0, 26);
+      if (!label) return null;
+      return { family: "units", lit: clampInt(r.lit, 1, 99, 10), label, rest: short(r.rest, 4).slice(0, 26) };
+    }
+    if (r.family === "crowd") {
+      const lit = short(r.lit, 2);
+      if (!lit) return null;
+      return {
+        family: "crowd",
+        x: short(r.x),
+        y: short(r.y),
+        count: clampInt(r.count, 6, 16, 12),
+        crowd: oneOf(r.crowd, CROWD_SHAPES, "rise"),
+        lit,
+        litShape: oneOf(r.litShape, STANDOUT_SHAPES, "peak"),
+      };
+    }
     if (r.family === "venn") {
       const a = short(r.a);
       const b = short(r.b);
@@ -406,7 +538,7 @@ export function checkPlay(p: unknown, scene: Scene | null): Play | null {
     .slice(0, 2)
     .map((c: Record<string, unknown>) => ({ target: String(c.target ?? "").trim().toLowerCase(), does: c.does as Play["changes"][number]["does"] }))
     .filter((c) => ALLOWED[scene.family].includes(c.does))
-    .map((c) => (["links", "stairs", "spectrum", "venn", "pair"].includes(scene.family) || (scene.family === "compare" && c.does === "step") ? { ...c, target: "" } : c))
+    .map((c) => (["links", "stairs", "spectrum", "venn", "pair", "tree", "test", "threshold", "units"].includes(scene.family) || (scene.family === "compare" && c.does === "step") ? { ...c, target: "" } : c))
     .filter((c) => names.includes(c.target));
   const readouts = (Array.isArray(r.readouts) ? r.readouts : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 3);
   if (!changes.length || readouts.length < 2) return null;
