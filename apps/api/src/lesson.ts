@@ -260,11 +260,21 @@ export async function buildLesson(env: Env, req: LessonRequest, fetchImpl?: type
   const hit = cache.get(key);
   if (hit) return { ...hit, cached: true };
 
-  const draft = brain === "claude" ? draftClaude : draftOpenAI;
+  let draft = brain === "claude" ? draftClaude : draftOpenAI;
   const cost: CostLine[] = [];
   let problem: string | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const r = await draft(env, req, problem, fetchImpl);
+    let r: Awaited<ReturnType<typeof draftOpenAI>>;
+    try {
+      r = await draft(env, req, problem, fetchImpl);
+    } catch (e) {
+      // If Claude is down or its key is refused, the learner still gets a
+      // lesson: switch to OpenAI for the rest of this request.
+      if (draft !== draftClaude || !env.OPENAI_API_KEY) throw e;
+      console.error("lesson: Claude failed, using OpenAI", (e as Error).message);
+      draft = draftOpenAI;
+      r = await draft(env, req, problem, fetchImpl);
+    }
     cost.push(r.cost);
     try {
       const lesson = checkLesson(r.draft, req);
@@ -301,7 +311,7 @@ export async function handleLesson(req: Request, env: Env = process.env, fetchIm
   if (!body.topic?.trim() || !body.idea?.trim()) return json(400, { error: "topic and idea are required" });
   if ((body.notes?.length ?? 0) > 200_000) return json(413, { error: "Notes are too long" });
   const brain = lessonBrain(env);
-  if (brain === "claude" && !env.ANTHROPIC_API_KEY) return json(500, { error: "ANTHROPIC_API_KEY is not set on the server" });
+  if (brain === "claude" && !env.ANTHROPIC_API_KEY && !env.OPENAI_API_KEY) return json(500, { error: "ANTHROPIC_API_KEY is not set on the server" });
   if (brain === "openai" && !env.OPENAI_API_KEY) return json(500, { error: "OPENAI_API_KEY is not set on the server" });
   const t0 = Date.now();
   try {
