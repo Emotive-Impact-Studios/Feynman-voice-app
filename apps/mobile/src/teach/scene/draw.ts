@@ -167,6 +167,16 @@ function label(c: SkCanvas, p: SkPaint, font: SkFont | null, text: string, x: nu
   fill(p, colour, a);
   c.drawText(text, left, y + 3.3, p, font);
 }
+/** A label on a small patch of the panel's own colour, so a line passing behind it stops short of the words. */
+function knockLabel(c: SkCanvas, p: SkPaint, font: SkFont | null, text: string, x: number, y: number, align: "left" | "center" | "right", colour = LAB, a = 1) {
+  "worklet";
+  if (!font || !text || a <= 0.01) return;
+  const w = font.getTextWidth(text);
+  const left = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
+  fill(p, PANEL, a);
+  c.drawRRect(Skia.RRectXY(Skia.XYWHRect(left - 3, y - 6, w + 6, 12), 3, 3), p);
+  label(c, p, font, text, x, y, align, colour, a);
+}
 /** Drops whole words from the end until the text fits, so a label is never cut mid-word. */
 function fitText(font: SkFont | null, text: string, maxW: number) {
   "worklet";
@@ -1006,6 +1016,8 @@ function drawTree(c: SkCanvas, p: SkPaint, font: SkFont | null, s: TreeScene, ch
   const leg2 = twoLegs ? clamp(lp * 2 - 1) : 0;
   const arrived = lp >= 0.999;
 
+  // Branch names go on after every line, so no later line is drawn across one.
+  const names: { t: string; y: number; lit: boolean; a: number }[] = [];
   for (let b = 0; b < s.branches.length; b++) {
     const kB = beat(f, 0.8 + (b / s.branches.length) * 0.5, 3);
     const onPath = b === lb;
@@ -1037,10 +1049,12 @@ function drawTree(c: SkCanvas, p: SkPaint, font: SkFont | null, s: TreeScene, ch
     dot(c, p, BX, by[b], 7, kB, PANEL);
     if (branchLit) dot(c, p, BX, by[b], 5, kB, BLUE);
     else ring(c, p, BX, by[b], 7, kB * 0.8);
-    // Above the node for branches above the root, below for those under it, so no line runs through a label.
-    if (leaves.length) label(c, p, font, s.branches[b].label, BX, by[b] > RY + 4 ? by[b] + 16 : by[b] - 15, "center", onPath ? SIL : LAB, beat(f, 1.6, 3));
+    // Above the node for branches above the root, below for those under it. A branch level with
+    // the root has lines on both sides, so its name sits on a patch that stops them short.
+    if (leaves.length) names.push({ t: s.branches[b].label, y: by[b] > RY + 4 ? by[b] + 16 : by[b] - 15, lit: onPath, a: beat(f, 1.6, 3) });
     else label(c, p, font, s.branches[b].label, BX + 13, by[b], "left", branchLit ? SIL : LAB, beat(f, 1.6, 3));
   }
+  for (const nm of names) knockLabel(c, p, font, nm.t, BX, nm.y, "center", nm.lit ? SIL : LAB, nm.a);
   const kR = beat(f, 0, 3);
   dot(c, p, RX, RY, 9, kR, PANEL);
   ring(c, p, RX, RY, 9, kR);
@@ -2191,8 +2205,13 @@ function drawThings(c: SkCanvas, p: SkPaint, font: SkFont | null, s: ThingsScene
       drawThing(c, p, s.items[1].thing, ex, ey, 13, 1, isLit(1), k1);
       if (n > 2) {
         // With a moon, the planet's name rides on the side away from it, so the two never meet.
+        // It sits just outside the moon's path, and never runs off the panel.
         const d = tm * 3.2 - 2.4 + Math.PI;
-        label(c, p, font, s.items[1].label, ex + Math.cos(d) * 20, ey + Math.sin(d) * 23, Math.cos(d) > 0.3 ? "left" : Math.cos(d) < -0.3 ? "right" : "center", isLit(1) ? SIL : LAB, k1);
+        const al = Math.cos(d) > 0.3 ? "left" : Math.cos(d) < -0.3 ? "right" : "center";
+        const tw = font ? font.getTextWidth(s.items[1].label) : 0;
+        const lx0 = ex + Math.cos(d) * 31;
+        const lx = al === "left" ? Math.min(lx0, 297 - tw) : al === "right" ? Math.max(lx0, 3 + tw) : Math.max(3 + tw / 2, Math.min(297 - tw / 2, lx0));
+        label(c, p, font, s.items[1].label, lx, clamp(ey + Math.sin(d) * 31, 8, 170), al, isLit(1) ? SIL : LAB, k1);
       } else label(c, p, font, s.items[1].label, ex, ey + 22, "center", isLit(1) ? SIL : LAB, k1);
     }
     return;
