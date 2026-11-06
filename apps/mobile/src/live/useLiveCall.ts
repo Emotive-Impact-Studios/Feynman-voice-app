@@ -43,6 +43,8 @@ export interface CallSettings {
   ears: LiveEars;
   /** Faster-replies trial (Me): shorter wait after they stop, and cut in by voice on headphones. */
   fast?: boolean;
+  /** Their scanned notes on this topic, if any. */
+  notes?: string;
 }
 
 export interface CallTurnStats {
@@ -503,6 +505,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
           ears: chosen.ears,
           // After two holds in a row the server must answer.
           features: waits.current < MAX_WAITS ? ["wait", "teach"] : ["teach"],
+          notes: settingsRef.current.notes,
         },
         onEvent,
         abort.signal,
