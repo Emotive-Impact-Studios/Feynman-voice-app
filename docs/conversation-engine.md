@@ -27,6 +27,14 @@ Extra stream events: `{"type":"engine","move","covered","ideas"}` every turn and
 phone sends `features: ["show_me"]` once it can show the card; older phones are
 never offered it.
 
+## When they don't know it
+
+As soon as the learner clearly doesn't know a bit (they say so, or give two empty answers in a row), Fenny stops asking about it. She never asks the same thing a smaller or different way.
+
+- A phone with teach mode (it sends `features: ["teach"]`) gets the offer "Tap Teach me to learn it first" (move `offer_teach`, event `teach_offer` with the idea). A spoken yes gives move `teach` and event `teach`, which opens teach mode.
+- A phone with Show me gets the Show me offer.
+- Otherwise Fenny moves on to another idea once. The second time, she ends the call kindly and suggests reading the notes first, then coming back to teach her.
+
 ## Lines the voices can read
 
 Every line Fenny says goes through `speakable()` (`apps/api/src/speakable.ts`) before any voice gets it. Em and en dashes, semicolons, markdown and emoji make the voices, Phonon above all, lose the shape of the sentence and the inflection goes wrong. Dashes become commas, number ranges become "5 to 10", and symbols are removed. The prompts also ask for proper sentences with no dashes. Before this rule, 15 of 287 lines in the test calls had a dash; after it, 0 of 240.

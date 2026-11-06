@@ -192,12 +192,14 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
             topic: body.topic,
             notes: body.notes,
             ideas,
-            limits: { canShowMe: (body.features ?? []).includes("show_me") },
+            limits: { canShowMe: (body.features ?? []).includes("show_me"), canTeach: (body.features ?? []).includes("teach") },
           });
           question = r.say;
           speak(question);
           send({ type: "engine", move: r.move, covered: r.covered, ideas: r.ideas });
           if (r.move === "show_me" && r.gap) send({ type: "show_me", gap: r.gap });
+          // Teach me: the phone shows the button on an offer, and opens teach mode on "teach".
+          if ((r.move === "offer_teach" || r.move === "teach") && r.gap) send({ type: r.move === "teach" ? "teach" : "teach_offer", gap: r.gap });
           for (const u of ideasUsage ? [ideasUsage, ...r.usage] : r.usage) lines.push(engineCost(chatModel, u, p));
         } else if (brain === "openai") {
           const splitter = new SentenceSplitter();
@@ -233,11 +235,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
           const c = costOf(r.usage, pricesFromEnv(env));
           lines.push({ label: `Gemini (${c.audioInTokens} audio in, ${c.textInTokens} text in, ${c.outTokens} out)`, usd: c.usd });
         }
-<<<<<<< HEAD
         if (index === 0 && !waited) speak(speakable(question) || "Sorry, could you say that again?");
-=======
-        if (index === 0) speak(speakable(question) || "Sorry, could you say that again?");
->>>>>>> origin/claude/project-thread-dh07mv
         timing.brain = Date.now() - t1;
         await voiced;
         if (sonicChars) lines.push({ label: `Cartesia Sonic (${sonicChars} characters)`, usd: sonicChars * credit });
@@ -248,11 +246,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         send({
           type: "done",
           transcript,
-<<<<<<< HEAD
           question: waited ? "" : speakable(question) || "Sorry, could you say that again?",
-=======
-          question: speakable(question) || "Sorry, could you say that again?",
->>>>>>> origin/claude/project-thread-dh07mv
           voice,
           stt,
           brain,
