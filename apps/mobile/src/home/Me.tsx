@@ -68,7 +68,7 @@ export function Me({ profile, top, bottom, onReplayIntro }: { profile: Profile; 
         <Glass style={styles.settings}>
           <T size={15}>Session view</T>
           <T size={12.5} tone="muted" style={{ marginTop: 2 }}>
-            How Fenny shows up while you explain. You can also change it in a session.
+            How Fenny shows up while you explain.
           </T>
           <View style={styles.views} accessibilityRole="radiogroup" accessibilityLabel="Session view">
             {VIEWS.map((v) => {

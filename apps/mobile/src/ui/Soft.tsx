@@ -30,9 +30,10 @@ export function SoftGlow({ radius, spread = 14 }: { radius?: number; spread?: nu
 
 /**
  * A button face. Its size comes from style (or its parent). Children are
- * centred. `lit` is for the one key button on a screen.
+ * centred. `lit` is for the one key button on a screen (a brighter fill;
+ * add `glow` only where a soft light behind it is really wanted).
  */
-export function Soft({ lit, glow = true, radius, style, children }: { lit?: boolean; glow?: boolean; radius?: number; style?: StyleProp<ViewStyle>; children?: ReactNode }) {
+export function Soft({ lit, glow = false, radius, style, children }: { lit?: boolean; glow?: boolean; radius?: number; style?: StyleProp<ViewStyle>; children?: ReactNode }) {
   return (
     <View style={[styles.centre, style]}>
       {lit && glow && <SoftGlow radius={radius} />}

@@ -6,19 +6,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { findTopic, recordSession, setSessionView, useProfile } from "../data/profile";
+import { findTopic, recordSession, useProfile } from "../data/profile";
 import { colour } from "../theme";
 import { DotWave } from "../ui/Dots";
-import { Backdrop, Glass, Icon, Label, RoundButton, T } from "../ui/kit";
+import { Backdrop, Icon, Label, T } from "../ui/kit";
 import { HoldButton } from "../ui/HoldButton";
 import { LivingLight } from "../ui/LivingLight";
 import { RecordDisc } from "../ui/RecordDisc";
-import { Press } from "../ui/Press";
 import { ScreenIn } from "../ui/ScreenIn";
 import { VoiceGlow } from "../ui/VoiceGlow";
-import { OptionsIcon, ViewMenu, VIEWS, type SessionView } from "../live/ViewMenu";
+import type { SessionView } from "../live/ViewMenu";
 import type { LiveEars, LiveVoice } from "../api";
-import { phononAvailable, useLiveCall, type CallTurnStats } from "../live/useLiveCall";
+import { useLiveCall } from "../live/useLiveCall";
 
 type View3 = SessionView;
 
@@ -33,45 +32,6 @@ const HINTS = {
   speaking: ["Your student is asking", "Tap to answer. Hold to end the session"],
   error: ["Something went wrong", "Hold the button to end the session"],
 } as const;
-
-// Test switches: which voice speaks and which service hears.
-const VOICES: { id: LiveVoice; label: string }[] = [
-  ...(phononAvailable ? [{ id: "phonon" as const, label: "Phonon" }] : []),
-  { id: "sonic", label: "Sonic" },
-  { id: "kitten", label: "Kitten" },
-];
-const EARS: { id: LiveEars; label: string }[] = [
-  { id: "auto", label: "Auto" },
-  { id: "cartesia", label: "Cartesia" },
-  { id: "openai", label: "OpenAI" },
-];
-const VOICE_NAME: Record<LiveVoice, string> = { phonon: "Phonon", sonic: "Sonic", kitten: "Kitten" };
-
-function statLine(s: CallTurnStats) {
-  const first = s.firstWordMs ? `first word ${(s.firstWordMs / 1000).toFixed(1)}s` : "no sound";
-  const ears = s.ears === "cartesia" ? "Cartesia" : "OpenAI";
-  return `${VOICE_NAME[s.voice]} voice, ${ears} ears. ${first}, ${s.pence.toFixed(2)}p`;
-}
-
-function Segmented<V extends string>({ items, value, onChange }: { items: { id: V; label: string }[]; value: V; onChange: (v: V) => void }) {
-  return (
-    <View style={styles.segment}>
-      {items.map((it) => (
-        <Press
-          key={it.id}
-          accessibilityRole="button"
-          accessibilityState={{ selected: it.id === value }}
-          onPress={() => onChange(it.id)}
-          style={[styles.switchItem, it.id === value && { backgroundColor: "rgba(255,255,255,0.14)" }]}
-        >
-          <T size={13} tone={it.id === value ? "text" : "muted"}>
-            {it.label}
-          </T>
-        </Press>
-      ))}
-    </View>
-  );
-}
 
 function clock(seconds: number) {
   const s = Math.floor(seconds);
@@ -89,14 +49,11 @@ export default function Session() {
   const opening = params.prompt ?? OPENING;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  // Starts in the view chosen in Me (or last picked in a session).
-  const [view, setView] = useState<View3>(() => profile.sessionView ?? "light");
-  const [voice, setVoice] = useState<LiveVoice>("sonic");
-  const [ears, setEars] = useState<LiveEars>("auto");
-  const [showSettings, setShowSettings] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  // The view is chosen in Me, under Settings. The session itself has no switch.
+  const [view] = useState<View3>(() => profile.sessionView ?? "light");
+  const voice: LiveVoice = "sonic";
+  const ears: LiveEars = "auto";
   const loop = useLiveCall(brainTopic, { voice, ears });
-  const lastStat = loop.stats.at(-1);
 
   const spoken = loop.heardSeconds + (loop.phase === "listening" ? loop.liveSpeaking : 0);
   const asked = [...loop.turns].reverse().find((t) => t.speaker === "student")?.text ?? opening;
@@ -210,7 +167,7 @@ export default function Session() {
         </>
       )}
 
-      {/* Top, as on the website: subject and time centred, view and close on the right */}
+      {/* Top: subject and time centred. No buttons: the view is set in Me. */}
       <View style={[styles.top, { top: insets.top + 8 }]}>
         <View style={styles.topRow}>
           <View style={styles.side} />
@@ -222,33 +179,8 @@ export default function Session() {
               {topic}
             </T>
           </View>
-          <View style={[styles.side, { flexDirection: "row", justifyContent: "flex-end", gap: 8 }]}>
-            <RoundButton
-              label={`Options. View: ${VIEWS.find((v) => v.id === view)?.label}`}
-              size={44}
-              on={menuOpen}
-              onPress={() => setMenuOpen((o) => !o)}
-            >
-              <OptionsIcon />
-            </RoundButton>
-          </View>
+          <View style={styles.side} />
         </View>
-        {showSettings && (
-          <Glass strong style={styles.settings}>
-            <View style={styles.rowBetween}>
-              <Label>Voice</Label>
-              <Press onPress={() => setShowSettings(false)} accessibilityRole="button" accessibilityLabel="Hide voice and ears" hitSlop={10}>
-                <Icon name="close" size={13} color={colour.muted} />
-              </Press>
-            </View>
-            <Segmented items={VOICES} value={voice} onChange={setVoice} />
-            <Label>Ears</Label>
-            <Segmented items={EARS} value={ears} onChange={setEars} />
-            <T size={12.5} tone="muted">
-              {lastStat ? `Last turn: ${statLine(lastStat)}` : "Changes apply from your next turn."}
-            </T>
-          </Glass>
-        )}
       </View>
 
       {/* One button at the bottom, with no panel: what it does sits just above it. */}
@@ -276,22 +208,6 @@ export default function Session() {
         </HoldButton>
       </View>
 
-      {menuOpen && (
-        <ViewMenu
-          top={insets.top + 60}
-          view={view}
-          onPick={(v) => {
-            setView(v);
-            setSessionView(v);
-            setMenuOpen(false);
-          }}
-          onClose={() => setMenuOpen(false)}
-          onTesting={() => {
-            setShowSettings(true);
-            setMenuOpen(false);
-          }}
-        />
-      )}
     </ScreenIn>
   );
 }
@@ -303,10 +219,6 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   side: { width: 52 },
   title: { flex: 1, minWidth: 0, alignItems: "center", gap: 4 },
-  rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  segment: { flexDirection: "row", gap: 2, padding: 3, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.05)", alignSelf: "flex-start" },
-  settings: { padding: 14, borderRadius: 24, gap: 8 },
-  switchItem: { height: 32, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center" },
   controls: { position: "absolute", left: 24, right: 24, alignItems: "center", gap: 4 },
   hintLine: { height: 26, justifyContent: "center", marginBottom: 14 },
   studentRow: { alignSelf: "flex-start", flexDirection: "row", alignItems: "flex-end", gap: 10, maxWidth: 320 },

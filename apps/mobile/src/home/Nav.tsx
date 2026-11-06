@@ -9,7 +9,6 @@ import { colour } from "../theme";
 import { Glass, T } from "../ui/kit";
 import { LivingLight } from "../ui/LivingLight";
 import { smooth } from "../ui/motion";
-import { SoftGlow } from "../ui/Soft";
 import { TabLight } from "../ui/TabLight";
 import { NAV_HEIGHT, navOffset } from "./styles";
 
@@ -84,7 +83,6 @@ export function Nav({ bottom, tab, onChange, onStart, width }: { bottom: number;
         ))}
       </Glass>
       <Press accessibilityRole="button" accessibilityLabel="Start explaining something new" onPress={onStart}>
-        <SoftGlow spread={12} />
         <View style={[styles.navLight, styles.solidBar]}>
           <LivingLight size={40} />
         </View>

@@ -33,11 +33,11 @@ export function RecordDisc({ size, listening, hold, children }: { size: number; 
   const box = size + SPREAD * 2;
 
   const tint = useAnimatedStyle(() => ({ opacity: on.value }));
-  // Always a faint light behind the button; brighter and breathing while listening.
+  // A soft light behind the button only while listening, breathing.
   const glow = useAnimatedStyle(() => {
     const held = hold ? Math.min(1, hold.value * 4) : 0;
     return {
-      opacity: (0.35 + 0.65 * on.value * (0.7 + 0.3 * breath.value)) * (1 - held),
+      opacity: on.value * (0.7 + 0.3 * breath.value) * (1 - held),
       transform: [{ scale: 1 + 0.06 * breath.value * on.value }],
     };
   });
