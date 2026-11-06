@@ -7,7 +7,7 @@
 import { useEffect } from "react";
 import { StyleSheet, useWindowDimensions } from "react-native";
 import { Blur, Canvas, Fill, Group, Oval, Rect, Shader, Skia } from "@shopify/react-native-skia";
-import { Easing, useDerivedValue, useReducedMotion, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
+import { Easing, type SharedValue, useDerivedValue, useReducedMotion, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 
 export type AuraScene = "today" | "topics" | "me" | "session" | "intro" | "topic";
 
@@ -36,6 +36,28 @@ half4 main(float2 xy) {
   return half4(half3(g), 1.0) * 0.035;
 }
 `);
+
+// Streaks, relative to the light's box: centre (0 to 1), length and
+// thickness as shares of it, blur, colour, and how far and which way it drifts.
+type StreakSpec = { cx: number; cy: number; l: number; t: number; blur: number; color: string; move: number };
+const STREAKS: StreakSpec[] = [
+  { cx: 0.42, cy: 0.42, l: 0.8, t: 0.16, blur: 16, color: "rgba(214,224,242,0.55)", move: 0.08 },
+  { cx: 0.6, cy: 0.55, l: 0.7, t: 0.1, blur: 12, color: "rgba(176,194,228,0.5)", move: -0.1 },
+  { cx: 0.35, cy: 0.66, l: 0.6, t: 0.08, blur: 10, color: "rgba(150,170,212,0.45)", move: 0.12 },
+  { cx: 0.58, cy: 0.3, l: 0.55, t: 0.07, blur: 10, color: "rgba(230,236,247,0.35)", move: -0.06 },
+];
+
+function Streak({ st, ox, oy, ow, oh, drift, breath }: { st: StreakSpec; ox: SharedValue<number>; oy: SharedValue<number>; ow: SharedValue<number>; oh: SharedValue<number>; drift: SharedValue<number>; breath: SharedValue<number> }) {
+  const w = useDerivedValue(() => ow.value * st.l);
+  const h = useDerivedValue(() => oh.value * st.t * (0.9 + 0.2 * breath.value));
+  const x = useDerivedValue(() => ox.value + ow.value * (st.cx + st.move * (drift.value - 0.5)) - w.value / 2);
+  const y = useDerivedValue(() => oy.value + oh.value * st.cy - h.value / 2);
+  return (
+    <Oval x={x} y={y} width={w} height={h} color={st.color}>
+      <Blur blur={st.blur} />
+    </Oval>
+  );
+}
 
 export function FennyAura({ scene = "today" }: { scene?: AuraScene }) {
   const { width: W, height: H } = useWindowDimensions();
@@ -81,6 +103,13 @@ export function FennyAura({ scene = "today" }: { scene?: AuraScene }) {
       <Group opacity={op}>
         <Blur blur={55} />
         <Oval x={ox} y={oy} width={ow} height={oh} color="#9FB0CF" />
+      </Group>
+      {/* Long soft streaks through the light, like the blurred photo of a dusk
+          sky the canvas used (cooled to silver-blue). Each drifts on its own. */}
+      <Group opacity={op} blendMode="screen">
+        {STREAKS.map((st, i) => (
+          <Streak key={i} st={st} ox={ox} oy={oy} ow={ow} oh={oh} drift={drift} breath={breath} />
+        ))}
       </Group>
       {grain && (
         <Fill blendMode="plus">
