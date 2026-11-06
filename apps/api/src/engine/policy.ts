@@ -48,6 +48,8 @@ export function moveOf(line: string): Move {
   if (s.includes("tap teach me")) return "offer_teach";
   if (s.includes("have a go at learning")) return "teach";
   if (s.includes(RETELL_LINE_HINT) && s.includes("seconds")) return "retell";
+  // The goodbye can name ideas ("why the heart has valves"), so it is read first.
+  if (/next time|good place to stop/.test(s)) return "wrap";
   if (/\bwhat if\b|what would happen|picture\b|imagine\b/.test(s)) return "what_if";
   if (/\bwait\b|i thought you said|but didn'?t you/.test(s)) return "puzzled";
   if (/\bwhy\b|how come/.test(s)) return "why";
@@ -155,11 +157,13 @@ export const DEFAULT_LIMITS: Limits = { retellFrom: 7, retellBy: 12, canShowMe: 
  * several means the model picks the best fit.
  */
 export function allowedMoves(s: CallState, l: Limits = DEFAULT_LIMITS): Move[] {
+  // After the shakiest-bit question the call ends, whatever they say (even
+  // "can we skip that?" or "show me"): the summary names the shaky bit for next time.
+  if (s.lastMove === "close") return ["wrap"];
   if (s.lastMove === "offer_teach" && s.answeredOffer === "yes") return ["teach"];
   if (s.askedToBeTold && l.canTeach) return ["offer_teach"];
   if (s.answeredOffer === "yes" || (s.askedToBeTold && l.canShowMe)) return ["show_me"];
   if (s.askedToBeTold) return ["let_go"];
-  if (s.lastMove === "close") return ["wrap"]; // even "can we skip that?" ends the call
   if (s.answeredOffer === "no" || s.skipRequested) return ["let_go"];
   // Close only once they have actually given the short version; a short
   // reply ("give me a sec") gets a nudge, at most twice.
