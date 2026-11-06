@@ -5,8 +5,11 @@
 // Visual Value, softened for Fenny:
 //   one idea per picture; soft silver lines on near-black, one line weight,
 //   rounded ends; only one thing lit (white fill, or steel blue for the thing
-//   that changes); no glows or gradients; few, small sentence-case labels;
+//   that changes); no gradients; few, small sentence-case labels;
 //   built in a few beats, then at rest with at most one slow movement.
+// Kit v5 (Dan Koe's habits): only the one lit thing carries a soft halo,
+//   nothing else glows; a lit line drawing on carries a small light at its
+//   pen tip, so the eye knows where the explanation is.
 // Motion (kit v3): every move means one thing, always.
 //   draw on = being built; drift = alive, at rest; jiggle (bounce) = random
 //   motion, with a fading trail for speed; cross = through a boundary;
@@ -102,9 +105,19 @@ function stroke(p: SkPaint, colour: string, a: number, w = W0, dash?: number[]) 
   p.setAlphaf(clamp(a));
   p.setPathEffect(dash ? Skia.PathEffect.MakeDash(dash, 0) : null);
 }
+/** The soft halo behind the one lit thing. Nothing else glows. */
+function halo(c: SkCanvas, x: number, y: number, r: number, a: number) {
+  "worklet";
+  const hp = Skia.Paint();
+  hp.setColor(Skia.Color(BLUE));
+  hp.setAlphaf(clamp(a) * 0.45);
+  hp.setMaskFilter(Skia.MaskFilter.MakeBlur(0, Math.min(7, 2.5 + r * 0.25), true));
+  c.drawCircle(x, y, r + 1.5, hp);
+}
 function dot(c: SkCanvas, p: SkPaint, x: number, y: number, r: number, a: number, colour = SIL) {
   "worklet";
   if (a <= 0.01 || r <= 0) return;
+  if (colour === BLUE && r >= 3) halo(c, x, y, r, a);
   fill(p, colour, a);
   c.drawCircle(x, y, r, p);
 }
@@ -124,6 +137,8 @@ function line(c: SkCanvas, p: SkPaint, x1: number, y1: number, x2: number, y2: n
 function arrow(c: SkCanvas, p: SkPaint, x1: number, y1: number, x2: number, y2: number, a: number, colour = SIL, k = 1) {
   "worklet";
   line(c, p, x1, y1, x2, y2, a, colour, k);
+  // The lit line carries a small light at its pen tip while it draws.
+  if (colour === BLUE && k > 0.02 && k < 0.98) dot(c, p, x1 + (x2 - x1) * k, y1 + (y2 - y1) * k, 2.6, a, BLUE);
   if (k < 0.98) return;
   const ang = Math.atan2(y2 - y1, x2 - x1);
   const s = 6;
@@ -517,6 +532,8 @@ function drawGraph(c: SkCanvas, p: SkPaint, font: SkFont | null, s: GraphScene, 
       }
       stroke(p, isLit && !ghost ? BLUE : SIL, ghost ? 0.25 : isLit ? 1 : 0.55, W0, ghost ? [3, 6] : undefined);
       c.drawPath(path.build(), p);
+      // Pen-tip light on the lit curve while it draws.
+      if (isLit && !ghost && k > 0.02 && k < 0.98) dot(c, p, X(end), Y(shapeY(cv.shape, end, sh, st)), 2.6, 1, BLUE);
     }
     if (cv.label) label(c, p, font, cv.label, X(0.97) + 6, Y(shapeY(cv.shape, 0.97, shifts[i], stretches[i])), "left", isLit ? BLUE : LAB, beat(f, 3, 4));
   }
