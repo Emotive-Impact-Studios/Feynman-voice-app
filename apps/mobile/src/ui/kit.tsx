@@ -1,10 +1,11 @@
 // Small shared pieces: type, glass, buttons, backgrounds, icons.
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { BlurView } from "expo-blur";
-import { Image } from "expo-image";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { colour, font, radius } from "../theme";
+import { LivingPhoto } from "./LivingPhoto";
+import { Press } from "./Press";
 
 export const images = {
   horizon: require("../../assets/images/horizon.webp"),
@@ -68,16 +69,9 @@ export function Glass({ children, style, strong }: { children?: ReactNode; style
   );
 }
 
-export function Backdrop({ source, opacity = 1, flip, offsetY = 0 }: { source: number; opacity?: number; flip?: boolean; offsetY?: number }) {
-  return (
-    <Image
-      source={source}
-      contentFit="cover"
-      style={[StyleSheet.absoluteFill, { opacity, top: offsetY, transform: flip ? [{ scaleY: -1 }] : undefined }]}
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-    />
-  );
+/** A background photo, drifting slowly and shifting with tilt (see LivingPhoto). */
+export function Backdrop(props: { source: number; opacity?: number; flip?: boolean; offsetY?: number }) {
+  return <LivingPhoto {...props} />;
 }
 
 export function PillButton({
@@ -97,36 +91,32 @@ export function PillButton({
 }) {
   const solid = variant === "solid";
   return (
-    <Pressable
+    <Press
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.pill,
-        solid ? { backgroundColor: colour.text } : { backgroundColor: "rgba(255,255,255,0.10)", borderWidth: 1, borderColor: colour.hairline },
-        { opacity: pressed ? 0.75 : 1 },
-        style,
-      ]}
+      style={[styles.pill, solid ? { backgroundColor: colour.text } : { backgroundColor: "rgba(255,255,255,0.10)", borderWidth: 1, borderColor: colour.hairline }, style]}
     >
       {children ?? (
         <T size={15} weight={solid ? "semibold" : "regular"} tone={solid ? "dark" : "text"}>
           {label}
         </T>
       )}
-    </Pressable>
+    </Press>
   );
 }
 
-export function RoundButton({ onPress, label, children, size = 48 }: { onPress?: () => void; label: string; children: ReactNode; size?: number }) {
+export function RoundButton({ onPress, label, children, size = 48, on }: { onPress?: () => void; label: string; children: ReactNode; size?: number; on?: boolean }) {
   return (
-    <Pressable
+    <Press
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={on === undefined ? undefined : { expanded: on }}
       onPress={onPress}
-      style={({ pressed }) => [styles.round, { width: size, height: size, opacity: pressed ? 0.7 : 1 }]}
+      style={[styles.round, { width: size, height: size }, on && { backgroundColor: "rgba(255,255,255,0.18)" }]}
     >
       {children}
-    </Pressable>
+    </Press>
   );
 }
 
