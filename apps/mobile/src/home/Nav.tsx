@@ -101,5 +101,5 @@ const styles = StyleSheet.create({
   nav: { position: "absolute", left: 16, right: 16, flexDirection: "row", gap: 10 },
   navBar: { flex: 1, height: NAV_HEIGHT, borderRadius: 999, flexDirection: "row", alignItems: "center", padding: 6 },
   navItem: { flex: 1, height: 52, alignItems: "center", justifyContent: "center" },
-  navLight: { width: NAV_HEIGHT, height: NAV_HEIGHT, borderRadius: 999, alignItems: "center", justifyContent: "center" },
+  navLight: { width: NAV_HEIGHT, height: NAV_HEIGHT, borderRadius: 999, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
 });

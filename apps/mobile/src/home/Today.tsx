@@ -47,7 +47,7 @@ export function Today({ profile, top, bottom, onNew, onTopic }: { profile: Profi
             </T>
             {/* The pill clips, so no glow here: just the lit fill. */}
             <Soft lit glow={false} style={{ width: 52, height: 52 }}>
-              <Icon name="mic" />
+              <Icon name="mic" color={colour.onLight} />
             </Soft>
           </Glass>
         </Press>

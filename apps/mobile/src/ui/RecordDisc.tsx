@@ -6,6 +6,7 @@
 import { useEffect, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { Blur, Canvas, Circle, vec } from "@shopify/react-native-skia";
+import { BUTTON_SHADOW, LIT_BG } from "./Soft";
 import Animated, {
   Easing,
   type SharedValue,
@@ -63,6 +64,6 @@ export function RecordDisc({ size, listening, hold, children }: { size: number; 
 const styles = StyleSheet.create({
   abs: { position: "absolute" },
   // A plain soft-silver disc with a dark icon: the one thing to press.
-  disc: { backgroundColor: "#D3D7DD", shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
+  disc: { backgroundColor: LIT_BG, ...BUTTON_SHADOW },
   centre: { alignItems: "center", justifyContent: "center" },
 });

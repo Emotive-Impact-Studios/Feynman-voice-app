@@ -196,12 +196,12 @@ export default function Intro() {
                   <Soft lit style={{ flex: 1 }}>
                     {last ? (
                       <Animated.View entering={FadeIn.delay(200)}>
-                        <T size={16} weight="semibold">
+                        <T size={16} weight="semibold" tone="dark">
                           Get started
                         </T>
                       </Animated.View>
                     ) : (
-                      <Arrow />
+                      <Arrow color={colour.onLight} />
                     )}
                   </Soft>
                 </Press>
@@ -471,10 +471,10 @@ function Dot({ on }: { on: boolean }) {
   return <Animated.View style={[{ height: 6, borderRadius: 3, backgroundColor: on ? colour.silver : "rgba(255,255,255,0.22)" }, st]} />;
 }
 
-function Arrow() {
+function Arrow({ color = colour.text }: { color?: string }) {
   return (
     <Svg width={20} height={20} viewBox="0 0 24 24">
-      <Path d="M5 12h14M13 6l6 6-6 6" stroke={colour.text} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <Path d="M5 12h14M13 6l6 6-6 6" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </Svg>
   );
 }
@@ -561,8 +561,8 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
     >
       <Animated.View style={st}>
         {on ? (
-          <Soft style={{ width: chipWidth(label), height: 46 }}>
-            <T size={15}>{label}</T>
+          <Soft lit style={{ width: chipWidth(label), height: 46 }}>
+            <T size={15} tone="dark">{label}</T>
           </Soft>
         ) : (
           <Glass style={{ height: 46, borderRadius: 999, paddingHorizontal: 17, justifyContent: "center" }}>
