@@ -14,7 +14,7 @@
 // before. Lessons without drawings keep the cards.
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, View, type ScrollViewInstance } from "react-native";
-import Animated, { cancelAnimation, Easing, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { cancelAnimation, Easing, FadeIn, FadeOut, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { buildAfter, estimateMs, filmLines, rampFor, type FilmLine } from "@feynman/audio";
@@ -94,8 +94,12 @@ export function TeachMode({
   const [biteDone, setBiteDone] = useState(false);
   const [filmOver, setFilmOver] = useState(false);
   const [filmRun, setFilmRun] = useState(0);
-  const build = useSharedValue(0);
-  const moving = useSharedValue(0);
+  // Two sets, used by alternate bites, so the last picture can fade out at
+  // its own build while the next one draws.
+  const buildA = useSharedValue(0);
+  const buildB = useSharedValue(0);
+  const movingA = useSharedValue(0);
+  const movingB = useSharedValue(0);
   const pick = useRef<((option: string) => void) | null>(null);
 
   useEffect(() => {
@@ -139,8 +143,14 @@ export function TeachMode({
     const sleep = (ms: number) => new Promise<void>((resolve) => timers.push(setTimeout(resolve, ms)));
     const ease = Easing.bezier(0.65, 0, 0.35, 1);
 
+    let build = buildA;
+    let moving = movingA;
+
     /** Says one line. If target is set, the drawing reaches it as the cue word is said. */
     const sayLine = async (line: FilmLine, target: number | null, last: boolean) => {
+      // This bite's drawing, even if a timer fires after the next bite starts.
+      const bv = build;
+      const mv = moving;
       setSub(line.say);
       let started = false;
       const begin = (durationMs: number, elapsedMs: number) => {
@@ -149,9 +159,9 @@ export function TeachMode({
         if (target === null) return;
         const r = rampFor(line, durationMs, elapsedMs);
         later(r.delayMs, () => {
-          build.value = reduce ? target : withTiming(target, { duration: r.rampMs, easing: ease });
+          bv.value = reduce ? target : withTiming(target, { duration: r.rampMs, easing: ease });
         });
-        if (last) later(r.delayMs + r.rampMs, () => (moving.value = 1));
+        if (last) later(r.delayMs + r.rampMs, () => (mv.value = 1));
       };
       if (speak) await speak(line.say, { onStart: ({ durationMs, elapsedMs }) => begin(durationMs, elapsedMs) });
       if (!alive || started) return;
@@ -166,6 +176,8 @@ export function TeachMode({
       for (let i = 0; i < lesson.bites.length; i++) {
         const b = lesson.bites[i];
         const lines = filmLines(b.film, b.text);
+        build = i % 2 === 0 ? buildA : buildB;
+        moving = i % 2 === 0 ? movingA : movingB;
         cancelAnimation(build);
         build.value = 0;
         moving.value = 0;
@@ -273,18 +285,30 @@ export function TeachMode({
         )}
 
         {lesson && step.kind === "watch" && filmNow && (
-          <Animated.View key={`watch${filmBite}-${filmRun}`} entering={riseIn()} style={{ gap: 20 }}>
+          <Animated.View key={`watch${filmRun}`} entering={riseIn()} style={{ gap: 20 }}>
             <Label tone="student">
               {filmNow.fromNotes ? "From your notes · " : ""}Idea {filmBite + 1} of {lesson.bites.length}
             </Label>
-            <T size={30} weight="medium" style={{ lineHeight: 35 }}>
-              {filmNow.title}
-            </T>
-            {filmNow.scene ? (
-              <SceneView scene={filmNow.scene} build={build} moving={moving} label={filmNow.caption || filmNow.title} caption={biteDone ? filmNow.caption : undefined} />
-            ) : (
-              <Picture kind={filmNow.picture.kind} labels={filmNow.picture.labels} />
-            )}
+            <Animated.View key={`title${filmBite}`} entering={FadeIn.duration(400)}>
+              <T size={30} weight="medium" style={{ lineHeight: 35 }}>
+                {filmNow.title}
+              </T>
+            </Animated.View>
+            {/* Morph between ideas: the picture changes in place. The last one
+                fades out where it stands while the next one draws. */}
+            <Animated.View key={`scene${filmBite}`} entering={FadeIn.duration(600)} exiting={reduce ? undefined : FadeOut.duration(600)}>
+              {filmNow.scene ? (
+                <SceneView
+                  scene={filmNow.scene}
+                  build={filmBite % 2 === 0 ? buildA : buildB}
+                  moving={filmBite % 2 === 0 ? movingA : movingB}
+                  label={filmNow.caption || filmNow.title}
+                  caption={biteDone ? filmNow.caption : undefined}
+                />
+              ) : (
+                <Picture kind={filmNow.picture.kind} labels={filmNow.picture.labels} />
+              )}
+            </Animated.View>
             <T size={17} tone={asking && !picked ? "text" : "soft"} style={{ lineHeight: 26, minHeight: 52 }}>
               {sub}
             </T>
