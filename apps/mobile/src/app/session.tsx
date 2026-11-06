@@ -123,7 +123,7 @@ export default function Session() {
   // feedback returns with gap analysis, build step 4.)
   // Saved once, whether you tap End, close, or go back with the system.
   const saved = useRef(false);
-  const latest = useRef({ spoken, questions: 0, ideas: [] as { id: string; idea: string }[], covered: [] as string[] });
+  const latest = useRef({ spoken, questions: 0, ideas: [] as { id: string; idea: string; label?: string }[], covered: [] as string[] });
   latest.current = { spoken, questions: loop.turns.filter((t) => t.speaker === "student").length, ideas: loop.ideas, covered: loop.covered };
   const save = useCallback(() => {
     if (saved.current) return;

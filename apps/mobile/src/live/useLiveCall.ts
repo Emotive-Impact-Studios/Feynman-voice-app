@@ -68,7 +68,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   /** The engine's move for the reply being spoken ("why", "puzzled", "close"...). Sets Fenny's face. */
   const [move, setMove] = useState<string | null>(null);
   /** The topic's key ideas (the engine's private checklist) and the ids explained so far this call. */
-  const [ideas, setIdeas] = useState<{ id: string; idea: string }[]>([]);
+  const [ideas, setIdeas] = useState<{ id: string; idea: string; label?: string }[]>([]);
   const [covered, setCovered] = useState<string[]>([]);
   const coveredRef = useRef<string[]>([]);
   /** The latest idea they nailed, with a counter so each one celebrates once. */
@@ -420,7 +420,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
           coveredRef.current = [...before, ...fresh];
           setCovered(coveredRef.current);
           const last = list.find((k) => k.id === fresh[fresh.length - 1]);
-          if (last) setGot((g) => ({ idea: last.idea, n: (g?.n ?? 0) + 1 }));
+          // The short label names the idea without giving the answer away.
+          if (last) setGot((g) => ({ idea: last.label || last.idea, n: (g?.n ?? 0) + 1 }));
         }
       }
       if (e.type === "engine" && e.move === "wrap") wrapped = true;

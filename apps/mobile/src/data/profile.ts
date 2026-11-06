@@ -27,7 +27,10 @@ export interface TopicRecord {
 
 export interface KeyIdea {
   id: string;
+  /** The idea itself (the answer). */
   idea: string;
+  /** A short name for it that doesn't give the answer away. */
+  label?: string;
 }
 
 export interface Profile {

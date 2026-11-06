@@ -121,10 +121,18 @@ export default function TopicMap() {
                   {i + 1}
                 </T>
               </View>
-              <T size={15} tone={known.has(k.id) ? "text" : "muted"} style={{ flex: 1, lineHeight: 21 }}>
-                {k.idea}
-                {fresh.has(k.id) ? <T size={13} tone="student">{"  "}New</T> : null}
-              </T>
+              {/* Ideas still to explain show only their name, so the page never gives the answer away. */}
+              <View style={{ flex: 1, gap: 3 }}>
+                <T size={15} tone={known.has(k.id) ? "text" : "muted"} style={{ lineHeight: 21 }}>
+                  {k.label ? cap(k.label) : known.has(k.id) ? k.idea : `Idea ${i + 1}`}
+                  {fresh.has(k.id) ? <T size={13} tone="student">{"  "}New</T> : null}
+                </T>
+                {k.label && known.has(k.id) ? (
+                  <T size={13.5} tone="soft" style={{ lineHeight: 19 }}>
+                    {k.idea}
+                  </T>
+                ) : null}
+              </View>
             </Animated.View>
           ))}
         </View>
@@ -139,6 +147,10 @@ export default function TopicMap() {
       </View>
     </View>
   );
+}
+
+function cap(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function Star({ x, y, n, lit, fresh, delay, all }: { x: number; y: number; n: number; lit: boolean; fresh: boolean; delay: number; all: boolean }) {
