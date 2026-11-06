@@ -1,11 +1,10 @@
-// The record button's face, from the canvas board (v56). No ring or
-// outline: a soft disc lit from the top, with a one-pixel top highlight and
-// a gentle shadow. While listening it tints silver-blue and a breathing ring
-// of glow sits just outside it. While held, the glow hides so the coral
-// hold ring (HoldButton) reads on its own.
+// The record button's face (build 12): one clean soft disc. No ring, no
+// outline and no top highlight. While listening it tints silver-blue and a
+// soft blurred light breathes behind it, with no line round it. While held,
+// the light hides so the coral hold ring (HoldButton) reads on its own.
 import { useEffect, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
-import { Blur, Canvas, Circle, Group, RadialGradient, vec } from "@shopify/react-native-skia";
+import { Blur, Canvas, Circle, vec } from "@shopify/react-native-skia";
 import Animated, {
   Easing,
   type SharedValue,
@@ -15,12 +14,8 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { SOFT_FILL, TOP_LIGHT } from "./Soft";
 
-const GLOW_GAP = 5;
-// The canvas asks for a 24 pt glow; 18 keeps its tail inside the control bar, which clips.
-const GLOW_SPREAD = 18;
-const LISTENING = ["rgba(169,190,230,0.32)", "rgba(110,134,188,0.12)"];
+const SPREAD = 26;
 
 export function RecordDisc({ size, listening, hold, children }: { size: number; listening: boolean; hold?: SharedValue<number>; children: ReactNode }) {
   const reduce = useReducedMotion();
@@ -35,47 +30,29 @@ export function RecordDisc({ size, listening, hold, children }: { size: number; 
   }, [reduce, breath]);
 
   const r = size / 2;
-  const box = size + (GLOW_GAP + GLOW_SPREAD) * 2;
-  const c = box / 2;
+  const box = size + SPREAD * 2;
 
-  // Tinted fill fades in over the plain one.
   const tint = useAnimatedStyle(() => ({ opacity: on.value }));
-  // The glow ring: shown while listening, hidden while held, breathing.
+  // Always a faint light behind the button; brighter and breathing while listening.
   const glow = useAnimatedStyle(() => {
     const held = hold ? Math.min(1, hold.value * 4) : 0;
     return {
-      opacity: on.value * (1 - held) * (0.75 + 0.25 * breath.value),
-      transform: [{ scale: 1 + 0.07 * breath.value }],
+      opacity: (0.35 + 0.65 * on.value * (0.7 + 0.3 * breath.value)) * (1 - held),
+      transform: [{ scale: 1 + 0.06 * breath.value * on.value }],
     };
   });
-  const lineR = r + GLOW_GAP;
 
   return (
     <View style={{ width: size, height: size }}>
-      <Animated.View pointerEvents="none" style={[styles.glow, { width: box, height: box, left: -(GLOW_GAP + GLOW_SPREAD), top: -(GLOW_GAP + GLOW_SPREAD) }, glow]}>
+      <Animated.View pointerEvents="none" style={[styles.abs, { width: box, height: box, left: -SPREAD, top: -SPREAD }, glow]}>
         <Canvas style={{ width: box, height: box }}>
-          <Group>
-            <Blur blur={GLOW_SPREAD / 2} />
-            <Circle c={vec(c, c)} r={lineR} style="stroke" strokeWidth={6} color="rgba(142,166,212,0.45)" />
-          </Group>
-          <Circle c={vec(c, c)} r={lineR} style="stroke" strokeWidth={1.5} color="rgba(201,214,240,0.75)" />
+          <Circle c={vec(box / 2, box / 2)} r={r + 2} color="rgba(142,166,212,0.42)">
+            <Blur blur={SPREAD / 2} />
+          </Circle>
         </Canvas>
       </Animated.View>
       <View style={[styles.disc, { width: size, height: size, borderRadius: r }]}>
-        <Canvas style={StyleSheet.absoluteFill}>
-          <Circle c={vec(r, r)} r={r}>
-            <RadialGradient c={vec(r, 0)} r={size} colors={SOFT_FILL} />
-          </Circle>
-        </Canvas>
-        <Animated.View style={[StyleSheet.absoluteFill, tint]}>
-          <Canvas style={StyleSheet.absoluteFill}>
-            <Circle c={vec(r, r)} r={r}>
-              <RadialGradient c={vec(r, 0)} r={size} colors={LISTENING} />
-            </Circle>
-          </Canvas>
-        </Animated.View>
-        {/* Only the top edge catches the light. */}
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: r, borderTopWidth: 1, borderTopColor: TOP_LIGHT }]} />
+        <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: r, backgroundColor: "rgba(169,190,230,0.22)" }, tint]} />
         <View style={[StyleSheet.absoluteFill, styles.centre]}>{children}</View>
       </View>
     </View>
@@ -83,12 +60,7 @@ export function RecordDisc({ size, listening, hold, children }: { size: number; 
 }
 
 const styles = StyleSheet.create({
-  glow: { position: "absolute" },
-  disc: {
-    shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-  },
+  abs: { position: "absolute" },
+  disc: { backgroundColor: "rgba(40,43,50,0.92)", overflow: "hidden" },
   centre: { alignItems: "center", justifyContent: "center" },
 });

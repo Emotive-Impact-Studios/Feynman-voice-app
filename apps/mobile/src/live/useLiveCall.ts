@@ -77,7 +77,9 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const endOfTurn = useRef(new EndOfTurn());
   // Quiet that ends the learner's next turn: longer after a "why" or "how".
   const nextQuiet = useRef(TURN_QUIET_SECONDS);
-  const bargeIn = useRef(new BargeIn());
+  // The student now plays much louder out of the speaker, and the mic hears
+  // some of it. Cutting in needs a clearly louder voice than the echo.
+  const bargeIn = useRef(new BargeIn(0.09, 0.35));
   // While thinking, the learner may carry on talking: then the turn was not over.
   const carryOn = useRef(new BargeIn(0.015, 0.4));
 

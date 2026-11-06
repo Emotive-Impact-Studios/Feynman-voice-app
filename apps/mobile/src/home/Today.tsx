@@ -45,8 +45,8 @@ export function Today({ profile, top, bottom, onNew, onTopic }: { profile: Profi
             <T size={16} tone="soft" style={{ flex: 1 }}>
               Pick a topic, or say one
             </T>
-            {/* The pill clips, so the halo's glow is kept short here. */}
-            <Soft halo glow={8} style={{ width: 52, height: 52 }}>
+            {/* The pill clips, so no glow here: just the lit fill. */}
+            <Soft lit glow={false} style={{ width: 52, height: 52 }}>
               <Icon name="mic" />
             </Soft>
           </Glass>

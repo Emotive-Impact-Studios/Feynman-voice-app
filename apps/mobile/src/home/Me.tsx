@@ -4,7 +4,9 @@
 // forgives a missed day a week (see docs/behavioural-design.md).
 import { Press } from "../ui/Press";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { minutesLeft, PROTOTYPE_MINUTES, softStreak, type Profile } from "../data/profile";
+import { minutesLeft, PROTOTYPE_MINUTES, setSessionView, softStreak, type Profile } from "../data/profile";
+import { ViewIcon, VIEWS } from "../live/ViewMenu";
+import { colour } from "../theme";
 import { MinutesRing } from "../ui/Dots";
 import { Glass, Label, T } from "../ui/kit";
 import { homeStyles } from "./styles";
@@ -62,6 +64,36 @@ export function Me({ profile, top, bottom, onReplayIntro }: { profile: Profile; 
       </In>
 
       <In d={4}>
+        <Label style={{ marginTop: 28 }}>Settings</Label>
+        <Glass style={styles.settings}>
+          <T size={15}>Session view</T>
+          <T size={12.5} tone="muted" style={{ marginTop: 2 }}>
+            How Fenny shows up while you explain. You can also change it in a session.
+          </T>
+          <View style={styles.views} accessibilityRole="radiogroup" accessibilityLabel="Session view">
+            {VIEWS.map((v) => {
+              const on = (profile.sessionView ?? "light") === v.id;
+              return (
+                <Press
+                  key={v.id}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={v.label}
+                  onPress={() => setSessionView(v.id)}
+                  style={[styles.view, on && styles.viewOn]}
+                >
+                  <ViewIcon id={v.id} size={20} color={on ? colour.text : colour.muted} />
+                  <T size={13} tone={on ? "text" : "muted"}>
+                    {v.label}
+                  </T>
+                </Press>
+              );
+            })}
+          </View>
+        </Glass>
+      </In>
+
+      <In d={5}>
         <Label style={{ marginTop: 28 }}>{profile.name || "You"}</Label>
         <Glass style={{ marginTop: 10, borderRadius: 24 }}>
           <Press onPress={onReplayIntro} style={styles.rowBtn} accessibilityRole="button">
@@ -90,4 +122,8 @@ const styles = StyleSheet.create({
   stats: { marginTop: 18, flexDirection: "row", gap: 8 },
   plan: { marginTop: 10, borderRadius: 24, flexDirection: "row", alignItems: "center", gap: 10, padding: 8, paddingRight: 16 },
   rowBtn: { paddingVertical: 16, paddingHorizontal: 18 },
+  settings: { marginTop: 10, borderRadius: 24, padding: 16 },
+  views: { flexDirection: "row", gap: 6, marginTop: 14 },
+  view: { flex: 1, height: 72, borderRadius: 18, alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.04)" },
+  viewOn: { backgroundColor: "rgba(255,255,255,0.11)" },
 });

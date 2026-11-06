@@ -193,7 +193,7 @@ export default function Intro() {
               )}
               <Animated.View style={[styles.morph, ctlStyle]}>
                 <Press onPress={next} accessibilityRole="button" accessibilityLabel={last ? "Get started" : "Next"} style={{ flex: 1 }}>
-                  <Soft halo style={{ flex: 1 }}>
+                  <Soft lit style={{ flex: 1 }}>
                     {last ? (
                       <Animated.View entering={FadeIn.delay(200)}>
                         <T size={16} weight="semibold">

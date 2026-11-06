@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { findTopic, minutesLeft, recordSession, useProfile } from "../data/profile";
+import { findTopic, recordSession, setSessionView, useProfile } from "../data/profile";
 import { colour } from "../theme";
 import { DotWave } from "../ui/Dots";
 import { Backdrop, Glass, Icon, Label, RoundButton, T } from "../ui/kit";
@@ -16,7 +16,7 @@ import { RecordDisc } from "../ui/RecordDisc";
 import { Press } from "../ui/Press";
 import { ScreenIn } from "../ui/ScreenIn";
 import { VoiceGlow } from "../ui/VoiceGlow";
-import { ViewIcon, ViewMenu, VIEWS, type SessionView } from "../live/ViewMenu";
+import { OptionsIcon, ViewMenu, VIEWS, type SessionView } from "../live/ViewMenu";
 import type { LiveEars, LiveVoice } from "../api";
 import { phononAvailable, useLiveCall, type CallTurnStats } from "../live/useLiveCall";
 
@@ -89,7 +89,8 @@ export default function Session() {
   const opening = params.prompt ?? OPENING;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const [view, setView] = useState<View3>("light");
+  // Starts in the view chosen in Me (or last picked in a session).
+  const [view, setView] = useState<View3>(() => profile.sessionView ?? "light");
   const [voice, setVoice] = useState<LiveVoice>("sonic");
   const [ears, setEars] = useState<LiveEars>("auto");
   const [showSettings, setShowSettings] = useState(false);
@@ -147,12 +148,12 @@ export default function Session() {
 
   return (
     <ScreenIn style={styles.root}>
-      <Backdrop />
+      <Backdrop scene="session" />
       {view === "light" && (
         <>
           <VoiceGlow level={voiceLevel} height={230} dim />
-          <View style={[styles.centre, { paddingTop: insets.top + 120 }]}>
-            <LivingLight size={220} energy={studentEnergy} />
+          <View style={[styles.centre, { paddingTop: insets.top + 96 }]}>
+            <LivingLight size={200} energy={studentEnergy} />
             <Label tone="student" style={{ marginTop: 28 }}>
               Student
             </Label>
@@ -187,7 +188,7 @@ export default function Session() {
         <>
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingTop: insets.top + 130, paddingBottom: 140, paddingHorizontal: 20, gap: 14, flexGrow: 1, justifyContent: "flex-end" }}
+            contentContainerStyle={{ paddingTop: insets.top + 130, paddingBottom: 200, paddingHorizontal: 20, gap: 14, flexGrow: 1, justifyContent: "flex-end" }}
           >
             {(loop.turns.length ? loop.turns : [{ speaker: "student" as const, text: opening }]).map((t, i) =>
               t.speaker === "student" ? (
@@ -223,12 +224,12 @@ export default function Session() {
           </View>
           <View style={[styles.side, { flexDirection: "row", justifyContent: "flex-end", gap: 8 }]}>
             <RoundButton
-              label={`View: ${VIEWS.find((v) => v.id === view)?.label}. Change view`}
+              label={`Options. View: ${VIEWS.find((v) => v.id === view)?.label}`}
               size={44}
               on={menuOpen}
               onPress={() => setMenuOpen((o) => !o)}
             >
-              <ViewIcon id={view} />
+              <OptionsIcon />
             </RoundButton>
           </View>
         </View>
@@ -250,30 +251,30 @@ export default function Session() {
         )}
       </View>
 
-      {/* Shared controls */}
-      <Glass strong style={[styles.controls, { bottom: Math.max(insets.bottom, 10) }]}>
-        <HoldButton size={62} label={ringLabel} onTap={canTap ? onRing : undefined} onHold={end}>
-          {(hold) => (
-            <View style={{ opacity: canTap ? 1 : 0.4 }}>
-              <RecordDisc size={62} listening={loop.phase === "listening"} hold={hold}>
-                <Icon name={ringIcon} />
-              </RecordDisc>
-            </View>
-          )}
-        </HoldButton>
-        <View style={{ flex: 1, gap: 2 }}>
-          <T size={15} weight="medium" lines={1}>
-            {loop.phase === "error" && loop.error ? loop.error : HINTS[loop.phase][0]}
-          </T>
+      {/* One button at the bottom, with no panel: what it does sits just above it. */}
+      <View pointerEvents="box-none" style={[styles.controls, { bottom: Math.max(insets.bottom, 12) + 8 }]}>
+        <T size={15} weight="medium" lines={1} style={{ textAlign: "center" }}>
+          {loop.phase === "error" && loop.error ? loop.error : HINTS[loop.phase][0]}
+        </T>
+        <View style={styles.hintLine}>
           {loop.phase === "listening" ? (
-            <DotWave width={width - 140} height={26} level={loop.isTalking ? 1 : 0.3} tick={tick} />
+            <DotWave width={Math.min(220, width - 80)} height={22} level={loop.isTalking ? 1 : 0.3} tick={tick} />
           ) : (
-            <T size={13} tone="muted" lines={2}>
+            <T size={13} tone="muted" lines={1} style={{ textAlign: "center" }}>
               {loop.notice ?? HINTS[loop.phase][1]}
             </T>
           )}
         </View>
-      </Glass>
+        <HoldButton size={76} label={ringLabel} onTap={canTap ? onRing : undefined} onHold={end}>
+          {(hold) => (
+            <View style={{ opacity: canTap ? 1 : 0.4 }}>
+              <RecordDisc size={76} listening={loop.phase === "listening"} hold={hold}>
+                <Icon name={ringIcon} size={24} />
+              </RecordDisc>
+            </View>
+          )}
+        </HoldButton>
+      </View>
 
       {menuOpen && (
         <ViewMenu
@@ -281,6 +282,7 @@ export default function Session() {
           view={view}
           onPick={(v) => {
             setView(v);
+            setSessionView(v);
             setMenuOpen(false);
           }}
           onClose={() => setMenuOpen(false)}
@@ -305,7 +307,8 @@ const styles = StyleSheet.create({
   segment: { flexDirection: "row", gap: 2, padding: 3, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.05)", alignSelf: "flex-start" },
   settings: { padding: 14, borderRadius: 24, gap: 8 },
   switchItem: { height: 32, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center" },
-  controls: { position: "absolute", left: 10, right: 10, height: 96, borderRadius: 38, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14 },
+  controls: { position: "absolute", left: 24, right: 24, alignItems: "center", gap: 4 },
+  hintLine: { height: 26, justifyContent: "center", marginBottom: 14 },
   studentRow: { alignSelf: "flex-start", flexDirection: "row", alignItems: "flex-end", gap: 10, maxWidth: 320 },
   studentBubble: {
     flexShrink: 1,
