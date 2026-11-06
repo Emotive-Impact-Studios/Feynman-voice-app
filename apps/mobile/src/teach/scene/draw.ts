@@ -7,6 +7,14 @@
 //   rounded ends; only one thing lit (white fill, or steel blue for the thing
 //   that changes); no glows or gradients; few, small sentence-case labels;
 //   built in a few beats, then at rest with at most one slow movement.
+// Motion (kit v3): every move means one thing, always.
+//   draw on = being built; drift = alive, at rest; jiggle (bounce) = random
+//   motion, with a fading trail for speed; cross = through a boundary;
+//   rise = bubbles, lighter; fall = grains settling, heavier; flow = carried
+//   along; orbit = a repeating cycle; pulse = a signal; grow = more of it;
+//   tip = one side wins; slide = where it sits; spark = a reaction; step = a
+//   jump between levels. Speed is shown with trails, never blur or glow.
+//   Under Reduce Motion nothing loops and only the slider changes the scene.
 // The panel is 300 x 176; the view scales it to fit the screen.
 import { Skia, type SkCanvas, type SkFont, type SkPaint } from "@shopify/react-native-skia";
 import type { BalanceScene, Change, CompareScene, GraphScene, LinksScene, ParticlesScene, Scene, Shape, SpectrumScene, StairsScene, VennScene } from "./types";
@@ -122,6 +130,14 @@ function arrow(c: SkCanvas, p: SkPaint, x1: number, y1: number, x2: number, y2: 
   line(c, p, x2 - Math.cos(ang - 0.5) * s, y2 - Math.sin(ang - 0.5) * s, x2, y2, a, colour);
   line(c, p, x2 - Math.cos(ang + 0.5) * s, y2 - Math.sin(ang + 0.5) * s, x2, y2, a, colour);
 }
+/** A spark: four short rays where two things meet. It always means "a reaction happened here". */
+function spark(c: SkCanvas, p: SkPaint, x: number, y: number, a: number, colour = BLUE) {
+  "worklet";
+  for (let i = 0; i < 4; i++) {
+    const an = Math.PI / 4 + (i * Math.PI) / 2;
+    line(c, p, x + Math.cos(an) * 7, y + Math.sin(an) * 7, x + Math.cos(an) * 12, y + Math.sin(an) * 12, a, colour);
+  }
+}
 function label(c: SkCanvas, p: SkPaint, font: SkFont | null, text: string, x: number, y: number, align: "left" | "center" | "right", colour = LAB, a = 1) {
   "worklet";
   if (!font || !text || a <= 0.01) return;
@@ -161,6 +177,12 @@ function drawParticles(c: SkCanvas, p: SkPaint, font: SkFont | null, s: Particle
     else if (s.divider === "sieve") for (let i = 0; i < 7; i++) line(c, p, x, 17 + i * 19, x, 25 + i * 19, 0.45 * kDiv, SIL, 1, undefined, 3);
   }
 
+  // Bouncing marks, so collisions between different kinds can spark.
+  const hx: number[] = [];
+  const hy: number[] = [];
+  const hg: number[] = [];
+  const hf: boolean[] = [];
+
   for (let g = 0; g < s.things.length; g++) {
     const th = s.things[g];
     const appear = has(changes, th.name, "appear");
@@ -196,10 +218,32 @@ function drawParticles(c: SkCanvas, p: SkPaint, font: SkFont | null, s: Particle
           y = by + Math.cos(tm * 0.5 + ph) * 2.5;
           break;
         case "jiggle": {
+          // Bounce: straight lines off the walls. A short trail of fading dots
+          // shows speed, worked out from where the mark was a moment ago, so
+          // it bends round the walls with it. Slow marks leave almost none.
           const vx = rnd(seed + 80) - 0.5;
           const vy = rnd(seed + 120) - 0.5;
-          x = x0 + bounce(rnd(seed) * w + vx * tm * 50, w);
-          y = top + 4 + bounce(rnd(seed + 7) * (h - 8) + vy * tm * 50, h - 8);
+          const ox = rnd(seed) * w;
+          const oy = rnd(seed + 7) * (h - 8);
+          x = x0 + bounce(ox + vx * tm * 50, w);
+          y = top + 4 + bounce(oy + vy * tm * 50, h - 8);
+          if (!f.still && th.mark !== "blocked") {
+            const sp = fast ? speedAt(changes, f.v) : 1;
+            for (let j = 1; j <= 3; j++) {
+              const back = tm - sp * 0.05 * j;
+              const gx = x0 + bounce(ox + vx * back * 50, w);
+              const gy = top + 4 + bounce(oy + vy * back * 50, h - 8);
+              // A trail dot hidden under its own mark would read as a second thing.
+              if ((gx - x) * (gx - x) + (gy - y) * (gy - y) <= (size + 2) * (size + 2)) continue;
+              dot(c, p, gx, gy, (th.mark === "dot" ? 2.2 : 2.6) * (1 - j * 0.2), a * (0.32 - j * 0.09));
+            }
+          }
+          if (hx.length < 40) {
+            hx.push(x);
+            hy.push(y);
+            hg.push(g);
+            hf.push(fast);
+          }
           break;
         }
         case "cross": {
@@ -214,11 +258,20 @@ function drawParticles(c: SkCanvas, p: SkPaint, font: SkFont | null, s: Particle
           }
           break;
         }
-        case "rise":
-        case "fall": {
-          const q = (tm * 0.2 + rnd(seed + 3)) % 1;
-          y = th.motion === "rise" ? bottom - q * h : top + q * h;
+        case "rise": {
+          // Bubbles: sway as they rise and swell a little near the top.
+          const q = (tm * 0.18 + rnd(seed + 3)) % 1;
+          y = bottom - q * h;
+          x = bx + Math.sin(q * TAU * 1.5 + ph) * 4;
+          r = size * (0.8 + q * 0.5);
           a *= Math.sin(q * Math.PI);
+          break;
+        }
+        case "fall": {
+          // Grains: slow down as they sink, land on the floor, then fade.
+          const q = (tm * 0.14 + rnd(seed + 3)) % 1;
+          y = top + ease(q * 1.25) * (h - 4);
+          a *= q > 0.85 ? (1 - q) / 0.15 : Math.min(1, q / 0.08);
           break;
         }
         case "orbit": {
@@ -253,6 +306,20 @@ function drawParticles(c: SkCanvas, p: SkPaint, font: SkFont | null, s: Particle
         line(c, p, x + k, y - k, x - k, y + k, a * 0.5);
       }
     }
+  }
+  // Spark where two different kinds meet while things are moving fast.
+  if (f.v > 0.3 && !f.still) {
+    let sparks = 0;
+    for (let i = 0; i < hx.length && sparks < 6; i++)
+      for (let j = i + 1; j < hx.length && sparks < 6; j++) {
+        if (hg[i] === hg[j] || !(hf[i] || hf[j])) continue;
+        const dx = hx[i] - hx[j];
+        const dy = hy[i] - hy[j];
+        if (dx * dx + dy * dy < 144) {
+          spark(c, p, (hx[i] + hx[j]) / 2, (hy[i] + hy[j]) / 2, beat(f, 2, 3));
+          sparks++;
+        }
+      }
   }
   for (let k = 0; k < n; k++) label(c, p, font, s.zones[k], k * zw + zw / 2, 164, "center", LAB, beat(f, 2.5, 3));
 }
