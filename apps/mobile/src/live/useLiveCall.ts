@@ -19,6 +19,10 @@ import { ClipQueue } from "./clipQueue";
 
 const RATE = 16000;
 const MAX_TURN_SECONDS = 60;
+/** Talking again this soon after the student starts means the learner wasn't finished. */
+const CARRY_ON_MS = 1500;
+/** Times in a row the server may hold a turn back ("wait") before it must answer. */
+const MAX_WAITS = 2;
 const KITTEN_VOICE = "Kiki";
 const KITTEN_SPEED = 1;
 
@@ -80,6 +84,10 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   // Bumped whenever a reply is abandoned (cut in, carried on, ended). Async
   // work checks it after each await and drops out if it has changed.
   const turnId = useRef(0);
+  // The turn in flight, so carrying on can take back what the server recorded.
+  const sent = useRef<{ id: number; recorded: boolean; seconds: number } | null>(null);
+  const waits = useRef(0);
+  const speakStart = useRef(0);
   const request = useRef<AbortController | null>(null);
   const clips = useRef(new ClipQueue());
   const phononReady = useRef(false);
@@ -109,9 +117,15 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     } else if (p === "thinking") {
       parts.current.push(down);
       const speech = meter.current.push(down, RATE);
-      if (carryOn.current.push(down, RATE) && speech) resumeListening(false);
+      if (carryOn.current.push(down, RATE) && speech) continueRef.current();
     } else if (p === "speaking") {
-      if (bargeIn.current.push(down, RATE)) interruptRef.current(down);
+      if (bargeIn.current.push(down, RATE)) {
+        // Talking again just as the student starts means they weren't
+        // finished: drop the reply and keep the whole turn. Later it's a
+        // new turn that cuts in.
+        if (Date.now() - speakStart.current < CARRY_ON_MS) continueRef.current(down);
+        else interruptRef.current(down);
+      }
     }
   }, []);
 
@@ -153,6 +167,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
 
   /** Fresh buffers for a new turn. `keep` carries audio over (cutting in). */
   const freshTurn = (keep?: Float32Array) => {
+    waits.current = 0;
+    sent.current = null;
     parts.current = keep ? [keep] : [];
     meter.current = new SpeechMeter();
     if (keep) meter.current.push(keep, RATE);
@@ -235,6 +251,33 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     setPhase("listening");
   }, [setPhase]);
 
+  /**
+   * The learner wasn't finished: drop any reply, take back the turn the
+   * server already recorded, and keep listening with the whole turn's audio
+   * so it is sent again in one piece. `more` is audio heard meanwhile.
+   */
+  const continueTurn = (more?: Float32Array) => {
+    if (phaseRef.current !== "thinking" && phaseRef.current !== "speaking") return;
+    silence();
+    const s = sent.current;
+    if (s?.recorded) {
+      setTurns((t) => t.slice(0, -2));
+      setHeardSeconds((n) => Math.max(0, n - s.seconds));
+    }
+    sent.current = null;
+    if (more) {
+      parts.current.push(more);
+      meter.current.push(more, RATE);
+    }
+    endOfTurn.current.reset();
+    bargeIn.current.reset();
+    carryOn.current.reset();
+    setLiveQuestion(null);
+    setPhase("listening");
+  };
+  const continueRef = useRef(continueTurn);
+  continueRef.current = continueTurn;
+
   /** Send the turn heard so far. Runs on its own when the learner goes quiet. */
   const submit = async () => {
     if (phaseRef.current !== "listening") return;
@@ -258,10 +301,15 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     let voiced: Promise<unknown> = Promise.resolve();
     let phononRemaining = 0;
     let wrapped = false;
+    let waited = false;
+    sent.current = { id, recorded: false, seconds: speakingSeconds };
     const markStart = () => {
       if (id !== turnId.current) return;
       if (!firstWordMs) firstWordMs = Date.now() - quietAt;
-      if (phaseRef.current === "thinking") setPhase("speaking");
+      if (phaseRef.current === "thinking") {
+        speakStart.current = Date.now();
+        setPhase("speaking");
+      }
     };
     clips.current.onStart = markStart;
 
@@ -292,11 +340,15 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       }
       if (e.type === "done") {
         done = e;
+        if (waited) return; // not finished: nothing to record yet
         nextQuiet.current = quietAfter(e.question);
         setHeardSeconds((n) => n + speakingSeconds);
         setTurns((t) => [...t, { speaker: "learner", text: e.transcript }, { speaker: "student", text: e.question }]);
+        if (sent.current?.id === id) sent.current.recorded = true;
       }
       if (e.type === "engine" && e.move === "wrap") wrapped = true;
+      // The server heard them stop mid-thought: keep listening instead of asking.
+      if (e.type === "engine" && e.move === "wait") waited = true;
       if (e.type === "error") throw new Error(e.error);
     };
 
@@ -304,11 +356,26 @@ export function useLiveCall(topic: string, settings: CallSettings) {
       const abort = new AbortController();
       request.current = abort;
       await streamLiveTurn(
-        { audioBase64: toBase64(encodeWav(pcm, RATE)), audioSeconds: speakingSeconds, history: turnsRef.current, topic, voice, ears: chosen.ears },
+        {
+          audioBase64: toBase64(encodeWav(pcm, RATE)),
+          audioSeconds: speakingSeconds,
+          history: turnsRef.current,
+          topic,
+          voice,
+          ears: chosen.ears,
+          // After two holds in a row the server must answer.
+          features: waits.current < MAX_WAITS ? ["wait"] : [],
+        },
         onEvent,
         abort.signal,
       );
       request.current = null;
+      if (waited) {
+        if (id !== turnId.current) return;
+        waits.current += 1;
+        continueTurn();
+        return;
+      }
       await voiced;
       if (voice === "phonon") await wait(phononRemaining);
       else await clips.current.whenIdle();

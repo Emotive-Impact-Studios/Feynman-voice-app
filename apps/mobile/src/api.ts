@@ -66,7 +66,16 @@ export const PHONON_BUNDLE_URL = API_URL ? `${API_URL.replace(/\/$/, "")}/phonon
  * student can start speaking its first sentence before the rest is written.
  */
 export async function streamLiveTurn(
-  input: { audioBase64: string; audioSeconds: number; history: Turn[]; topic: string; voice: LiveVoice; ears: LiveEars },
+  input: {
+    audioBase64: string;
+    audioSeconds: number;
+    history: Turn[];
+    topic: string;
+    voice: LiveVoice;
+    ears: LiveEars;
+    /** What this phone can handle. "wait": the server may say the learner isn't finished. */
+    features?: string[];
+  },
   onEvent: (e: LiveEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {

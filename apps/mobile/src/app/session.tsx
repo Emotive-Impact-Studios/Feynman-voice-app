@@ -5,13 +5,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { findTopic, minutesLeft, recordSession, useProfile } from "../data/profile";
 import { colour } from "../theme";
 import { DotWave } from "../ui/Dots";
-import { Backdrop, Glass, Icon, images, Label, PillButton, RoundButton, T } from "../ui/kit";
-import { GlowRing } from "../ui/GlowRing";
+import { Backdrop, Glass, Icon, Label, RoundButton, T } from "../ui/kit";
+import { HoldButton } from "../ui/HoldButton";
 import { LivingLight } from "../ui/LivingLight";
 import { SilverRing } from "../ui/SilverRing";
 import { Press } from "../ui/Press";
@@ -25,13 +24,14 @@ type View3 = SessionView;
 
 const OPENING = "Explain it as if I know nothing. I'll ask when I get lost.";
 
-const STATUS = {
-  loading: "Getting ready",
-  ready: "Tap the ring to start the call",
-  listening: "Listening",
-  thinking: "Thinking of a question. Keep talking to carry on.",
-  speaking: "Your student is asking. Talk or tap to cut in.",
-  error: "Something went wrong",
+// What the button does now (first line) and the next thing to know (second).
+const HINTS = {
+  loading: ["Getting ready", "Hold the button to end the session"],
+  ready: ["Tap to start explaining", "Hold the button to end the session"],
+  listening: ["Listening", "Tap when you pause for a question"],
+  thinking: ["Thinking of a question", "Keep talking if you weren't finished"],
+  speaking: ["Your student is asking", "Tap to answer. Hold to end the session"],
+  error: ["Something went wrong", "Hold the button to end the session"],
 } as const;
 
 // Test switches: which voice speaks and which service hears.
@@ -114,6 +114,7 @@ export default function Session() {
   }, [loop.phase]);
 
   // The ring starts the call, sends the turn early, or cuts the student off.
+  // Holding it ends the session.
   const canTap = loop.phase !== "loading";
   const onRing =
     loop.phase === "listening" ? loop.finish : loop.phase === "thinking" || loop.phase === "speaking" ? loop.interrupt : loop.start;
@@ -138,7 +139,6 @@ export default function Session() {
     save();
     router.back();
   };
-  const close = end;
   // Fenny said goodbye: save and leave, as if they tapped End.
   useEffect(() => {
     if (loop.finished) end();
@@ -147,12 +147,12 @@ export default function Session() {
 
   return (
     <ScreenIn style={styles.root}>
+      <Backdrop />
       {view === "light" && (
         <>
-          <Backdrop source={images.horizon} opacity={0.3} />
           <VoiceGlow level={voiceLevel} height={230} dim />
           <View style={[styles.centre, { paddingTop: insets.top + 120 }]}>
-            <GlowRing size={230} energy={studentEnergy} />
+            <LivingLight size={220} energy={studentEnergy} />
             <Label tone="student" style={{ marginTop: 28 }}>
               Student
             </Label>
@@ -185,7 +185,6 @@ export default function Session() {
 
       {view === "chat" && (
         <>
-          <Backdrop source={images.aurora} opacity={0.9} />
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingTop: insets.top + 130, paddingBottom: 140, paddingHorizontal: 20, gap: 14, flexGrow: 1, justifyContent: "flex-end" }}
@@ -231,9 +230,6 @@ export default function Session() {
             >
               <ViewIcon id={view} />
             </RoundButton>
-            <RoundButton label="Close session" size={44} onPress={close}>
-              <Icon name="close" size={15} />
-            </RoundButton>
           </View>
         </View>
         {showSettings && (
@@ -256,39 +252,25 @@ export default function Session() {
 
       {/* Shared controls */}
       <Glass strong style={[styles.controls, { bottom: Math.max(insets.bottom, 10) }]}>
-        <Press
-          accessibilityRole="button"
-          accessibilityLabel={ringLabel}
-          accessibilityHint="Hold to change the view"
-          disabled={!canTap}
-          onPress={onRing}
-          // Holding opens the view menu; the release after a hold is not a tap.
-          delayLongPress={480}
-          onLongPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            setMenuOpen(true);
-          }}
-          style={{ opacity: canTap ? 1 : 0.4 }}
-        >
-          <SilverRing width={58} height={58}>
-            <Icon name={ringIcon} />
-          </SilverRing>
-        </Press>
-        <View style={{ flex: 1, gap: 4 }}>
+        <HoldButton size={58} label={ringLabel} onTap={canTap ? onRing : undefined} onHold={end}>
+          <View style={{ opacity: canTap ? 1 : 0.4 }}>
+            <SilverRing width={58} height={58}>
+              <Icon name={ringIcon} />
+            </SilverRing>
+          </View>
+        </HoldButton>
+        <View style={{ flex: 1, gap: 2 }}>
+          <T size={15} weight="medium" lines={1}>
+            {loop.phase === "error" && loop.error ? loop.error : HINTS[loop.phase][0]}
+          </T>
           {loop.phase === "listening" ? (
-            <DotWave width={width - 210} height={34} level={loop.isTalking ? 1 : 0.3} tick={tick} />
+            <DotWave width={width - 140} height={26} level={loop.isTalking ? 1 : 0.3} tick={tick} />
           ) : (
-            <T size={14} tone="muted" lines={2}>
-              {loop.notice ?? loop.error ?? STATUS[loop.phase]}
+            <T size={13} tone="muted" lines={2}>
+              {loop.notice ?? HINTS[loop.phase][1]}
             </T>
           )}
-          {lastStat && !showSettings ? (
-            <T size={11.5} tone="dim" lines={1}>
-              {statLine(lastStat)}
-            </T>
-          ) : null}
         </View>
-        <PillButton label="End" variant="solid" onPress={end} style={{ height: 54 }} />
       </Glass>
 
       {menuOpen && (
@@ -315,7 +297,7 @@ const styles = StyleSheet.create({
   centre: { alignItems: "center", paddingHorizontal: 24 },
   top: { position: "absolute", left: 16, right: 16, gap: 14 },
   topRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  side: { width: 96 },
+  side: { width: 52 },
   title: { flex: 1, minWidth: 0, alignItems: "center", gap: 4 },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   segment: { flexDirection: "row", gap: 2, padding: 3, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.05)", alignSelf: "flex-start" },

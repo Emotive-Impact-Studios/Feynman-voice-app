@@ -14,7 +14,7 @@ index 42ce9e8..6430a53 100644
      return registry.allRecorders.values.contains { $0.isRecording }
      #else
 diff --git a/node_modules/expo-audio/ios/AudioStream.swift b/node_modules/expo-audio/ios/AudioStream.swift
-index 1534fe5..3e48718 100644
+index 1534fe5..a3745b9 100644
 --- a/node_modules/expo-audio/ios/AudioStream.swift
 +++ b/node_modules/expo-audio/ios/AudioStream.swift
 @@ -16,7 +16,17 @@ class AudioStream: SharedObject {
@@ -36,7 +36,7 @@ index 1534fe5..3e48718 100644
    private var startTimestamp: AVAudioTime?
  
    private var fileWriter: AudioStreamFileWriter?
-@@ -32,15 +42,43 @@ class AudioStream: SharedObject {
+@@ -32,15 +42,55 @@ class AudioStream: SharedObject {
  
    func start() throws {
      guard !isStreaming else { return }
@@ -52,13 +52,25 @@ index 1534fe5..3e48718 100644
 +#else
 +    options.insert(.allowBluetooth)
 +#endif
-+    try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
++    // .videoChat, not .voiceChat: both tune the mic for speech, but
++    // .voiceChat played the student very faintly, like a phone call held to
++    // the ear. .videoChat is the speakerphone mode.
++    try session.setCategory(.playAndRecord, mode: .videoChat, options: options)
      try session.setPreferredSampleRate(requestedSampleRate)
      try session.setActive(true)
- 
++    routeToSpeakerIfReceiver(session)
++
 +    try startEngine()
 +    isStreaming = true
 +    emitStatus()
++  }
++
++  // Feynman patch: with no headphones or Bluetooth, play out of the
++  // loudspeaker, never the earpiece at the top of the phone.
++  private func routeToSpeakerIfReceiver(_ session: AVAudioSession) {
++    if session.currentRoute.outputs.contains(where: { $0.portType == .builtInReceiver }) {
++      try? session.overrideOutputAudioPort(.speaker)
++    }
 +  }
 +
 +  // Feynman patch: iOS stops an AVAudioEngine when the audio route or
@@ -69,7 +81,7 @@ index 1534fe5..3e48718 100644
 +  // Bumped on every start and stop, so a restart retry left over from an
 +  // earlier run never touches a newer one.
 +  private var generation = 0
-+
+ 
 +  private func startEngine() throws {
      let engine = AVAudioEngine()
      let inputNode = engine.inputNode
@@ -81,7 +93,7 @@ index 1534fe5..3e48718 100644
  
      let targetSampleRate = requestedSampleRate
      let targetChannels = AVAudioChannelCount(requestedChannels)
-@@ -69,9 +107,8 @@ class AudioStream: SharedObject {
+@@ -69,9 +119,8 @@ class AudioStream: SharedObject {
          channels = Int(hardwareFormat.channelCount)
          setupTapWithoutConversion(engine: engine, inputNode: inputNode, format: hardwareFormat)
          self.audioEngine = engine
@@ -92,7 +104,7 @@ index 1534fe5..3e48718 100644
          return
        }
        self.converter = conv
-@@ -98,13 +135,71 @@ class AudioStream: SharedObject {
+@@ -98,13 +147,72 @@ class AudioStream: SharedObject {
      }
  
      self.audioEngine = engine
@@ -130,6 +142,7 @@ index 1534fe5..3e48718 100644
 +    tearDownEngine()
 +    do {
 +      try startEngine()
++      routeToSpeakerIfReceiver(AVAudioSession.sharedInstance())
 +    } catch {
 +      // The new route may not be ready yet: try again shortly, then give up.
 +      if attempt < 3 {
@@ -166,7 +179,7 @@ index 1534fe5..3e48718 100644
      audioEngine?.inputNode.removeTap(onBus: 0)
      audioEngine?.stop()
      audioEngine = nil
-@@ -116,11 +211,7 @@ class AudioStream: SharedObject {
+@@ -116,11 +224,7 @@ class AudioStream: SharedObject {
      // Auto-finalize any in-progress file recording.
      // removeTap above ensures no more data is dispatched to fileWriterQueue;
      // syncing on the queue drains any appends already in flight before closing the writer.
@@ -179,7 +192,7 @@ index 1534fe5..3e48718 100644
    }
  
    func startFileRecording(url: URL, format: AudioStreamFileFormat) throws -> String {
-@@ -285,3 +376,19 @@ internal final class AudioStreamException: GenericException<String> {
+@@ -285,3 +389,19 @@ internal final class AudioStreamException: GenericException<String> {
      param
    }
  }
