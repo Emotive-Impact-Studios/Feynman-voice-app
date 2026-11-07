@@ -1,6 +1,7 @@
 // Bundles the functions into Vercel's Build Output API layout:
 //   .vercel/output/functions/api/turn.func/index.mjs
 //   .vercel/output/functions/api/live-turn.func/index.mjs (streams its response)
+//   .vercel/output/functions/api/analyse.func, show-me.func (after the call)
 // One self-contained file, so workspace packages written in TypeScript and
 // the eSpeak build inside `phonemizer` all come along without extra config.
 import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -44,6 +45,8 @@ cpSync(fn, `${out}/functions/api/look.func`, { recursive: true });
 const readPage = `${out}/functions/api/read-page.func`;
 cpSync(fn, readPage, { recursive: true });
 writeFileSync(`${readPage}/.vc-config.json`, JSON.stringify({ ...config, maxDuration: 60 }, null, 2));
+// After the call: gap analysis and "Show me". Same bundle again.
+for (const name of ["analyse", "show-me"]) cpSync(fn, `${out}/functions/api/${name}.func`, { recursive: true });
 // The iPhone voice model, served as static files for the app to download.
 if (process.env.SKIP_PHONON_BUNDLE !== "1") {
   const { out: dir, files } = await writePhononBundle(`${out}/static`);

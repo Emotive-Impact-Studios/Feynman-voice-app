@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { setFinishedCall } from "../data/lastCall";
 import { findTopic, recordSession, useProfile } from "../data/profile";
 import { colour } from "../theme";
 import { DotWave } from "../ui/Dots";
@@ -51,10 +52,13 @@ function clock(seconds: number) {
 
 export default function Session() {
   // A review card opens the session on its own topic and question.
-  const params = useLocalSearchParams<{ topic?: string; prompt?: string; goal?: string }>();
+  // A gap card opens it on that gap (focus), with "Go on, tell me in your own words."
+  const params = useLocalSearchParams<{ topic?: string; prompt?: string; goal?: string; focus?: string; focusId?: string }>();
   const topic = params.topic?.trim() || "Anything you like";
   // Their goal for the topic, in their words, steers Fenny's questions.
   const [goal] = useState(() => params.goal?.trim() || findTopic(topic)?.goal || "");
+  const focus = params.focus?.trim() || "";
+  // The focus travels separately, so the topic's key ideas stay the same.
   const brainTopic = goal ? `${topic}. What they want to be able to explain: ${goal}` : topic;
   const profile = useProfile();
   const opening = params.prompt ?? OPENING;
@@ -68,7 +72,7 @@ export default function Session() {
   const [fast] = useState(() => !!profile.fastReplies);
   // Pages they scanned for this topic: Fenny uses them to spot what they leave out.
   const [notes] = useState(() => getNotes(topic));
-  const loop = useLiveCall(brainTopic, { voice, ears, fast, notes });
+  const loop = useLiveCall(brainTopic, { voice, ears, fast, notes, focus: focus || undefined });
   // Faster-replies trial: how long the last reply took, so we can compare.
   const lastStats = fast ? loop.stats[loop.stats.length - 1] : undefined;
 
@@ -126,8 +130,8 @@ export default function Session() {
   const ringLabel =
     loop.phase === "listening" ? "Done, ask me" : loop.phase === "thinking" || loop.phase === "speaking" ? "Cut in" : "Start the call";
   // Stop the microphone, any pending turn and any reply before leaving.
-  // Save the topic and the speaking time, then back to Today. (Session
-  // feedback returns with gap analysis, build step 4.)
+  // Save the topic and the speaking time, then on to the results (gap
+  // analysis), or back to Today if nothing was said.
   // Saved once, whether you tap End, close, or go back with the system.
   const saved = useRef(false);
   const latest = useRef({ spoken, questions: 0, ideas: [] as { id: string; idea: string; label?: string }[], covered: [] as string[] });
@@ -142,7 +146,19 @@ export default function Session() {
   const end = () => {
     loop.cancel();
     save();
-    router.back();
+    if (loop.turns.some((t) => t.speaker === "learner" && t.text.trim())) {
+      setFinishedCall({
+        topic,
+        goal,
+        focus: focus || undefined,
+        focusId: params.focusId,
+        turns: loop.turns,
+        seconds: latest.current.spoken,
+        shakiest: loop.shakiest ?? undefined,
+        missedIdeas: loop.ideas.filter((i) => !loop.covered.includes(i.id)).map((i) => i.idea),
+      });
+      router.replace("/results");
+    } else router.back();
   };
   // Teach me: the call steps aside for a short lesson on the stuck idea.
   const [teaching, setTeaching] = useState<{ idea: string; said?: string } | null>(null);

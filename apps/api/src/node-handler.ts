@@ -3,6 +3,7 @@
 // sentence by sentence.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { handleLiveTurn } from "./live";
+import { handleAnalyse, handleShowMe } from "./review";
 import { handleTurn } from "./turn";
 import { handleLesson } from "./lesson";
 import { handleSpeak } from "./speak";
@@ -16,6 +17,8 @@ const ROUTES: Record<string, (req: Request) => Promise<Response>> = {
   "/api/speak": (r) => handleSpeak(r),
   "/api/look": (r) => handleLook(r),
   "/api/read-page": (r) => handleReadPage(r),
+  "/api/analyse": (r) => handleAnalyse(r),
+  "/api/show-me": (r) => handleShowMe(r),
 };
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {

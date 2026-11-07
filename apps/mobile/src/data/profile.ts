@@ -3,6 +3,7 @@
 // explained and the speaking time you've used. Kept in one small JSON file.
 import { useSyncExternalStore } from "react";
 import { File, Paths } from "expo-file-system";
+import type { Analysis, Gap, Strength } from "../api";
 
 /** Prototype allowance, until the minutes ledger and plans exist (build steps 5 and 7). */
 export const PROTOTYPE_MINUTES = 200;
@@ -23,6 +24,12 @@ export interface TopicRecord {
   known?: string[];
   /** Ideas first explained in the latest session, so the topic page can light them up. */
   fresh?: string[];
+  /** What they said the first time they explained it, for "then and now". */
+  firstAttempt?: string;
+  /** Gaps from gap analysis, newest first. Cleared ones stay, marked. */
+  gaps?: SavedGap[];
+  /** What came across clearly, in their words, newest first. */
+  strengths?: Strength[];
 }
 
 export interface KeyIdea {
@@ -31,6 +38,13 @@ export interface KeyIdea {
   idea: string;
   /** A short name for it that doesn't give the answer away. */
   label?: string;
+}
+
+export interface SavedGap extends Gap {
+  id: string;
+  at: number;
+  /** Set once they have explained it clearly in a later call. */
+  clearedAt?: number;
 }
 
 export interface Profile {
@@ -162,6 +176,37 @@ function mergeIdeas(old: TopicRecord | undefined, map: { ideas: KeyIdea[]; cover
   const before = same ? (old?.known ?? []) : [];
   const fresh = map.covered.filter((id) => !before.includes(id));
   return { ideas: map.ideas, known: [...before, ...fresh], fresh };
+}
+
+const MAX_GAPS = 30;
+const MAX_STRENGTHS = 30;
+
+/**
+ * Save what gap analysis found for a topic. New gaps go on top; a gap this
+ * call went back over is marked cleared if they explained it this time.
+ */
+export function saveAnalysis(title: string, a: Analysis, opts: { focusId?: string; attempt?: string } = {}): SavedGap[] {
+  const old = findTopic(title);
+  if (!old) return [];
+  const now = Date.now();
+  const fresh: SavedGap[] = a.gaps.map((g, i) => ({ ...g, id: `${now}-${i}`, at: now }));
+  const kept = (old.gaps ?? []).map((g) => (g.id === opts.focusId && a.focusExplained ? { ...g, clearedAt: now } : g));
+  const seen = new Set(fresh.map((g) => g.title.toLowerCase()));
+  const rec: TopicRecord = {
+    ...old,
+    gaps: [...fresh, ...kept.filter((g) => !seen.has(g.title.toLowerCase()))].slice(0, MAX_GAPS),
+    strengths: [...a.strengths, ...(old.strengths ?? [])].slice(0, MAX_STRENGTHS),
+    firstAttempt: old.firstAttempt ?? opts.attempt?.slice(0, 3000),
+  };
+  set({ ...state, topics: state.topics.map((t) => (t === old ? rec : t)) });
+  return fresh;
+}
+
+/** Gaps still to explain again, across topics, newest first. */
+export function openGaps(p: Profile): { topic: string; gap: SavedGap }[] {
+  return p.topics
+    .flatMap((t) => (t.gaps ?? []).filter((g) => !g.clearedAt).map((gap) => ({ topic: t.title, gap })))
+    .sort((a, b) => b.gap.at - a.gap.at);
 }
 
 export function findTopic(title: string): TopicRecord | undefined {

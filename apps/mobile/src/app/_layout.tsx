@@ -30,6 +30,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colour.ground }, animation: "fade" }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="session" options={{ animation: "fade", gestureEnabled: false }} />
+        <Stack.Screen name="results" options={{ animation: "fade", gestureEnabled: false }} />
         <Stack.Screen name="intro" options={{ animation: "fade", gestureEnabled: false }} />
         <Stack.Screen name="topic" options={{ presentation: "transparentModal", animation: "none" }} />
         <Stack.Screen name="map" />

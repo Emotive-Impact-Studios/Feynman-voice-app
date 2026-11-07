@@ -45,6 +45,8 @@ export interface CallSettings {
   fast?: boolean;
   /** Their scanned notes on this topic, if any. */
   notes?: string;
+  /** A gap they are going back over (a call opened from a gap card). */
+  focus?: string;
 }
 
 export interface CallTurnStats {
@@ -69,6 +71,12 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [stats, setStats] = useState<CallTurnStats[]>([]);
   const [liveQuestion, setLiveQuestion] = useState<string | null>(null);
+  // Their answer to "which bit felt shakiest?" (the first wrap turn's transcript).
+  const [shakiest, setShakiest] = useState<string | null>(null);
+  const shakiestRef = useRef<string | null>(null);
+  // The engine's move on the last finished turn: only a wrap straight after
+  // "close" (which asks the shakiest question) carries their answer.
+  const lastMoveRef = useRef<string | null>(null);
   const [liveSpeaking, setLiveSpeaking] = useState(0);
   const [isTalking, setIsTalking] = useState(false);
   /** Fenny has said goodbye and finished speaking: the call is over. */
@@ -421,6 +429,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     let wrapped = false;
     let waited = false;
     sent.current = { id, recorded: false, seconds: speakingSeconds, coveredBefore: coveredRef.current };
+    let heard = "";
     const markStart = () => {
       if (id !== turnId.current) return;
       if (!firstWordMs) firstWordMs = Date.now() - quietAt;
@@ -432,6 +441,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
 
     const onEvent = (e: LiveEvent) => {
       if (id !== turnId.current) return;
+      if (e.type === "transcript") heard = e.text;
       if (e.type === "sentence") {
         spoken = spoken ? `${spoken} ${e.text}` : e.text;
         setLiveQuestion(spoken);
@@ -483,7 +493,16 @@ export function useLiveCall(topic: string, settings: CallSettings) {
           });
         }
       }
-      if (e.type === "engine" && e.move === "wrap") wrapped = true;
+      if (e.type === "engine" && e.move === "wrap") {
+        wrapped = true;
+        // Wrap only follows the close, so the first wrap's turn is their answer
+        // to "which bit felt shakiest?". A later wrap is just a goodbye.
+        if (shakiestRef.current === null && lastMoveRef.current === "close" && heard.trim()) {
+          shakiestRef.current = heard.trim();
+          setShakiest(heard.trim());
+        }
+      }
+      if (e.type === "engine" && e.move && e.move !== "wait") lastMoveRef.current = e.move;
       // The server heard them stop mid-thought: keep listening instead of asking.
       if (e.type === "engine" && e.move === "wait") waited = true;
       if (e.type === "teach_offer") setTeach({ idea: e.gap.title, open: false });
@@ -505,6 +524,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
           // After two holds in a row the server must answer.
           features: waits.current < MAX_WAITS ? ["wait", "teach"] : ["teach"],
           notes: settingsRef.current.notes,
+          focus: settingsRef.current.focus,
         },
         onEvent,
         abort.signal,
@@ -618,6 +638,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
     ideas,
     covered,
     got,
+    shakiest,
     isTalking,
     start,
     /** "Done, ask me": send now instead of waiting for the pause. */

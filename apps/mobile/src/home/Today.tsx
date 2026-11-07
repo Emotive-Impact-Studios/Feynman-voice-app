@@ -1,25 +1,47 @@
 // Today, from the canvas board "THE APP: start here". One way in, your last
-// topic to pick up, and reviews (empty until gap analysis and the review
-// queue exist, build steps 4 and 6).
+// topic to pick up, and the gaps from your sessions to explain again. (The
+// spaced review queue, build step 6, will decide which day each comes back.)
+import { useState } from "react";
 import { Press } from "../ui/Press";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { useReducedMotion } from "react-native-reanimated";
 import Svg, { Circle, Path } from "react-native-svg";
-import { ago, minutesLeft, softStreak, todaySentence, type Profile } from "../data/profile";
+import { ago, dayNumber, minutesLeft, openGaps, softStreak, todaySentence, type Profile, type SavedGap } from "../data/profile";
 import { colour, font } from "../theme";
 import { Glass, Icon, Label, PillButton, T } from "../ui/kit";
 import { riseIn, STAGGER_MS } from "../ui/motion";
 import { Soft } from "../ui/Soft";
 import { homeStyles } from "./styles";
 
-export function Today({ profile, top, bottom, onNew, onTopic, onLook }: { profile: Profile; top: number; bottom: number; onNew: () => void; onTopic: (t: string) => void; onLook?: () => void }) {
+export function Today({
+  profile,
+  top,
+  bottom,
+  onNew,
+  onTopic,
+  onGap,
+  onLook,
+}: {
+  profile: Profile;
+  top: number;
+  bottom: number;
+  onNew: () => void;
+  onTopic: (t: string) => void;
+  onGap: (topic: string, gap: SavedGap) => void;
+  onLook?: () => void;
+}) {
   const last = profile.topics[0];
   const streak = softStreak(profile.days);
+  const gaps = openGaps(profile);
+  const [showAll, setShowAll] = useState(false);
+  // "It caught N gaps": the gaps found on the day of the last session.
+  const lastDay = profile.topics[0] ? dayNumber(profile.topics[0].at) : -1;
+  const caught = profile.topics.flatMap((t) => t.gaps ?? []).filter((g) => dayNumber(g.at) === lastDay).length;
   return (
     <ScrollView contentContainerStyle={[homeStyles.scroll, { paddingTop: top + 70, paddingBottom: bottom + 130 }]} showsVerticalScrollIndicator={false}>
       <In d={1}>
         <Text style={styles.sentence} accessibilityRole="header">
-          {todaySentence(profile).map((part, i) =>
+          {todaySentence(profile, { caught, due: gaps.length }).map((part, i) =>
             part.hl ? (
               <Text key={i} style={[styles.hl, part.hl === "gap" && styles.hlGap]}>
                 {part.text}
@@ -79,12 +101,44 @@ export function Today({ profile, top, bottom, onNew, onTopic, onLook }: { profil
       )}
 
       <In d={4}>
-        <Label style={{ marginTop: 22 }}>Due for review</Label>
-        <T size={15} tone="soft" style={{ marginTop: 10 }}>
-          {profile.topics.length
-            ? "Nothing to say again yet. Gaps from your sessions will come back here once gap checking is built."
-            : "Nothing yet. Explain your first topic and this fills up."}
-        </T>
+        <Label style={{ marginTop: 22 }}>Explain again</Label>
+        {gaps.length === 0 ? (
+          <T size={15} tone="soft" style={{ marginTop: 10 }}>
+            {profile.topics.length ? "Nothing to go over. Gaps from your sessions come back here." : "Nothing yet. Explain your first topic and this fills up."}
+          </T>
+        ) : (
+          <Glass style={styles.list}>
+            {(showAll ? gaps : gaps.slice(0, 5)).map(({ topic, gap }, i) => (
+              <Press
+                key={gap.id}
+                onPress={() => onGap(topic, gap)}
+                accessibilityRole="button"
+                accessibilityLabel={`Explain again: ${gap.title}`}
+                style={[styles.gapRow, i > 0 && styles.divider]}
+              >
+                <View style={[styles.dot, gap.kind === "skipped" ? { borderWidth: 1.5, borderColor: colour.student } : { backgroundColor: colour.gap }]} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <T size={12} style={{ color: gap.kind === "skipped" ? colour.student : "#F5B09A" }}>
+                    {gap.named ? "You named it" : gap.kind === "skipped" ? "Skipped" : gap.kind === "muddled" ? "Not quite" : "Gap"} · {topic}
+                  </T>
+                  <T size={15} lines={1}>
+                    {gap.title}
+                  </T>
+                </View>
+                <T size={13} tone="muted">
+                  {ago(gap.at)}
+                </T>
+              </Press>
+            ))}
+            {gaps.length > 5 && (
+              <Press onPress={() => setShowAll((v) => !v)} accessibilityRole="button" style={[styles.gapRow, styles.divider, { justifyContent: "center" }]}>
+                <T size={14} tone="soft">
+                  {showAll ? "Show fewer" : `Show all ${gaps.length}`}
+                </T>
+              </Press>
+            )}
+          </Glass>
+        )}
       </In>
     </ScrollView>
   );
@@ -135,4 +189,8 @@ const styles = StyleSheet.create({
   start: { marginTop: 18, height: 64, borderRadius: 999, flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 22, paddingRight: 6 },
   look: { marginTop: 10, height: 50, borderRadius: 999, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 20 },
   card: { marginTop: 10, borderRadius: 24, padding: 16, paddingBottom: 14 },
+  list: { marginTop: 10, borderRadius: 24 },
+  gapRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, paddingHorizontal: 16 },
+  divider: { borderTopWidth: 1, borderTopColor: colour.hairlineSoft },
+  dot: { width: 8, height: 8, borderRadius: 4 },
 });
