@@ -4,7 +4,6 @@
 // The learner taps the button to cut in (talking over the student is ignored,
 // because on the loudspeaker the mic hears the student too).
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Platform } from "react-native";
 import {
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
@@ -13,10 +12,11 @@ import {
 } from "expo-audio";
 import { BargeIn, concatFloat32, EndOfTurn, FAST_TURN_QUIET_SECONDS, fromBase64, pcm16ToFloat32, quietAfter, Resampler, SpeechMeter, toBase64, TURN_QUIET_SECONDS } from "@feynman/audio";
 import { encodeWav, SAMPLE_RATE as KITTEN_RATE, synthesise } from "@feynman/kitten-tts";
-import { Phonon, PHONON_DEFAULT_VOICE } from "../../modules/phonon";
-import { PHONON_BUNDLE_URL, speakLine, streamLiveTurn, type LiveEars, type LiveEvent, type LiveVoice, type Turn } from "../api";
+import { Phonon } from "../../modules/phonon";
+import { speakLine, streamLiveTurn, type LiveEars, type LiveEvent, type LiveVoice, type Turn } from "../api";
 import { loadKitten } from "../kitten";
 import { ClipQueue } from "./clipQueue";
+import { phononAvailable, phononIsReady, preparePhonon } from "./phononWarm";
 
 const RATE = 16000;
 const MAX_TURN_SECONDS = 60;
@@ -62,8 +62,7 @@ export interface CallTurnStats {
   quietSeconds: number;
 }
 
-/** Phonon runs on iPhone builds only. Elsewhere the on-device voice is Kitten. */
-export const phononAvailable = Platform.OS === "ios" && Phonon != null;
+export { phononAvailable };
 
 export function useLiveCall(topic: string, settings: CallSettings) {
   const [phase, setPhaseState] = useState<CallPhase>("loading");
@@ -137,7 +136,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
   const waits = useRef(0);
   const request = useRef<AbortController | null>(null);
   const clips = useRef(new ClipQueue());
-  const phononReady = useRef(false);
+  const phononReady = useRef(phononIsReady());
   const callOn = useRef(false);
   // Speaking seconds of every turn the server has heard, counted when its
   // transcript arrives, so ending mid-reply still keeps them.
@@ -259,8 +258,8 @@ export function useLiveCall(topic: string, settings: CallSettings) {
         setNotice(fraction < 1 ? `Downloading the voice, ${Math.round(fraction * 100)}%` : "Preparing the voice"),
       );
       try {
-        if (!PHONON_BUNDLE_URL) throw new Error("Set EXPO_PUBLIC_API_URL to download the voice");
-        await Phonon!.prepare(PHONON_BUNDLE_URL, PHONON_DEFAULT_VOICE);
+        // Usually already under way since the app opened.
+        await preparePhonon();
         phononReady.current = true;
       } finally {
         sub.remove();

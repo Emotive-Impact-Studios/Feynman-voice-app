@@ -5,6 +5,7 @@
 import { Press } from "../ui/Press";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { minutesLeft, PROTOTYPE_MINUTES, setExplainLevel, setFastReplies, type ExplainPref, setSessionView, setVoice, softStreak, type Profile, type VoicePref } from "../data/profile";
+import { warmPhononOnLaunch } from "../live/phononWarm";
 import { ViewIcon, VIEWS } from "../live/ViewMenu";
 import { colour } from "../theme";
 import { MinutesRing } from "../ui/Dots";
@@ -118,7 +119,10 @@ export function Me({ profile, top, bottom, onReplayIntro }: { profile: Profile; 
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on }}
                   accessibilityLabel={`${v.label}, ${v.note}`}
-                  onPress={() => setVoice(v.id)}
+                  onPress={() => {
+                    setVoice(v.id);
+                    warmPhononOnLaunch(v.id);
+                  }}
                   style={[styles.view, styles.voice, on && styles.viewOn]}
                 >
                   <T size={13.5} tone={on ? "text" : "muted"}>

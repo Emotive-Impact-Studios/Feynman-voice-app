@@ -54,7 +54,8 @@ export function SceneView({
     v.value += (target - v.value) * Math.min(1, dt * 5);
     if (moving && moving.value < 1) return;
     t.value += dt;
-    clock.value += dt * speedAt(changes, v.value);
+    const speed = speedAt(changes, v.value);
+    clock.value += dt * (Number.isFinite(speed) ? speed : 1);
     if (!build && intro.value < 1) intro.value = Math.min(1, intro.value + dt * 0.55);
   });
 
@@ -62,7 +63,13 @@ export function SceneView({
   const picture = useDerivedValue(() =>
     createPicture((canvas) => {
       "worklet";
-      drawScene(canvas, scene, changes, { t: t.value, T: clock.value, v: v.value, intro: intro.value, still: reduce, hand: HAND_DRAWN }, font);
+      // This runs on the UI thread, where an error closes the app. A drawing
+      // that cannot draw is left blank instead.
+      try {
+        drawScene(canvas, scene, changes, { t: t.value, T: clock.value, v: v.value, intro: intro.value, still: reduce, hand: HAND_DRAWN }, font);
+      } catch {
+        // Nothing drawn this frame.
+      }
     }),
   );
 
