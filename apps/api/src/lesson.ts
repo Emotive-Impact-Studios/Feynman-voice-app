@@ -4,7 +4,9 @@
 // and explains it to Fenny. Fenny never teaches; this lesson is the notes
 // speaking, shown on screen.
 //
-// Request:  { topic, idea, notes?, said? }   said = what the learner tried to say
+// Request:  { topic, idea, notes?, said?, level? }   said = what the learner tried to say
+//           level = "simple" (a five year old could follow), "standard" (a bright
+//           12 year old could follow, the default) or "deep" (university terms)
 // Response: { lesson, model, cached, cost, timingMs }
 //
 // Built on Claude (LESSON_BRAIN=claude, the default once ANTHROPIC_API_KEY is
@@ -72,18 +74,33 @@ export interface Lesson {
   explainBack: string;
 }
 
+export const LEVELS = ["simple", "standard", "deep"] as const;
+export type Level = (typeof LEVELS)[number];
+
+/** How simply to explain, told to the writer with each lesson so the instructions stay cached. */
+export const LEVEL_TEXT: Record<Level, string> = {
+  simple:
+    "Level: simplest. Write it so a five year old could follow: tiny everyday words, short sentences, one concrete everyday comparison in each bite, and no technical words at all (say what the thing does instead). Keep only the core of the idea, and keep it true. Puzzles are easy checks of that core.",
+  standard:
+    "Level: plain. Write it so a bright 12 year old could follow: short everyday words, an everyday comparison when it helps, and any technical word explained in plain words the first time it appears. Keep it accurate to university level: simple words, not a simpler truth.",
+  deep:
+    "Level: university. The student already gets the basic idea, so go one layer deeper: use the proper technical terms (each explained briefly), show the mechanism and why it works, and include one nuance or common misconception. Still short, plain sentences. Puzzles test the deeper detail.",
+};
+
 export interface LessonRequest {
   topic: string;
   idea: string;
   notes?: string;
   said?: string;
+  /** How simply to explain. Defaults to "standard". */
+  level?: Level;
 }
 
 const SYSTEM = `You write tiny lessons for Fenny, a learning app for UK university students. The student tried to explain an idea and got stuck, so before they try again they get a bite-sized lesson, like Brilliant or Duolingo, then they explain it back in their own words.
 
 Write 2 or 3 bites that build up to the idea. Each bite:
 - title: 2 to 5 words.
-- text: at most 45 words. Plain, warm, concrete. One thought per bite. Use an everyday comparison when it helps. Explain any technical word the first time it appears.
+- text: at most 45 words. Plain, warm, concrete. One thought per bite. Pitch every bite, the recap and the puzzles at the Level given with the request, the Feynman way.
 - picture: a fallback diagram, used when scene is null or cannot be drawn. Pick the simplest diagram that shows the bite, and give its labels (2 to 5, each 1 to 3 words). flow = things in sequence, labels in order. compare = two sides, labels [left, right] or [left, right, what differs]. cycle = a loop, labels in order. layers = a stack from top to bottom. parts = a whole then its parts, first label is the whole. none = no diagram helps.
 - quote: when notes are given, copy a short phrase (5 to 25 words) from the notes, word for word, that backs this bite up. With no notes, use "".
 - puzzle: one quick check of that bite, answerable in a few seconds. Use a mix of kinds across the lesson, and make the last one the hardest.
@@ -94,7 +111,7 @@ Write 2 or 3 bites that build up to the idea. Each bite:
   match: 3 pairs; options are the left items, answer the matching right items in the same order. Every left item and every right item must be different, because each one is a card the student taps once.
   why: one short sentence on why the answer is right.
 
-Then recap (one sentence that ties the bites together) and explainBack (the question Fenny, a curious student, asks when they return, in under 15 words).
+Then recap (one sentence that ties the bites together, just as plain) and explainBack (the question Fenny, a curious student, asks when they return, in under 15 words).
 
 Rules:
 - Teach only what the notes say when notes are given. Never add facts the notes do not support. With no notes, stick to standard first-year university understanding.
@@ -252,6 +269,7 @@ function userMessage(req: LessonRequest, retry?: string): string {
   return [
     `Topic: ${req.topic}`,
     `The idea they need: ${req.idea}`,
+    LEVEL_TEXT[req.level ?? "standard"],
     req.said?.trim() ? `What they tried to say: ${req.said.trim()}` : "",
     notes ? `<notes>\n${notes}\n</notes>` : "No notes. Use standard first-year university understanding.",
     retry ? `Your last try had a problem: ${retry} Please fix it.` : "",
@@ -334,7 +352,7 @@ const cache = new Map<string, LessonResult>();
 export async function buildLesson(env: Env, req: LessonRequest, fetchImpl?: typeof fetch): Promise<LessonResult & { cached: boolean }> {
   const brain = lessonBrain(env);
   const key = createHash("sha256")
-    .update([brain, req.topic.trim().toLowerCase(), req.idea.trim().toLowerCase(), req.notes?.trim() ?? ""].join("\0"))
+    .update([brain, req.level ?? "standard", req.topic.trim().toLowerCase(), req.idea.trim().toLowerCase(), req.notes?.trim() ?? ""].join("\0"))
     .digest("hex");
   const hit = cache.get(key);
   if (hit) return { ...hit, cached: true };
@@ -389,6 +407,7 @@ export async function handleLesson(req: Request, env: Env = process.env, fetchIm
   }
   if (!body.topic?.trim() || !body.idea?.trim()) return json(400, { error: "topic and idea are required" });
   if ((body.notes?.length ?? 0) > 200_000) return json(413, { error: "Notes are too long" });
+  if (body.level !== undefined && !LEVELS.includes(body.level)) return json(400, { error: `level must be one of ${LEVELS.join(", ")}` });
   const brain = lessonBrain(env);
   if (brain === "claude" && !env.ANTHROPIC_API_KEY && !env.OPENAI_API_KEY) return json(500, { error: "ANTHROPIC_API_KEY is not set on the server" });
   if (brain === "openai" && !env.OPENAI_API_KEY) return json(500, { error: "OPENAI_API_KEY is not set on the server" });

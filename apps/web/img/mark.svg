@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs><filter id="b1" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="14"/></filter><filter id="b2" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="5"/></filter><filter id="b3" filterUnits="userSpaceOnUse" x="0" y="0" width="200" height="200"><feGaussianBlur stdDeviation="7"/></filter>
+   <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F4F8FF"/><stop offset=".5" stop-color="#6E8FBF"/><stop offset="1" stop-color="#E6EEFA"/></linearGradient></defs>
+   <ellipse cx="100" cy="100" rx="56" ry="62" fill="none" stroke="#7FA3D1" stroke-width="22" opacity=".35" filter="url(#b1)"/>
+   <ellipse cx="100" cy="100" rx="56" ry="62" fill="none" stroke="#A9C2E8" stroke-width="7" opacity=".6" filter="url(#b2)"/>
+   <ellipse cx="100" cy="100" rx="56" ry="62" fill="none" stroke="url(#rg)" stroke-width="3.2"/>
+   <ellipse class="spark" cx="100" cy="38" rx="16" ry="6" fill="#fff" opacity=".9" filter="url(#b3)"/>
+   <ellipse class="spark" cx="100" cy="162" rx="13" ry="5" fill="#fff" opacity=".75" filter="url(#b3)"/></svg>

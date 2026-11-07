@@ -19,7 +19,7 @@ import { notesBlock, STUDENT_SYSTEM_PROMPT } from "./prompt";
 import { SentenceSplitter } from "./sentences";
 import { speakable } from "./speakable";
 import { toSpeechChunks } from "./speech";
-import { engineTurn } from "./engine/engine";
+import { engineTurn, pickFresh, seedOf } from "./engine/engine";
 import { keyIdeas } from "./engine/ideas";
 import { unfinished } from "./engine/policy";
 
@@ -175,6 +175,8 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         // 3. Ask the question, streaming.
         const t1 = Date.now();
         let question: string;
+        /** The engine's move, sent back in "done" so the phone can hand it back next turn. */
+        let engineMove: string | undefined;
         // The learner stopped mid-thought: keep listening instead of answering.
         // A phone that sends "wait" holds the turn and resends it longer;
         // older phones get a short nudge to carry on.
@@ -190,7 +192,9 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
         } else if (holdOn) {
           const { ideas, usage: ideasUsage } = await ideasReady!;
           if (ideasUsage) lines.push(engineCost(fennyModel, ideasUsage, fp));
-          question = "Go on.";
+          const mine = history.filter((t) => t.speaker === "student").map((t) => t.text);
+          question = pickFresh(["Go on.", "Keep going.", "Mm, carry on.", "I'm listening."], mine.slice(-4), seedOf(transcript));
+          engineMove = "listen";
           speak(question);
           send({ type: "engine", move: "listen", covered: [], ideas });
         } else if (useEngine) {
@@ -207,6 +211,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
             limits: { canShowMe: (body.features ?? []).includes("show_me"), canTeach: (body.features ?? []).includes("teach") },
           });
           question = r.say;
+          engineMove = r.move;
           // Sentence by sentence, so the phone can leave a breath between a
           // reaction ("Oh, nice.") and the question that follows it.
           // Even a short reaction gets its own piece here, so it lands on its own.
@@ -263,6 +268,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
           type: "done",
           transcript,
           question: waited ? "" : speakable(question) || "Sorry, could you say that again?",
+          ...(engineMove ? { move: engineMove } : {}),
           voice,
           stt,
           brain,

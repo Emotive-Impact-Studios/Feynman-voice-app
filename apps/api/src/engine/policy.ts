@@ -2,6 +2,8 @@
 // where the call is from the history alone, so the server stays stateless.
 import type { PastTurn } from "../gemini";
 
+export const MOVES = ["listen", "next", "why", "what_if", "puzzled", "build_on_theirs", "plain_words", "simpler", "offer_show_me", "show_me", "offer_teach", "teach", "let_go", "retell", "close", "wrap"] as const;
+
 export type Move =
   | "listen"
   | "next"
@@ -27,6 +29,8 @@ const STUCK = /\b(i\s*(don'?t|do not)\s*(really\s*)?know|not (really )?sure|no i
 /** "Can we skip that?": move on, not a sign they're stuck. Not when negated ("don't skip this"). */
 const SKIP = /^(?!.*\b(don'?t|do not|not|never)\s+(skip|pass|move on)\b)\s*(\w+[,.]?\s+){0,3}?(i'?ll (pass|skip)|pass on (that|this)|(can|could) we (skip|move on)|(i'?d|i would|i want to|i wanna)( like to)? (skip|pass|move on)(?=\s*(on )?((this|that)( one| question| bit)?)?[\s,]*(please)?\s*[.!?]*$)|let'?s (skip|move on)|(just )?skip (that|this)( one)?( please)?\s*[.!?]*$|next question|(pass|skip)\s*[.!,]*$)/i;
 const YES = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|please|go on|go on then|alright|sounds good)\b/i;
+/** A yes to an offer is short ("Yeah, go on"). "Okay, the leaves have chlorophyll..." is them carrying on explaining. */
+const saysYes = (t: string) => YES.test(t) && t.trim().split(/\s+/).length <= 6;
 const TELL_ME = /\b(just tell me|can you (just )?(tell|explain)|explain it to me|what('?s| is) the answer|show me)\b/i;
 /** "Hang on, let me think": not the retell itself. */
 const HESITATE = /\b(hang on|hold on|(need|want|have) (a (bit|little) )?(more )?time|a (bit|little) more time|give me a (sec|second|moment|minute)|one (sec|second|moment)|let me think|thinking about it|bear with me|wait a (sec|second|moment))\b/i;
@@ -39,10 +43,17 @@ export const OFFER_TEACH_LINE = "No worries, this sounds new to you. Tap Teach m
 export const TEACH_LINE = "Great. Have a go at learning it, then come back and tell me in your own words.";
 export const LEARN_FIRST_LINE = "No worries, this sounds new to you. Have a read of your notes first, then come back and teach me.";
 
-/** Guess which move an earlier Fenny line was, from its words. */
+/** The move an earlier Fenny line made: the one the phone sent back, or a guess from its words. */
+export function moveOfTurn(t: PastTurn): Move {
+  return t.move && (MOVES as readonly string[]).includes(t.move) ? (t.move as Move) : moveOf(t.text);
+}
+
+/** Guess which move an earlier Fenny line was, from its words. Older phones don't send the move back. */
 export function moveOf(line: string): Move {
   const s = line.toLowerCase();
   if (s.includes("quick explanation")) return "offer_show_me";
+  // The Teach me button, named with its capitals. Read before the goodbye's "come back and teach me".
+  if (/\bTeach me\b/.test(line) && !/have a go at learning/.test(s)) return "offer_teach";
   if (s.includes("have a read of your notes") || s.includes("come back and teach me")) return "wrap";
   if (s.includes("have a read")) return "show_me";
   if (s.includes("tap teach me")) return "offer_teach";
@@ -72,6 +83,8 @@ export interface CallState {
   stuckNow: boolean;
   /** Times Fenny has already let a stuck bit go this call. */
   letGos: number;
+  /** Teach me offers they didn't take, this call. */
+  teachOffersIgnored: number;
   lastMove?: Move;
   probedLastTurn: boolean;
   retellAsked: boolean;
@@ -91,7 +104,7 @@ export interface CallState {
 }
 
 export function callState(history: PastTurn[], transcript: string): CallState {
-  const fenny = history.filter((t) => t.speaker === "student").map((t) => moveOf(t.text));
+  const fenny = history.filter((t) => t.speaker === "student").map(moveOfTurn);
   const learner = [...history.filter((t) => t.speaker === "learner").map((t) => t.text), transcript];
   let stuckStreak = 0;
   for (let i = learner.length - 1; i >= 0 && STUCK.test(learner[i]) && learner[i].split(/\s+/).length < 25; i--) stuckStreak++;
@@ -108,6 +121,7 @@ export function callState(history: PastTurn[], transcript: string): CallState {
     stuckStreak,
     stuckNow: (stuckStreak >= 1 || twoWeak) && !isHesitation(transcript),
     letGos: fenny.filter((m) => m === "let_go").length,
+    teachOffersIgnored: fenny.filter((m, i) => m === "offer_teach" && fenny[i + 1] !== "teach").length - (lastMove === "offer_teach" ? 1 : 0),
     lastMove,
     probedLastTurn: lastMove ? PROBES.includes(lastMove) : false,
     retellAsked,
@@ -117,7 +131,7 @@ export function callState(history: PastTurn[], transcript: string): CallState {
     hesitating: isHesitation(transcript),
     askedToBeTold: TELL_ME.test(transcript),
     skipRequested: SKIP.test(transcript),
-    answeredOffer: lastMove === "offer_show_me" || lastMove === "offer_teach" ? (YES.test(transcript) ? "yes" : NO.test(transcript) ? "no" : undefined) : undefined,
+    answeredOffer: lastMove === "offer_show_me" || lastMove === "offer_teach" ? (saysYes(transcript) ? "yes" : NO.test(transcript) ? "no" : undefined) : undefined,
   };
 }
 
@@ -176,8 +190,10 @@ export function allowedMoves(s: CallState, l: Limits = DEFAULT_LIMITS): Move[] {
   // They clearly don't know it: stop asking straight away. Offer to teach
   // when the phone can; otherwise move on once, and the second time stop the
   // call so they can learn it first. Never ask the same thing a new way.
+  // Teach me is offered at most twice a call if they keep not taking it, so
+  // "I don't know" doesn't always get the same answer.
   if (s.stuckNow) {
-    if (l.canTeach && s.lastMove !== "offer_teach") return ["offer_teach"];
+    if (l.canTeach && s.lastMove !== "offer_teach" && s.teachOffersIgnored < 2) return ["offer_teach"];
     if (l.canShowMe && s.lastMove !== "offer_show_me") return ["offer_show_me"];
     return [s.letGos >= 1 ? "wrap" : "let_go"];
   }
