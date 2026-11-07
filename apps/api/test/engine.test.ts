@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { allowedMoves, callState, DEFAULT_LIMITS, isVague, LEARN_FIRST_LINE, moveOf, OFFER_LINE, OFFER_TEACH_LINE, TEACH_LINE, unfinished } from "../src/engine/policy";
-import { engineTurn, freshReaction, goalLine, lastProgress, noRepeatOpener, OFFER_TEACH_LINES, oneQuestion, pickFresh, withProgress } from "../src/engine/engine";
+import { engineTurn, freshReaction, goalLine, noOoh, lastProgress, noRepeatOpener, OFFER_TEACH_LINES, oneQuestion, pickFresh, withProgress } from "../src/engine/engine";
 import { keyIdeas } from "../src/engine/ideas";
 import type { PastTurn } from "../src/gemini";
 
@@ -223,6 +223,7 @@ describe("engineTurn", () => {
     expect(noRepeatOpener("Ooh — so where?", ["Okay. Ooh, that's clever."])).toBe("So where?");
     expect(noRepeatOpener("Ooh, where does it go?", ["Why?"])).toBe("Ooh, where does it go?");
     expect(pickFresh(["a.", "b."], ["a."], 0)).toBe("b.");
+    expect(noOoh("Ooh, where does it go? Oooh. Nice.")).toBe("Where does it go? Nice.");
   });
 
   it("keys the ideas cache on the whole notes, and counts the cost once", async () => {
@@ -277,8 +278,8 @@ describe("unfinished", () => {
 
   it("says the goal up front on their first turn, and treats a missing verdict as none", async () => {
     const r = await engineTurn(cfg({ move: "next", say: "Ooh, and where does it go next?", covered: [], stuck_on: "" }), { transcript: "The heart pumps blood.", history: [], topic: "Circulation", ideas });
-    expect(r.say).toMatch(/what the heart does and why the heart has valves\. Ooh, and where does it go next\?$/);
-    expect(r.say).not.toMatch(/^Ooh/);
+    expect(r.say).toMatch(/what the heart does and why the heart has valves\. And where does it go next\?$/);
+    expect(r.say).not.toMatch(/ooh/i);
     // The goal is worded differently from call to call.
     expect(new Set([0, 1, 2, 3, 4].map((n) => goalLine(ideas, n))).size).toBe(5);
     expect(r.verdict).toBe("none");

@@ -128,7 +128,7 @@ describe("POST /api/live-turn", () => {
     expect(ev[1]).toMatchObject({ type: "engine", move: "next", covered: ["k2"], verdict: "partly" });
     const said = ev.filter((e) => e.type === "sentence").map((e) => e.text);
     expect(said.join(" ")).toContain("which way water moves and what the membrane does.");
-    expect(said.at(-1)).toBe("Ooh, so which way does the water go?");
+    expect(said.at(-1)).toBe("So which way does the water go?");
     const done = ev.at(-1)!;
     expect(done.type).toBe("done");
     // The move goes back to the phone, which hands it back next turn.

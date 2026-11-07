@@ -130,7 +130,15 @@ const NUMBER_WORD = /(?:^|[.!?]\s+|that'?s |that makes )(\w+) (?:of|out of) (?:t
 /** A word Fenny opens with. Saying the same one line after line is what makes it sound canned. */
 const OPENER = /^(ooh+|oh+|ah+|hmm+|mm+|right|okay|ok|great|nice|lovely|brilliant|no worries|that'?s (?:completely |totally )?(?:fine|okay|alright)|that is (?:completely |totally )?(?:fine|okay|alright)|fair enough|got it|wow|ah right|oh nice)\b[,.!]?\s*/i;
 
-/** Drop the opening "Ooh," or "No worries," if Fenny opened one of its recent lines with it too. */
+/** "Ooh" anywhere at the start of a sentence: Edem finds it naff, so Fenny never says it. */
+export function noOoh(say: string): string {
+  return say
+    .replace(/(^|[.!?]\s+)o{2,}h+\b[,.!]?\s*/gi, "$1")
+    .replace(/(^|[.!?]\s+)([a-z])/g, (_, a: string, b: string) => a + b.toUpperCase())
+    .trim();
+}
+
+/** Drop the opening "Oh," or "No worries," if Fenny opened one of its recent lines with it too. */
 export function noRepeatOpener(say: string, recent: string[]): string {
   // A short opening sentence that starts like one of the recent lines ("That's fine." after "That's fine, ...") goes.
   const first = firstSentence(say).trim();
@@ -279,7 +287,7 @@ export async function engineTurn(
     ideas.map((k) => `${k.id}: ${k.idea} [${k.label}]`).join("\n") +
     `\n\nThis turn, choose exactly one of these moves and say one line for it (under 22 words, at most one question):\n${guide}` +
     `\n\nMost turns should be a real, specific question about the subject that moves the explanation on. Probe (why, what_if, puzzled) on key ideas that are missing or thin, never on small details. Cover each key idea once before going deeper on any. Use listen rarely. Ignore small transcription slips.` +
-    `\n\nSound like a real person on a call, not a script: vary your wording every time, follow what they actually said, and let the conversation drift naturally. Never reuse a phrase from your earlier lines. Don't open with a sound like "Ooh" or "Oh" or with "No worries" more than once a call. When they say they don't know, react the way a friend would to that exact moment, never with a stock phrase. Your last lines were:\n${lastLines(input.history)}` +
+    `\n\nSound like a real person on a call, not a script: vary your wording every time, follow what they actually said, and let the conversation drift naturally. Never reuse a phrase from your earlier lines. Never say "Ooh". Don't open with "Oh" or "No worries" more than once a call. When they say they don't know, react the way a friend would to that exact moment, never with a stock phrase. Your last lines were:\n${lastLines(input.history)}` +
     (openers.length ? `\nYou have already opened lines with: ${openers.map((o) => `"${o}"`).join(", ")}. Open differently this time.` : "") +
     `\n\nYou can always tell whether an explanation hangs together, so judge what they just said against the key ideas and give a verdict: right (it is correct), partly (on the right lines but something important is missing or muddled), off (it is wrong or does not fit), or none (not an attempt at the content, such as a pause, a question or saying they don't know). Your face already shows the verdict, so a spoken reaction is optional: give one when it adds something, in fresh words, and often just go straight to your question. When you do react: for right, that it makes sense to you; for partly, that you follow some of it but not all; for off, that it doesn't sound right to you or doesn't fit, and ask them to check that exact bit. Never say what the right answer is.` +
     `\n\nAlso list the ids of the key ideas the student has clearly explained so far in the whole conversation, and for show_me or offer_show_me, the key idea they are stuck on.`;
@@ -342,7 +350,7 @@ export async function engineTurn(
     if ((verdict === "right" || verdict === "partly") && covered.length > lastProgress(history) && covered.length < ideas.length && state.learnerTurns > 1) say = withProgress(say, covered.length, ideas.length, seed);
   }
   // Never open with the same "Ooh," or "No worries," as a recent line.
-  if (move !== "show_me" && move !== "offer_show_me") say = noRepeatOpener(say, recent);
+  if (move !== "show_me" && move !== "offer_show_me") say = noOoh(noRepeatOpener(say, recent)) || say;
   // Their first turn: say up front what Fenny wants to understand, so the
   // call has a clear goal and they can tell when it's nearly done.
   if (state.learnerTurns === 1 && ideas.length && !CONTROL.includes(move) && move !== "listen") say = `${goalLine(ideas, seed)} ${say}`;
