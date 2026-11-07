@@ -20,7 +20,8 @@
 // and light in a speech rhythm while Fenny speaks. `touchable` lets the eyes
 // follow a finger held on the orb, and a tap gets a squish (boop).
 import { useEffect, useRef, useState } from "react";
-import { View, type GestureResponderEvent } from "react-native";
+import { AppState, View, type GestureResponderEvent } from "react-native";
+import { useIsFocused } from "expo-router";
 import { Canvas, Fill, Shader, Skia } from "@shopify/react-native-skia";
 import * as Haptics from "expo-haptics";
 import {
@@ -197,7 +198,13 @@ export function FennyOrb({
   touchable?: boolean;
   onTap?: () => void;
 }) {
-  const reduce = useReducedMotion();
+  const reduceMotion = useReducedMotion();
+  // Off screen (another screen on top, or the app in the background) Fenny
+  // does not animate at all: every change lands at once, and reactions are
+  // dropped. So when the screen comes back there is no backlog to play
+  // through, and the next change moves on from wherever Fenny now is.
+  const onScreen = useOnScreen();
+  const reduce = reduceMotion || !onScreen;
   const peekMood = usePeek(peek && mood === "rest" && !reduce);
   const shown: FennyMood = peekMood ?? mood;
   const t = useSharedValue(0);
@@ -225,22 +232,24 @@ export function FennyOrb({
   // Below about 150 px of canvas the eyes grow, so a button-sized orb still has a face.
   const boost = Math.min(1, Math.max(0, (150 - size) / 90));
   useEffect(() => {
-    if (reduce) return;
+    if (reduceMotion) return;
     // Seconds, running for a very long time; restarts after about 11 days.
     t.value = withRepeat(withTiming(1e6, { duration: 1e9, easing: Easing.linear }), -1);
-  }, [reduce, t]);
+  }, [reduceMotion, t]);
   useEffect(() => {
-    level.value = withSpring(energy, { duration: 350, dampingRatio: 0.9 });
-  }, [energy, level]);
+    level.value = reduce ? energy : withSpring(energy, { duration: 350, dampingRatio: 0.9 });
+  }, [energy, reduce, level]);
   useEffect(() => {
-    nodding.value = reduce ? 0 : withSpring(nod, { duration: 400, dampingRatio: 0.9 });
-  }, [nod, reduce, nodding]);
+    nodding.value = reduceMotion ? 0 : reduce ? nod : withSpring(nod, { duration: 400, dampingRatio: 0.9 });
+  }, [nod, reduce, reduceMotion, nodding]);
   useEffect(() => {
-    talking.value = reduce ? 0 : withSpring(talk, { duration: 300, dampingRatio: 0.9 });
-  }, [talk, reduce, talking]);
+    talking.value = reduceMotion ? 0 : reduce ? talk : withSpring(talk, { duration: 300, dampingRatio: 0.9 });
+  }, [talk, reduce, reduceMotion, talking]);
   useEffect(() => {
     const to = MOODS[shown];
-    // Reduce Motion: change mood at once, no springs.
+    // Reduce Motion or off screen: change mood at once, no springs. A new
+    // spring starts from the current value and speed, so a change part way
+    // through another one carries straight on rather than restarting.
     const go = (v: { value: number }, n: number) => {
       v.value = reduce ? n : withSpring(n, SPRING);
     };
@@ -257,7 +266,19 @@ export function FennyOrb({
     go(core, to.core);
     go(dull, to.dull);
   }, [shown, reduce, eyes, lookX, lookY, eyeL, eyeR, open, slant, happy, tilt, core, dull]);
-  // Play a reaction when the cue changes. Reduce Motion: none.
+  // Leaving the screen: stop any reaction or finger follow where it is and
+  // settle at neutral, so nothing is left running to catch up on later.
+  useEffect(() => {
+    if (onScreen) return;
+    for (const ch of CHANNELS) r[ch].value = NEUTRAL[ch];
+    held.value = 0;
+    gx.value = 0;
+    gy.value = 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onScreen]);
+  // Play a reaction when the cue changes. Reduce Motion or off screen: none.
+  // Each step eases from the channel's current value, so a reaction that
+  // interrupts another blends out of it instead of jumping back to rest.
   const play = (name: Cue["name"]) => {
     if (reduce) return;
     const reaction = REACTIONS[name];
@@ -362,6 +383,17 @@ export function FennyOrb({
       {canvas}
     </View>
   );
+}
+
+/** True while this screen is the one in front and the app is open. */
+function useOnScreen(): boolean {
+  const focused = useIsFocused();
+  const [open, setOpen] = useState(AppState.currentState !== "background");
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (s) => setOpen(s !== "background"));
+    return () => sub.remove();
+  }, []);
+  return focused && open;
 }
 
 /** One shared value per reaction channel, starting at neutral. */
