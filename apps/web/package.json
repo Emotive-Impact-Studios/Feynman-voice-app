@@ -1,0 +1,9 @@
+{
+  "name": "@feynman/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Marketing site for Fenny. Static page plus one waitlist function, deployed as its own Vercel project with root directory apps/web.",
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0"
+  }
+}
