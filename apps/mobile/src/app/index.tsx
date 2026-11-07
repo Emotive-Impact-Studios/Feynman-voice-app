@@ -1,10 +1,11 @@
 // Home: Today, Topics and Me, from the canvas board "THE APP: start here".
 // First run goes to the intro.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWindowDimensions, View } from "react-native";
 import { Redirect, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { minutesLeft, replayIntro, useProfile } from "../data/profile";
+import { getFinishedCall, TELL_ME } from "../data/lastCall";
+import { minutesLeft, replayIntro, useProfile, type SavedGap } from "../data/profile";
 import { Me } from "../home/Me";
 import { Nav, TopBar, type HomeTab } from "../home/Nav";
 import { homeStyles } from "../home/styles";
@@ -18,17 +19,26 @@ export default function Home() {
   const { width } = useWindowDimensions();
   const profile = useProfile();
   const [tab, setTab] = useState<HomeTab>("today");
+  // A call whose results never came back (the app closed mid-check): finish it.
+  useEffect(() => {
+    if (profile.introDone && getFinishedCall()) router.push("/results");
+    // Once, when the app opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   if (!profile.introDone) return <Redirect href="/intro" />;
 
   const onNew = () => router.push("/topic");
   const onTopic = (topic: string) => router.push({ pathname: "/session", params: { topic } });
+  // A saved gap opens a call on that gap, with Fenny asking them to tell it in their own words.
+  const onGap = (topic: string, gap: SavedGap) =>
+    router.push({ pathname: "/session", params: { topic, prompt: TELL_ME, focus: gap.title, focusId: gap.id } });
   const common = { profile, top: insets.top, bottom: insets.bottom };
 
   return (
     <View style={homeStyles.root}>
       <Backdrop scene={tab} />
       <ScreenIn key={tab}>
-        {tab === "today" && <Today {...common} onNew={onNew} onTopic={onTopic} onLook={() => router.push("/look")} />}
+        {tab === "today" && <Today {...common} onNew={onNew} onTopic={onTopic} onGap={onGap} onLook={() => router.push("/look")} />}
         {tab === "topics" && <Topics {...common} onNew={onNew} onTopic={onTopic} />}
         {tab === "me" && (
           <Me

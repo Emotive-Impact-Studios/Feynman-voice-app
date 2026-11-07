@@ -3,7 +3,7 @@ import { Press } from "../ui/Press";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { Image } from "expo-image";
-import { ago, photoFor, type Profile } from "../data/profile";
+import { ago, photoFor, type Profile, type TopicRecord } from "../data/profile";
 import { Glass, PillButton, T } from "../ui/kit";
 import { homeStyles } from "./styles";
 import { In, mins } from "./Today";
@@ -39,9 +39,17 @@ export function Topics({ profile, top, bottom, onNew, onTopic }: { profile: Prof
                 <T size={17} weight="semibold" style={{ flex: 1 }} lines={1}>
                   {t.title}
                 </T>
-                <T size={12} weight="mono" tone="muted">
-                  {mins(t.seconds)}
-                </T>
+                {open(t) > 0 ? (
+                  <View style={styles.pill}>
+                    <T size={12} style={{ color: "#F5B09A" }}>
+                      {open(t) === 1 ? "1 gap" : `${open(t)} gaps`}
+                    </T>
+                  </View>
+                ) : (
+                  <T size={12} weight="mono" tone="muted">
+                    {mins(t.seconds)}
+                  </T>
+                )}
               </View>
               <T size={13} tone="muted">
                 {t.sessions === 1 ? "1 session" : `${t.sessions} sessions`} · {t.questions} questions asked · {ago(t.at)}
@@ -54,6 +62,8 @@ export function Topics({ profile, top, bottom, onNew, onTopic }: { profile: Prof
     </ScrollView>
   );
 }
+
+const open = (t: TopicRecord) => (t.gaps ?? []).filter((g) => !g.clearedAt).length;
 
 /** The topic's ideas as a row of small stars, lit ones first. */
 function Dots({ total, lit }: { total: number; lit: number }) {
@@ -75,4 +85,5 @@ const styles = StyleSheet.create({
   row: { borderRadius: 24, paddingVertical: 16, paddingHorizontal: 18, gap: 8 },
   rowPhoto: { paddingLeft: 18 + 56 + 14, minHeight: 88 },
   photo: { position: "absolute", left: 16, top: 16, width: 56, height: 56, borderRadius: 16, backgroundColor: "#24272C" },
+  pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(240,154,128,0.16)" },
 });

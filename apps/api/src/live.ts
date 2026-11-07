@@ -41,6 +41,11 @@ export interface LiveTurnRequest {
   stt?: "cartesia" | "openai";
   /** What this phone can do, e.g. "show_me" for the in-call explanation card. */
   features?: string[];
+  /**
+   * A gap the learner is going back over (a call opened from a gap card). Kept
+   * apart from topic so the topic's key ideas, cached by topic, stay the same.
+   */
+  focus?: string;
 }
 
 type Env = Record<string, string | undefined>;
@@ -118,6 +123,9 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
       const fp = chatPricesFor(fennyModel, env);
       const chatCfg = { apiKey: env.OPENAI_API_KEY!, anthropicKey: env.ANTHROPIC_API_KEY, model: fennyModel, reasoningEffort: env.OPENAI_REASONING_EFFORT ?? "none", fetchImpl: f };
       // The topic's key ideas, built while we listen (cached after the first turn).
+      // Fenny's line knows the focus; the key ideas are built from the topic alone.
+      const focus = typeof body.focus === "string" ? body.focus.trim().slice(0, 300) : "";
+      const talkTopic = focus ? `${body.topic ?? ""}. They are going back over one part they found shaky, so ask about it: ${focus}` : body.topic;
       const ideasReady = useEngine ? keyIdeas(chatCfg, body.topic?.trim() || "a topic of their choice", body.notes) : undefined;
       ideasReady?.catch(() => {});
       try {
@@ -193,7 +201,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
             transcript,
             history,
             callHistory,
-            topic: body.topic,
+            topic: talkTopic,
             notes: body.notes,
             ideas,
             limits: { canShowMe: (body.features ?? []).includes("show_me"), canTeach: (body.features ?? []).includes("teach") },
@@ -218,7 +226,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
               reasoningEffort: env.OPENAI_REASONING_EFFORT ?? "none",
               fetchImpl: f,
             },
-            { transcript, history, topic: body.topic, notes: body.notes },
+            { transcript, history, topic: talkTopic, notes: body.notes },
             (delta) => splitter.push(delta).forEach(speak),
           );
           splitter.flush().forEach(speak);
@@ -235,7 +243,7 @@ export async function handleLiveTurn(req: Request, env: Env = process.env, fetch
           // Gemini is not streamed yet: send the whole question as one piece.
           const r = await askStudent(
             { apiKey: env.GEMINI_API_KEY!, model: env.GEMINI_MODEL ?? "gemini-3.8-flash", thinkingLevel: env.GEMINI_THINKING_LEVEL, fetchImpl: f },
-            { audioBase64: body.audioBase64, mimeType: body.mimeType, history, topic: body.topic, notes: body.notes },
+            { audioBase64: body.audioBase64, mimeType: body.mimeType, history, topic: talkTopic, notes: body.notes },
           );
           question = r.question;
           const splitter = new SentenceSplitter();

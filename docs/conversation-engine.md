@@ -39,6 +39,13 @@ As soon as the learner clearly doesn't know a bit (they say so, or give two empt
 
 Every line Fenny says goes through `speakable()` (`apps/api/src/speakable.ts`) before any voice gets it. Em and en dashes, semicolons, markdown and emoji make the voices, Phonon above all, lose the shape of the sentence and the inflection goes wrong. Dashes become commas, number ranges become "5 to 10", and symbols are removed. The prompts also ask for proper sentences with no dashes. Before this rule, 15 of 287 lines in the test calls had a dash; after it, 0 of 240.
 
+## After the call
+
+The transcript of the first turn that ends in `wrap` is the learner's answer
+to "which bit felt shakiest?", so the results skip the typed question. Key
+ideas never in `covered` go to `/api/analyse` as `missedIdeas`, to seed
+"skipped" gaps.
+
 ## The conversation test
 
 No change to how Fenny talks ships without this:

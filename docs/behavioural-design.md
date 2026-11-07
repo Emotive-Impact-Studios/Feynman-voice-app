@@ -24,7 +24,12 @@ Full write-up: https://claude.ai/artifact/2xzBxSJfscmHntjbaDkB3Y
 - Live call mode should wait longer (about 2.5 s) after a "why" or "how"
   question before ending the learner's turn (with the live call work).
 
-## Rules for gap analysis (build step 4) and "Show me" (4b)
+## Rules for gap analysis (build step 4) and "Show me" (4b) (built)
+
+Server: `apps/api/src/review.ts` (`POST /api/analyse`, `POST /api/show-me`).
+App: `apps/mobile/src/results/Results.tsx`. Gaps are saved on the topic and
+listed on Today under "Explain again". A call opened from a gap card asks the
+analysis whether that gap is now clear, and marks it cleared if so.
 
 1. **The learner names the first gap.** When a call ends, Fenny asks "Which bit
    felt shakiest to you?" The answer becomes the first gap card, titled in the
