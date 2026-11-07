@@ -31,7 +31,15 @@ import { riseIn } from "../ui/motion";
 
 type View3 = SessionView;
 
-const OPENING = "Explain it as if I know nothing. I'll ask when I get lost.";
+// Fenny's first words, picked fresh each call so it never opens the same way twice running.
+const OPENINGS = [
+  "Explain it as if I know nothing. I'll ask when I get lost.",
+  "Go on then, teach me. I know nothing about this, so start wherever you like.",
+  "I'm all ears. Explain it like I've never heard of it.",
+  "Right, I'm ready. Talk me through it from the start.",
+  "Okay, I know nothing about this. Where does it begin?",
+  "Teach me this one. I'll stop you when I get lost.",
+];
 
 // What the button does now (first line) and the next thing to know (second).
 const HINTS = {
@@ -56,7 +64,7 @@ export default function Session() {
   const [goal] = useState(() => params.goal?.trim() || findTopic(topic)?.goal || "");
   const brainTopic = goal ? `${topic}. What they want to be able to explain: ${goal}` : topic;
   const profile = useProfile();
-  const opening = params.prompt ?? OPENING;
+  const [opening] = useState(() => params.prompt ?? OPENINGS[Math.floor(Math.random() * OPENINGS.length)]);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   // The view is chosen in Me, under Settings. The session itself has no switch.

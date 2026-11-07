@@ -125,12 +125,16 @@ describe("POST /api/live-turn", () => {
     const res = await handleLiveTurn(request({ ...audio, topic: "Osmosis engine test" }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
     const ev = await events(res);
     // First turn: Fenny says up front what it wants to understand, then asks.
-    expect(ev.map((e) => e.type)).toEqual(["transcript", "engine", "sentence", "sentence", "sentence", "done"]);
     expect(ev[1]).toMatchObject({ type: "engine", move: "next", covered: ["k2"], verdict: "partly" });
-    expect(ev[3].text).toBe("By the end I want to understand two things: which way water moves and what the membrane does.");
-    expect(ev[4].text).toBe("Ooh, so which way does the water go?");
+    const said = ev.filter((e) => e.type === "sentence").map((e) => e.text);
+    expect(said.join(" ")).toContain("which way water moves and what the membrane does.");
+    expect(said.at(-1)).toBe("Ooh, so which way does the water go?");
+    const done = ev.at(-1)!;
+    expect(done.type).toBe("done");
+    // The move goes back to the phone, which hands it back next turn.
+    expect(done.move).toBe("next");
     // Speech to text, the key ideas (first turn on this topic) and the turn.
-    expect(ev[5].cost.lines).toHaveLength(3);
+    expect(done.cost.lines).toHaveLength(3);
   });
 
   it("never sends a dash to the voice, even if the model writes one", async () => {
@@ -150,8 +154,9 @@ describe("POST /api/live-turn", () => {
     const res = await handleLiveTurn(request({ ...audio, history, topic: "Osmosis dash test" }), { ...env, FENNY_ENGINE: undefined }, fetchImpl);
     const ev = await events(res);
     const sentence = ev.find((e) => e.type === "sentence")!;
-    expect(sentence.text).toBe("Ooh, so which way does the water go?");
-    expect(ev.find((e) => e.type === "done")!.question).toBe("Ooh, so which way does the water go?");
+    // Fenny opened with "Ooh" last time, so not again.
+    expect(sentence.text).toBe("So which way does the water go?");
+    expect(ev.find((e) => e.type === "done")!.question).toBe("So which way does the water go?");
   });
 
   it("holds the turn when the learner stops mid-thought and the phone can wait", async () => {

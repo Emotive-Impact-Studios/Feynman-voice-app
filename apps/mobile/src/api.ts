@@ -8,6 +8,8 @@ const TOKEN = process.env.EXPO_PUBLIC_PROTOTYPE_TOKEN ?? "";
 export interface Turn {
   speaker: "learner" | "student";
   text: string;
+  /** For Fenny's lines: the move the server's engine made, handed back next turn so it keeps its place. */
+  move?: string;
 }
 
 export interface TurnResponse {
@@ -48,6 +50,8 @@ export type LiveEvent =
   | { type: "sentence"; index: number; text: string; speech?: PhonemeChunk[]; audio?: string; sampleRate?: number }
   | {
       type: "done";
+      /** The engine's move for this reply, when the engine answered. */
+      move?: string;
       transcript: string;
       question: string;
       voice: LiveVoice;

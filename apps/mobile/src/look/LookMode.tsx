@@ -208,7 +208,7 @@ export default function LookMode() {
             </View>
             <Glass style={styles.sheet}>
               <T size={26} weight="medium" style={{ marginTop: 10 }}>
-                {look.reaction || `Ooh, ${look.thing}!`}
+                {look.reaction || `${look.thing.charAt(0).toUpperCase()}${look.thing.slice(1)}!`}
               </T>
               <T size={19} tone="text" style={{ marginTop: 10, color: "#D6D9DE" }}>
                 {angle.question}

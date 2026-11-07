@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { allowedMoves, callState, DEFAULT_LIMITS, isVague, LEARN_FIRST_LINE, moveOf, OFFER_LINE, OFFER_TEACH_LINE, TEACH_LINE, unfinished } from "../src/engine/policy";
-import { engineTurn, freshReaction, lastProgress, oneQuestion, withProgress } from "../src/engine/engine";
+import { engineTurn, freshReaction, goalLine, lastProgress, noRepeatOpener, OFFER_TEACH_LINES, oneQuestion, pickFresh, withProgress } from "../src/engine/engine";
 import { keyIdeas } from "../src/engine/ideas";
 import type { PastTurn } from "../src/gemini";
 
@@ -170,19 +170,59 @@ describe("engineTurn", () => {
     expect(allowedMoves(callState([...h, L("No idea."), F(r.say)], "Yes please."))).toEqual(["show_me"]);
   });
 
-  it("stops the call in fixed words when a second bit is new to them", async () => {
+  it("stops the call kindly when a second bit is new to them, and says why", async () => {
     const h = [L("Not sure."), F("No worries, let's come back to that. What does the heart do?"), L("Pumps blood."), F("Where does it pump it to?")];
     const r = await engineTurn(cfg({ move: "wrap", say: "Thanks, that's a good place to stop.", covered: [], stuck_on: "" }), { transcript: "No idea.", history: h, topic: "Circulation", ideas });
     expect(r.move).toBe("wrap");
-    expect(r.say).toBe(LEARN_FIRST_LINE);
+    expect(moveOf(r.say)).toBe("wrap");
+    expect(r.say).toMatch(/notes|read/);
+    // The model's own words are kept when they say why.
+    const own = "That's fine, it's new to you. Have a look at your notes and teach me next time.";
+    const r2 = await engineTurn(cfg({ move: "wrap", say: own, covered: [], stuck_on: "" }), { transcript: "No idea.", history: h, topic: "Circulation", ideas });
+    expect(r2.say).toBe(own);
+    expect(LEARN_FIRST_LINE).toMatch(/come back and teach me/);
   });
 
-  it("offers Teach me in fixed words and names the idea", async () => {
-    const r = await engineTurn(cfg({ move: "offer_teach", say: "Want me to teach you?", covered: [], stuck_on: "k1" }), {
+  it("lets the model word the Teach me offer, as long as it names the button", async () => {
+    const own = "Ah, that's fine, valves are new to you. Tap Teach me, then come back and tell me.";
+    const r = await engineTurn(cfg({ move: "offer_teach", say: own, covered: [], stuck_on: "k1" }), {
       transcript: "I don't know.", history: [L("Valves."), F("What do valves do?")], topic: "Circulation", ideas, limits: { canTeach: true },
     });
-    expect(r.say).toBe(OFFER_TEACH_LINE);
+    expect(r.say).toBe(own);
     expect(r.gap?.title).toBe(ideas[0].idea);
+    expect(moveOf(r.say)).toBe("offer_teach");
+    // No button named: a fresh line from the bank, never the one said last time.
+    const r2 = await engineTurn(cfg({ move: "offer_teach", say: "Want me to teach you?", covered: [], stuck_on: "k1" }), {
+      transcript: "I don't know.", history: [L("Valves."), F(OFFER_TEACH_LINE), L("Okay."), F("What do valves do?")], topic: "Circulation", ideas, limits: { canTeach: true },
+    });
+    expect(OFFER_TEACH_LINES).toContain(r2.say);
+    expect(r2.say).not.toBe(OFFER_TEACH_LINE);
+  });
+
+  it("never offers Teach me the same way or more than twice when they keep not taking it", () => {
+    const teach = { ...DEFAULT_LIMITS, canTeach: true };
+    const h = [L("I don't know."), F(OFFER_TEACH_LINES[1]), L("The heart pumps."), F("Where to?"), L("Not sure."), F(OFFER_TEACH_LINES[2]), L("Lungs."), F("Why there?")];
+    expect(allowedMoves(callState(h, "No idea."), teach)).toEqual(["let_go"]);
+    expect(allowedMoves(callState(h.slice(0, 4), "No idea."), teach)).toEqual(["offer_teach"]);
+  });
+
+  it("hears carrying on after an offer as carrying on, not a yes", () => {
+    const h = [L("I don't know."), F(OFFER_TEACH_LINE)];
+    expect(callState(h, "Okay, the leaves have chlorophyll which catches the light.").answeredOffer).toBeUndefined();
+    expect(callState(h, "Okay, go on then.").answeredOffer).toBe("yes");
+  });
+
+  it("uses the move the phone hands back over guessing from the words", () => {
+    const s = callState([L("I don't know."), { speaker: "student", text: "Fair play. Have a go at the lesson button.", move: "offer_teach" }], "Yes please.");
+    expect(s.lastMove).toBe("offer_teach");
+    expect(allowedMoves(s, { ...DEFAULT_LIMITS, canTeach: true })).toEqual(["teach"]);
+  });
+
+  it("drops an opener Fenny used lately, and picks lines it hasn't said", () => {
+    expect(noRepeatOpener("Ooh, where does it go?", ["Ooh, nice. Why?"])).toBe("Where does it go?");
+    expect(noRepeatOpener("Ooh — so where?", ["Okay. Ooh, that's clever."])).toBe("So where?");
+    expect(noRepeatOpener("Ooh, where does it go?", ["Why?"])).toBe("Ooh, where does it go?");
+    expect(pickFresh(["a.", "b."], ["a."], 0)).toBe("b.");
   });
 
   it("keys the ideas cache on the whole notes, and counts the cost once", async () => {
@@ -221,7 +261,7 @@ describe("unfinished", () => {
       ideas,
     });
     expect(r.move).toBe("retell");
-    expect(r.say).toBe("That's all two things I wanted to understand. Can you explain the whole thing to me again in 30 seconds, really simply?");
+    expect(r.say).toMatch(/whole thing again in (about )?30 seconds/);
     expect(r.verdict).toBe("right");
     expect(moveOf(r.say)).toBe("retell");
   });
@@ -230,14 +270,17 @@ describe("unfinished", () => {
     const h = [L("The heart pumps blood."), F("That was really clear. Which bit felt shakiest to you?")];
     const r = await engineTurn(cfg({ move: "wrap", verdict: "none", say: "Bye!", covered: ["k1"], stuck_on: "" }), { transcript: "The valves bit.", history: h, topic: "Circulation", ideas });
     expect(r.move).toBe("wrap");
-    expect(r.say).toBe("Thanks, that really helped. You explained what the heart does really well. Why the heart has valves was the shaky bit, so we'll pick it up next time.");
+    expect(r.say).toMatch(/ You explained what the heart does really well\. Why the heart has valves was the shaky bit, so we'll pick it up next time\.$/);
     // Read back as the goodbye, even though it names a "why".
     expect(moveOf(r.say)).toBe("wrap");
   });
 
   it("says the goal up front on their first turn, and treats a missing verdict as none", async () => {
     const r = await engineTurn(cfg({ move: "next", say: "Ooh, and where does it go next?", covered: [], stuck_on: "" }), { transcript: "The heart pumps blood.", history: [], topic: "Circulation", ideas });
-    expect(r.say).toBe("Ooh, OK. By the end I want to understand two things: what the heart does and why the heart has valves. Ooh, and where does it go next?");
+    expect(r.say).toMatch(/what the heart does and why the heart has valves\. Ooh, and where does it go next\?$/);
+    expect(r.say).not.toMatch(/^Ooh/);
+    // The goal is worded differently from call to call.
+    expect(new Set([0, 1, 2, 3, 4].map((n) => goalLine(ideas, n))).size).toBe(5);
     expect(r.verdict).toBe("none");
   });
 
@@ -249,8 +292,11 @@ describe("unfinished", () => {
   });
 
   it("counts progress in code and says it only when another idea is done", () => {
-    expect(withProgress("Ah, I get it now. What do valves do?", 2, 4)).toBe("Ah, I get it now. That's two of the four things. What do valves do?");
+    expect(withProgress("Ah, I get it now. What do valves do?", 2, 4, 2)).toBe("Ah, I get it now. That's two of the four things. What do valves do?");
+    // Every wording reads back.
+    for (let seed = 0; seed < 4; seed++) expect(lastProgress([F(withProgress("Nice. Why?", 3, 4, seed)), L("Because.")])).toBe(3);
     expect(lastProgress([F("Oh nice. That's two of the four things. Why?"), L("Because.")])).toBe(2);
+    expect(lastProgress([F("So is it one of the two valves?")])).toBe(0);
     expect(lastProgress([F("Why?")])).toBe(0);
   });
 

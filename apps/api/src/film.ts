@@ -31,7 +31,7 @@ export const FILM_SCHEMA = { type: "array", items: obj({ say: str, cue: str }) }
 export const GUESS_SCHEMA = { anyOf: [obj({ ask: str, options: { type: "array", items: str }, answer: str }), { type: "null" }] } as const;
 
 export const FILM_PROMPT = `film: Fenny also narrates each bite while its scene draws itself, one sentence at a time. Each sentence makes the next part of the drawing appear, so write them in the order the drawing builds (the scene's slots, left to right).
-- 2 to 4 sentences, each under 15 words, together under 45 words. Say what text says, as you would say it aloud to a friend.
+- 2 to 4 sentences, each under 15 words, together under 45 words. Say what text says, as you would say it aloud to a friend, in words a 12 year old would follow.
 - The first sentence names the parts the drawing starts with. The last names the change or result that is the point.
 - cue: one word copied exactly from that sentence, the word that names what appears at that moment (a noun or a verb, never "the", "it" or "this").
 

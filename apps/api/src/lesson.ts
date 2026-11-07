@@ -83,7 +83,7 @@ const SYSTEM = `You write tiny lessons for Fenny, a learning app for UK universi
 
 Write 2 or 3 bites that build up to the idea. Each bite:
 - title: 2 to 5 words.
-- text: at most 45 words. Plain, warm, concrete. One thought per bite. Use an everyday comparison when it helps. Explain any technical word the first time it appears.
+- text: at most 45 words. Plain, warm, concrete. One thought per bite. Write it so a bright 12 year old could follow it, the Feynman way: short everyday words, an everyday comparison when it helps, and any technical word explained in plain words the first time it appears. Keep it accurate to university level; simple words, not a simpler truth.
 - picture: a fallback diagram, used when scene is null or cannot be drawn. Pick the simplest diagram that shows the bite, and give its labels (2 to 5, each 1 to 3 words). flow = things in sequence, labels in order. compare = two sides, labels [left, right] or [left, right, what differs]. cycle = a loop, labels in order. layers = a stack from top to bottom. parts = a whole then its parts, first label is the whole. none = no diagram helps.
 - quote: when notes are given, copy a short phrase (5 to 25 words) from the notes, word for word, that backs this bite up. With no notes, use "".
 - puzzle: one quick check of that bite, answerable in a few seconds. Use a mix of kinds across the lesson, and make the last one the hardest.
@@ -94,7 +94,7 @@ Write 2 or 3 bites that build up to the idea. Each bite:
   match: 3 pairs; options are the left items, answer the matching right items in the same order. Every left item and every right item must be different, because each one is a card the student taps once.
   why: one short sentence on why the answer is right.
 
-Then recap (one sentence that ties the bites together) and explainBack (the question Fenny, a curious student, asks when they return, in under 15 words).
+Then recap (one sentence that ties the bites together, just as plain) and explainBack (the question Fenny, a curious student, asks when they return, in under 15 words).
 
 Rules:
 - Teach only what the notes say when notes are given. Never add facts the notes do not support. With no notes, stick to standard first-year university understanding.

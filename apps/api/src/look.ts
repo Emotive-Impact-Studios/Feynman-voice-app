@@ -33,7 +33,7 @@ export interface Look {
   clear: boolean;
   /** A friendly line for when it is not clear, e.g. "It's a bit dark. Try again near a light?" */
   retry: string;
-  /** Fenny's first reaction, before the question, e.g. "Ooh, a bike chain!" */
+  /** Fenny's first reaction, before the question, e.g. "A bike chain, nice!" */
   reaction: string;
   /** Two or three angles, best first, each tied to a different subject where possible. */
   angles: LookAngle[];
@@ -45,7 +45,7 @@ The learner has pointed their camera at something real and wants to teach Fenny 
 
 1. thing: name the main object in a few plain words (for example "bike chain", "centrifuge", "kettle", "oak leaf", "suspension bridge"). If it is a diagram, poster or whiteboard, name what it shows ("diagram of the heart").
 2. clear: false if the photo is too dark, too blurred, or shows nothing worth explaining. Then give a short, kind retry line and leave angles empty.
-3. reaction: Fenny's first reaction in under 8 words, warm and curious, like "Ooh, a bike chain!" No question here.
+3. reaction: Fenny's first reaction in under 8 words, warm and curious, in your own words for this exact thing, like "A bike chain, nice!", "Oh, I've always wondered about these." or "Wait, is that a centrifuge?" Vary it. Don't start with "Ooh". No question here.
 4. angles: 2 or 3 different ways in, best first. Each has:
    - subject: one of the learner's subjects that genuinely fits, or "everyday" if none do. Use a different subject for each angle where you can. A biologist and a physicist looking at the same tree should get different questions.
    - question: what Fenny asks to get the learner explaining. Under 22 words. Curious, a little naive, about how or why it works, never a quiz with one right word. It must not contain the answer or any hint of it.

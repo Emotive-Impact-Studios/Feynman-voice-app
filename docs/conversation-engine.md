@@ -35,6 +35,22 @@ As soon as the learner clearly doesn't know a bit (they say so, or give two empt
 - A phone with Show me gets the Show me offer.
 - Otherwise Fenny moves on to another idea once. The second time, she ends the call kindly and suggests reading the notes first, then coming back to teach her.
 
+- Teach me is offered at most twice a call if they keep not taking it; after that Fenny moves on, then ends kindly.
+- "Okay, the leaves have chlorophyll..." after an offer is them carrying on, not a yes. Only a short reply ("Yeah, go on") counts as yes.
+
+## Never scripted
+
+Edem (2026-11-07): Fenny kept saying the same thing when they didn't know, and "Ooh" opened every call. Fenny should sound like a free flowing conversation, not a script.
+
+- The model words almost every line itself, including the Teach me offer (it only has to say the button's name, "Teach me"), the yes to it, and the kind goodbye when a bit is new to them.
+- Lines code must be sure of (backups, the goal on the first turn, progress, the retell request, the final summary) come from small banks. `pickFresh` never picks one Fenny said lately, and a seed from the call picks differently each call.
+- `noRepeatOpener` drops an opening "Ooh," "No worries," or "That's fine." that Fenny used in one of its last six lines.
+- The spoken reaction is optional: Fenny's face shows how the answer landed, so many lines go straight to the question.
+- The phone hands each line's move back (`move` on Fenny's turns, from `done.move`), so the engine keeps its place without relying on fixed wording. Older phones still work: the move is guessed from the words.
+- The phone's opening line is picked from a few each call. Camera mode's first reaction is written fresh for the thing.
+
+Test (12 turns, 30 calls each, same harness): before, 30 of 187 lines had "Ooh" (every call opened "Ooh, OK") and 16% of lines repeated an earlier opening or sentence; after, 0 "Ooh" and 0% repeats, naturalness 3.93 to 4.07, annoying 1/30 to 0/30, leaked 1/30 to 0/30. Transcripts in project files, engine-tests/variety-*.json.
+
 ## Lines the voices can read
 
 Every line Fenny says goes through `speakable()` (`apps/api/src/speakable.ts`) before any voice gets it. Em and en dashes, semicolons, markdown and emoji make the voices, Phonon above all, lose the shape of the sentence and the inflection goes wrong. Dashes become commas, number ranges become "5 to 10", and symbols are removed. The prompts also ask for proper sentences with no dashes. Before this rule, 15 of 287 lines in the test calls had a dash; after it, 0 of 240.
