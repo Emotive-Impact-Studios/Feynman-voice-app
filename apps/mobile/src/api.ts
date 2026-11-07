@@ -176,7 +176,10 @@ export interface Lesson {
 }
 
 /** A short lesson on one idea the learner is stuck on, built on the server from their notes. */
-export async function fetchLesson(input: { topic: string; idea: string; notes?: string; said?: string }, signal?: AbortSignal): Promise<Lesson> {
+/** How simply a lesson explains: a five year old, a bright 12 year old, or university level. */
+export type LessonLevel = "simple" | "standard" | "deep";
+
+export async function fetchLesson(input: { topic: string; idea: string; notes?: string; said?: string; level?: LessonLevel }, signal?: AbortSignal): Promise<Lesson> {
   if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in apps/mobile/.env");
   const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/lesson`, {
     method: "POST",

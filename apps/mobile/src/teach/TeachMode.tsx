@@ -18,7 +18,11 @@ import Animated, { cancelAnimation, Easing, FadeIn, FadeOut, useReducedMotion, u
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { buildAfter, estimateMs, filmLines, rampFor, type FilmLine } from "@feynman/audio";
-import { fetchLesson, type Lesson, type LessonBite } from "../api";
+import { fetchLesson, type Lesson, type LessonBite, type LessonLevel } from "../api";
+import type { ExplainPref } from "../data/profile";
+
+/** What Fenny asks when they're back: worded a little differently each time. */
+const WELCOME = ["Welcome back!", "Right, you're back.", "Okay, over to you.", "Nice one.", "Ready when you are."];
 import type { SpeakOptions } from "../live/useLiveCall";
 import { colour } from "../theme";
 import { Backdrop, Label, PillButton, Stat, T } from "../ui/kit";
@@ -60,6 +64,7 @@ export function TeachMode({
   onDone,
   speak,
   hush,
+  level = "smart",
 }: {
   topic: string;
   idea: string;
@@ -73,7 +78,10 @@ export function TeachMode({
   speak?: (text: string, opts?: SpeakOptions) => Promise<void>;
   /** Stop reading aloud. */
   hush?: () => void;
+  /** How simply to explain, from Settings in Me. Smart starts plain and offers Simpler or Go deeper. */
+  level?: ExplainPref;
 }) {
+  const [lvl, setLvl] = useState<LessonLevel>(level === "smart" ? "standard" : level);
   const insets = useSafeAreaInsets();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +124,10 @@ export function TeachMode({
   useEffect(() => {
     const abort = new AbortController();
     setError(null);
-    fetchLesson({ topic, idea, said, notes }, abort.signal)
+    setLesson(null);
+    setRight(0);
+    setAnswered(null);
+    fetchLesson({ topic, idea, said, notes, level: lvl }, abort.signal)
       .then((raw) => {
         // A newer server may send drawings this build cannot draw yet: those
         // bites use the simple diagram instead.
@@ -128,7 +139,7 @@ export function TeachMode({
         if (!abort.signal.aborted) setError(String(e instanceof Error ? e.message : e));
       });
     return () => abort.abort();
-  }, [topic, idea, said, notes, attempt]);
+  }, [topic, idea, said, notes, attempt, lvl]);
 
   // Fenny reads each bite aloud as it appears, in the voice chosen in Me.
   useEffect(() => {
@@ -277,7 +288,7 @@ export function TeachMode({
           <View style={styles.centre}>
             <LivingLight size={90} energy={0.5} mood="think" touchable />
             <T size={18} weight="medium" style={{ textAlign: "center", marginTop: 26 }}>
-              Making a short lesson
+              {lvl === "simple" && level !== "simple" ? "Making it simpler" : lvl === "deep" && level !== "deep" ? "Going deeper" : "Making a short lesson"}
             </T>
             <T size={15} tone="soft" style={{ textAlign: "center", marginTop: 8, maxWidth: 300 }}>
               {idea}
@@ -490,7 +501,30 @@ export function TeachMode({
           {step.kind === "read" && <PillButton label="Got it" variant="solid" onPress={next} />}
           {step.kind === "play" && (played ? <PillButton label="Next" variant="solid" onPress={next} /> : <PillButton label="Slide to see it" onPress={next} />)}
           {step.kind === "try" && answered !== null && <PillButton label="Continue" variant="solid" onPress={next} />}
-          {step.kind === "finish" && <PillButton label="Back to Fenny" variant="solid" onPress={() => onDone(`Welcome back! ${lesson.explainBack}`)} />}
+          {step.kind === "finish" &&
+            (() => {
+              const back = () => onDone(`${WELCOME[Math.floor(Math.random() * WELCOME.length)]} ${lesson.explainBack}`);
+              // Smart: most puzzles missed, so the simpler version comes first.
+              const lost = level === "smart" && lvl !== "simple" && right < lesson.bites.length / 2;
+              return (
+                <>
+                  {lost && (
+                    <T size={14.5} tone="soft" style={{ textAlign: "center" }}>
+                      That was a tricky one. Want it explained more simply first?
+                    </T>
+                  )}
+                  {lost ? <PillButton label="Explain it simpler" variant="solid" onPress={() => setLvl("simple")} /> : <PillButton label="Back to Fenny" variant="solid" onPress={back} />}
+                  <View style={styles.choices}>
+                    {lost ? (
+                      <PillButton label="Back to Fenny" style={{ flex: 1 }} onPress={back} />
+                    ) : (
+                      lvl !== "simple" && <PillButton label="Simpler" style={{ flex: 1 }} onPress={() => setLvl(lvl === "deep" ? "standard" : "simple")} />
+                    )}
+                    {lvl !== "deep" && <PillButton label="Go deeper" style={{ flex: 1 }} onPress={() => setLvl(lvl === "simple" ? "standard" : "deep")} />}
+                  </View>
+                </>
+              );
+            })()}
         </View>
       )}
     </View>

@@ -47,11 +47,14 @@ export interface Profile {
   voice?: VoicePref;
   /** Trial: shorter wait after they stop, cut in by voice on headphones, timings shown. */
   fastReplies?: boolean;
+  /** How Teach me explains: Smart (starts plain, adapts) or always one level. */
+  explainLevel?: ExplainPref;
   /** Teach me this thing: the photo behind a topic, by lower-case title (a file in the app's documents). */
   photos?: Record<string, string>;
 }
 
 export type SessionViewPref = "light" | "subtitles" | "chat";
+export type ExplainPref = "smart" | "simple" | "standard" | "deep";
 export type VoicePref = "sonic" | "phonon";
 
 const EMPTY: Profile = { introDone: false, name: "", subjects: [], secondsUsed: 0, topics: [], days: [], sessionView: "light" };
@@ -105,6 +108,11 @@ export function setSessionView(view: SessionViewPref) {
 /** Remember Fenny's voice (Settings in Me). */
 export function setVoice(voice: VoicePref) {
   if (state.voice !== voice) set({ ...state, voice });
+}
+
+/** Remember how Teach me explains (Settings in Me). */
+export function setExplainLevel(level: ExplainPref) {
+  if ((state.explainLevel ?? "smart") !== level) set({ ...state, explainLevel: level });
 }
 
 export function setFastReplies(on: boolean) {

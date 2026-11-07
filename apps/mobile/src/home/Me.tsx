@@ -4,7 +4,7 @@
 // forgives a missed day a week (see docs/behavioural-design.md).
 import { Press } from "../ui/Press";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { minutesLeft, PROTOTYPE_MINUTES, setFastReplies, setSessionView, setVoice, softStreak, type Profile, type VoicePref } from "../data/profile";
+import { minutesLeft, PROTOTYPE_MINUTES, setExplainLevel, setFastReplies, type ExplainPref, setSessionView, setVoice, softStreak, type Profile, type VoicePref } from "../data/profile";
 import { ViewIcon, VIEWS } from "../live/ViewMenu";
 import { colour } from "../theme";
 import { MinutesRing } from "../ui/Dots";
@@ -15,6 +15,13 @@ import { In, mins } from "./Today";
 const VOICES: { id: VoicePref; label: string; note: string }[] = [
   { id: "sonic", label: "Live", note: "Cartesia Sonic" },
   { id: "phonon", label: "On this phone", note: "Phonon" },
+];
+
+const EXPLAIN: { id: ExplainPref; label: string; note: string }[] = [
+  { id: "smart", label: "Smart", note: "Adapts to you" },
+  { id: "simple", label: "Simple", note: "Like you're five" },
+  { id: "standard", label: "Standard", note: "Like you're twelve" },
+  { id: "deep", label: "In depth", note: "University level" },
 ];
 
 export function Me({ profile, top, bottom, onReplayIntro }: { profile: Profile; top: number; bottom: number; onReplayIntro: () => void }) {
@@ -149,6 +156,35 @@ export function Me({ profile, top, bottom, onReplayIntro }: { profile: Profile; 
                   </T>
                   <T size={11.5} tone="muted">
                     {on ? "Trial" : "Steady"}
+                  </T>
+                </Press>
+              );
+            })}
+          </View>
+
+          <T size={15} style={{ marginTop: 22 }}>
+            Explain things
+          </T>
+          <T size={12.5} tone="muted" style={{ marginTop: 2 }}>
+            How simply Teach me explains. Smart starts plain, offers Simpler if you're still lost, and Go deeper once you've got it.
+          </T>
+          <View style={[styles.views, { flexWrap: "wrap" }]} accessibilityRole="radiogroup" accessibilityLabel="Explain things">
+            {EXPLAIN.map((o) => {
+              const chosen = (profile.explainLevel ?? "smart") === o.id;
+              return (
+                <Press
+                  key={o.id}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: chosen }}
+                  accessibilityLabel={o.label}
+                  onPress={() => setExplainLevel(o.id)}
+                  style={[styles.view, styles.voice, { minWidth: "45%" }, chosen && styles.viewOn]}
+                >
+                  <T size={13.5} tone={chosen ? "text" : "muted"}>
+                    {o.label}
+                  </T>
+                  <T size={11.5} tone="muted">
+                    {o.note}
                   </T>
                 </Press>
               );

@@ -309,6 +309,7 @@ export default function Session() {
           said={teaching.said}
           speak={loop.speak}
           hush={loop.hush}
+          level={profile.explainLevel ?? "smart"}
           onClose={() => {
             setTeaching(null);
             loop.dismissTeach();
