@@ -14,8 +14,6 @@ import { Topics } from "../home/Topics";
 import { Backdrop } from "../ui/kit";
 import { ScreenIn } from "../ui/ScreenIn";
 
-const dusk = require("../../assets/images/home-dusk.webp");
-
 export default function Home() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -32,9 +30,9 @@ export default function Home() {
 
   return (
     <View style={homeStyles.root}>
-      <Backdrop source={dusk} opacity={tab === "today" ? 0.85 : 0.45} flip={tab === "topics"} />
+      <Backdrop scene={tab} />
       <ScreenIn key={tab}>
-        {tab === "today" && <Today {...common} onNew={onNew} onTopic={onTopic} onGap={onGap} />}
+        {tab === "today" && <Today {...common} onNew={onNew} onTopic={onTopic} onGap={onGap} onLook={() => router.push("/look")} />}
         {tab === "topics" && <Topics {...common} onNew={onNew} onTopic={onTopic} />}
         {tab === "me" && (
           <Me

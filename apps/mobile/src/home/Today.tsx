@@ -9,7 +9,7 @@ import { ago, dayNumber, minutesLeft, openGaps, softStreak, todaySentence, type 
 import { colour, font } from "../theme";
 import { Glass, Icon, Label, PillButton, T } from "../ui/kit";
 import { riseIn, STAGGER_MS } from "../ui/motion";
-import { SilverRing } from "../ui/SilverRing";
+import { Soft } from "../ui/Soft";
 import { homeStyles } from "./styles";
 
 export function Today({
@@ -19,6 +19,7 @@ export function Today({
   onNew,
   onTopic,
   onGap,
+  onLook,
 }: {
   profile: Profile;
   top: number;
@@ -26,6 +27,7 @@ export function Today({
   onNew: () => void;
   onTopic: (t: string) => void;
   onGap: (topic: string, gap: SavedGap) => void;
+  onLook?: () => void;
 }) {
   const last = profile.topics[0];
   const streak = softStreak(profile.days);
@@ -63,11 +65,22 @@ export function Today({
             <T size={16} tone="soft" style={{ flex: 1 }}>
               Pick a topic, or say one
             </T>
-            <SilverRing width={52} height={52}>
-              <Icon name="mic" />
-            </SilverRing>
+            {/* The pill clips, so no glow here: just the lit fill. */}
+            <Soft lit glow={false} style={{ width: 52, height: 52 }}>
+              <Icon name="mic" color={colour.onLight} />
+            </Soft>
           </Glass>
         </Press>
+        {onLook && (
+          <Press onPress={onLook} accessibilityRole="button" accessibilityLabel="Teach me this thing: show Fenny something with the camera">
+            <Glass style={styles.look}>
+              <Icon name="camera" size={19} color={colour.soft} />
+              <T size={15} tone="soft" style={{ flex: 1 }}>
+                Or show Fenny something real
+              </T>
+            </Glass>
+          </Press>
+        )}
       </In>
 
       {last && (
@@ -165,6 +178,7 @@ const styles = StyleSheet.create({
   stats: { marginTop: 16, flexDirection: "row", flexWrap: "wrap", gap: 16 },
   stat: { flexDirection: "row", alignItems: "center", gap: 6 },
   start: { marginTop: 18, height: 64, borderRadius: 999, flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 22, paddingRight: 6 },
+  look: { marginTop: 10, height: 50, borderRadius: 999, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 20 },
   card: { marginTop: 10, borderRadius: 24, padding: 16, paddingBottom: 14 },
   list: { marginTop: 10, borderRadius: 24 },
   gapRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, paddingHorizontal: 16 },

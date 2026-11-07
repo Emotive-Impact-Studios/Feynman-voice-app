@@ -19,14 +19,25 @@ export interface TopicRecord {
   questions: number;
   /** What they want to be able to explain, in their own words. */
   goal?: string;
-  /** Their notes as text, once uploads exist (build step 3). */
-  notes?: string;
+  /** The topic's key ideas (from Fenny's engine) and the ids they have explained. */
+  ideas?: KeyIdea[];
+  known?: string[];
+  /** Ideas first explained in the latest session, so the topic page can light them up. */
+  fresh?: string[];
   /** What they said the first time they explained it, for "then and now". */
   firstAttempt?: string;
   /** Gaps from gap analysis, newest first. Cleared ones stay, marked. */
   gaps?: SavedGap[];
   /** What came across clearly, in their words, newest first. */
   strengths?: Strength[];
+}
+
+export interface KeyIdea {
+  id: string;
+  /** The idea itself (the answer). */
+  idea: string;
+  /** A short name for it that doesn't give the answer away. */
+  label?: string;
 }
 
 export interface SavedGap extends Gap {
@@ -44,9 +55,20 @@ export interface Profile {
   topics: TopicRecord[];
   /** Local day numbers on which they explained something, for the soft streak. */
   days: number[];
+  /** How a session shows the conversation: the light, subtitles or the full chat. */
+  sessionView: SessionViewPref;
+  /** Fenny's voice: Cartesia Sonic from the server, or Phonon downloaded to the phone. */
+  voice?: VoicePref;
+  /** Trial: shorter wait after they stop, cut in by voice on headphones, timings shown. */
+  fastReplies?: boolean;
+  /** Teach me this thing: the photo behind a topic, by lower-case title (a file in the app's documents). */
+  photos?: Record<string, string>;
 }
 
-const EMPTY: Profile = { introDone: false, name: "", subjects: [], secondsUsed: 0, topics: [], days: [] };
+export type SessionViewPref = "light" | "subtitles" | "chat";
+export type VoicePref = "sonic" | "phonon";
+
+const EMPTY: Profile = { introDone: false, name: "", subjects: [], secondsUsed: 0, topics: [], days: [], sessionView: "light" };
 const file = new File(Paths.document, "profile.json");
 
 function load(): Profile {
@@ -89,19 +111,51 @@ export function finishIntro(name: string, subjects: string[]) {
   set({ ...state, introDone: true, name: name.trim(), subjects });
 }
 
+/** Remember how sessions should look, from Me or from the session's own menu. */
+export function setSessionView(view: SessionViewPref) {
+  if (state.sessionView !== view) set({ ...state, sessionView: view });
+}
+
+/** Remember Fenny's voice (Settings in Me). */
+export function setVoice(voice: VoicePref) {
+  if (state.voice !== voice) set({ ...state, voice });
+}
+
+export function setFastReplies(on: boolean) {
+  if (!!state.fastReplies !== on) set({ ...state, fastReplies: on });
+}
+
+/** Teach me this thing: remember the photo a topic started from, for its card in Topics. */
+export function setTopicPhoto(title: string, uri: string) {
+  const key = title.trim().toLowerCase();
+  if (!key || state.photos?.[key] === uri) return;
+  set({ ...state, photos: { ...state.photos, [key]: uri } });
+}
+
+export function photoFor(p: Profile, title: string): string | undefined {
+  return p.photos?.[title.trim().toLowerCase()];
+}
+
 export function replayIntro() {
   set({ ...state, introDone: false });
 }
 
 /** Record a finished session. Sessions with no speaking are not saved. */
-export function recordSession(title: string, seconds: number, questions: number, goal?: string) {
+export function recordSession(
+  title: string,
+  seconds: number,
+  questions: number,
+  goal?: string,
+  map?: { ideas: KeyIdea[]; covered: string[] },
+) {
   const t = title.trim();
   if (!t || seconds < 1) return;
   const old = findTopic(t);
   const g = goal?.trim() || old?.goal;
-  const rec: TopicRecord = old
+  const base: TopicRecord = old
     ? { ...old, at: Date.now(), seconds: old.seconds + seconds, sessions: old.sessions + 1, questions: old.questions + questions, goal: g }
     : { title: t, at: Date.now(), seconds, sessions: 1, questions, goal: g };
+  const rec = map ? { ...base, ...mergeIdeas(old, map) } : { ...base, fresh: [] };
   const today = dayNumber(Date.now());
   set({
     ...state,
@@ -109,6 +163,19 @@ export function recordSession(title: string, seconds: number, questions: number,
     topics: [rec, ...state.topics.filter((x) => x !== old)],
     days: state.days.includes(today) ? state.days : [...state.days, today].slice(-120),
   });
+}
+
+/**
+ * The topic's ideas after a session. The server builds the checklist once per
+ * topic, so it is normally the same list each time and what they knew adds up.
+ * If it came back different (the server restarted), the new list starts over
+ * with what they explained this time. Lasting maps come with accounts.
+ */
+function mergeIdeas(old: TopicRecord | undefined, map: { ideas: KeyIdea[]; covered: string[] }): Pick<TopicRecord, "ideas" | "known" | "fresh"> {
+  const same = !!old?.ideas && old.ideas.length === map.ideas.length && old.ideas.every((k, i) => k.idea === map.ideas[i].idea);
+  const before = same ? (old?.known ?? []) : [];
+  const fresh = map.covered.filter((id) => !before.includes(id));
+  return { ideas: map.ideas, known: [...before, ...fresh], fresh };
 }
 
 const MAX_GAPS = 30;

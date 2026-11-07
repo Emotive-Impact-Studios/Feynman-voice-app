@@ -12,17 +12,18 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollVie
 import { Redirect, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown, FadeOutLeft, SlideInRight } from "react-native-reanimated";
 import { analyseCall, showMe, type Analysis, type Gap } from "../api";
 import { getFinishedCall, SHAKIEST_MIN_SECONDS, TELL_ME, TELL_ME_BUTTON, type FinishedCall } from "../data/lastCall";
+import { getNotes } from "../data/notes";
 import { findTopic, minutesLeft, saveAnalysis, useProfile, type SavedGap } from "../data/profile";
 import { colour, font } from "../theme";
 import { Backdrop, Glass, Label, PillButton, T } from "../ui/kit";
 import { LivingLight } from "../ui/LivingLight";
 import { spring } from "../ui/motion";
 
-const feedbackBg = require("../../assets/images/feedback.webp");
 const gapArt = require("../../assets/images/card-gap.webp");
 const skippedArt = require("../../assets/images/card-review.webp");
 
@@ -49,8 +50,7 @@ function ResultsFor({ call }: { call: FinishedCall }) {
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
 
-  const record = findTopic(call.topic);
-  const notes = record?.notes;
+  const notes = getNotes(call.topic);
   const learnerText = call.turns
     .filter((t) => t.speaker === "learner")
     .map((t) => t.text)
@@ -67,7 +67,7 @@ function ResultsFor({ call }: { call: FinishedCall }) {
     const firstAttempt = before && before.sessions > 1 ? before.firstAttempt : undefined;
     try {
       const a = await analyseCall(
-        { topic: call.topic, goal: call.goal, notes: before?.notes, turns: call.turns, shakiest: shakiest.trim() || undefined, firstAttempt, focus: call.focus, missedIdeas: call.missedIdeas },
+        { topic: call.topic, goal: call.goal, notes, turns: call.turns, shakiest: shakiest.trim() || undefined, firstAttempt, focus: call.focus, missedIdeas: call.missedIdeas },
         ctl.signal,
       );
       if (ctl.signal.aborted) return;
@@ -97,7 +97,7 @@ function ResultsFor({ call }: { call: FinishedCall }) {
 
   return (
     <View style={styles.root}>
-      <Backdrop source={feedbackBg} opacity={0.85} />
+      <Backdrop scene="session" />
       <LinearGradient
         colors={["rgba(10,11,13,0.15)", "rgba(10,11,13,0.35)", "rgba(10,11,13,0.92)", colour.ground]}
         locations={[0, 0.4, 0.78, 1]}
@@ -413,7 +413,7 @@ function GapCard({
 
   return (
     <Animated.View entering={SlideInRight.springify().duration(spring.bouncy.duration).dampingRatio(spring.bouncy.dampingRatio)} exiting={FadeOutLeft} style={styles.card}>
-      <Backdrop source={gap.kind === "skipped" ? skippedArt : gapArt} opacity={0.75} />
+      <Image source={gap.kind === "skipped" ? skippedArt : gapArt} contentFit="cover" style={[StyleSheet.absoluteFill, { opacity: 0.75 }]} accessibilityElementsHidden />
       <LinearGradient colors={["rgba(10,11,13,0)", "rgba(10,11,13,0.85)", "rgba(10,11,13,0.95)"]} locations={[0.2, 0.62, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
       <View style={styles.cardInner}>
         <View style={styles.rowBetween}>

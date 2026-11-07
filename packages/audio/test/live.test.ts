@@ -41,10 +41,15 @@ describe("EndOfTurn", () => {
 
 describe("quietAfter", () => {
   it("gives why and how questions thinking time", () => {
-    expect(quietAfter("Why does the price go up?")).toBe(2.5);
-    expect(quietAfter("So how would that work?")).toBe(2.5);
-    expect(quietAfter("What is an enzyme?")).toBe(1.2);
-    expect(quietAfter("Is that the same as showing?")).toBe(1.2);
+    expect(quietAfter("Why does the price go up?")).toBe(3);
+    expect(quietAfter("So how would that work?")).toBe(3);
+    expect(quietAfter("What is an enzyme?")).toBe(2);
+    expect(quietAfter("Is that the same as showing?")).toBe(2);
+  });
+
+  it("waits less in the faster-replies trial", () => {
+    expect(quietAfter("Why does the price go up?", true)).toBe(2);
+    expect(quietAfter("What is an enzyme?", true)).toBe(1.2);
   });
 });
 

@@ -27,11 +27,24 @@ Extra stream events: `{"type":"engine","move","covered","ideas"}` every turn and
 phone sends `features: ["show_me"]` once it can show the card; older phones are
 never offered it.
 
-On the phone (`useLiveCall`): `show_me` opens `live/ShowMeCard.tsx` over the
-call, which fetches `/api/show-me` and hands back with "Now tell Fenny in your
-own words". The transcript of the first turn that ends in `wrap` is their answer
-to "which bit felt shakiest?", so the results skip the typed question. Key ideas
-never in `covered` go to `/api/analyse` as `missedIdeas`, to seed "skipped" gaps.
+## When they don't know it
+
+As soon as the learner clearly doesn't know a bit (they say so, or give two empty answers in a row), Fenny stops asking about it. She never asks the same thing a smaller or different way.
+
+- A phone with teach mode (it sends `features: ["teach"]`) gets the offer "Tap Teach me to learn it first" (move `offer_teach`, event `teach_offer` with the idea). A spoken yes gives move `teach` and event `teach`, which opens teach mode.
+- A phone with Show me gets the Show me offer.
+- Otherwise Fenny moves on to another idea once. The second time, she ends the call kindly and suggests reading the notes first, then coming back to teach her.
+
+## Lines the voices can read
+
+Every line Fenny says goes through `speakable()` (`apps/api/src/speakable.ts`) before any voice gets it. Em and en dashes, semicolons, markdown and emoji make the voices, Phonon above all, lose the shape of the sentence and the inflection goes wrong. Dashes become commas, number ranges become "5 to 10", and symbols are removed. The prompts also ask for proper sentences with no dashes. Before this rule, 15 of 287 lines in the test calls had a dash; after it, 0 of 240.
+
+## After the call
+
+The transcript of the first turn that ends in `wrap` is the learner's answer
+to "which bit felt shakiest?", so the results skip the typed question. Key
+ideas never in `covered` go to `/api/analyse` as `missedIdeas`, to seed
+"skipped" gaps.
 
 ## The conversation test
 
@@ -48,3 +61,14 @@ Feynman loop. Transcripts are written to `converse-test-results.json`.
 First run (2026-11-05): the engine's first draft was annoying in 14 of 24 calls
 (it parroted "Ooh, and what happens after that?"). After fixes: 0 of 30
 annoying, nag 1.1, naturalness 4.1, Feynman loop 4.7 (old prompt: 3.7).
+
+## A clear goal, a clear end, and how it landed
+
+Edem's feedback (2026-11-06): the calls felt like an endless run of questions, with no goal, no end in sight, and no idea whether an answer was right.
+
+- **Goal up front.** The key ideas are now 3 or 4, and each one has a short label that doesn't give the answer away ("why the heart has valves"). On the learner's first turn Fenny says what it wants to understand: "By the end I want to understand three things: a, b and c."
+- **How it landed.** Every turn the model gives a verdict (right, partly, off or none) and opens its line with a matching reaction, without ever saying the answer. If the opener repeats one of Fenny's recent openers, code swaps in a fresh one for the same verdict. The verdict also goes to the phone in the `engine` event.
+- **Progress you can hear.** Code counts the covered ideas. When another one is done, Fenny says "That's two of the three things." Code reads back the last count from Fenny's own lines, so the server stays stateless.
+- **A clear end.** Once every idea is covered, Fenny asks for the 30 second retell straight away ("That's all three things I wanted to understand..."). After the shakiest-bit question the call always ends. The goodbye is built in code: what they explained well, and the shaky bit for next time.
+
+30 simulated calls of up to 14 turns: 29 of 30 ended by themselves, the median was 6 learner turns, none were annoying, nag 1.17, natural 4.07.

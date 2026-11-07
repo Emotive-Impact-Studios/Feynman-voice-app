@@ -6,6 +6,9 @@ const END = /[.?!…]["')\]]*\s+/g;
 export class SentenceSplitter {
   private buffer = "";
 
+  /** Pieces shorter than `minChars` are joined to the next sentence. */
+  constructor(private minChars = 12) {}
+
   /** Add streamed text. Returns any sentences it completed. */
   push(delta: string): string[] {
     this.buffer += delta;
@@ -16,7 +19,7 @@ export class SentenceSplitter {
       const end = m.index + m[0].length;
       const sentence = this.buffer.slice(start, end).trim();
       // Very short pieces ("Oh." "Hm?") sound better joined to what follows.
-      if (sentence.length < 12) continue;
+      if (sentence.length < this.minChars) continue;
       out.push(sentence);
       start = end;
     }

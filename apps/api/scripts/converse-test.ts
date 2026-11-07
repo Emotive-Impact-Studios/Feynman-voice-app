@@ -9,6 +9,11 @@ import { liveSystemPrompt } from "../src/live";
 import type { PastTurn } from "../src/gemini";
 
 const cfg: ChatCfg = { apiKey: process.env.OPENAI_API_KEY!, model: process.env.OPENAI_CHAT_MODEL ?? "gpt-5.4-mini", reasoningEffort: "none" };
+// Fenny's own brain can be swapped for the comparison, e.g. FENNY_MODEL=claude-haiku-5-5.
+// The simulated learner and the judge stay on the same model, so only Fenny changes.
+const fennyCfg: ChatCfg = process.env.FENNY_MODEL
+  ? { ...cfg, model: process.env.FENNY_MODEL, anthropicKey: process.env.ANTHROPIC_API_KEY }
+  : cfg;
 const judgeCfg: ChatCfg = { ...cfg, model: process.env.JUDGE_MODEL ?? cfg.model, reasoningEffort: process.env.JUDGE_MODEL ? undefined : "low" };
 
 const PERSONAS: Record<string, string> = {
@@ -71,15 +76,25 @@ async function judge(topic: string, convo: PastTurn[]): Promise<Score> {
 
 async function run(kind: "old" | "engine", persona: string, topic: string, turns: number) {
   const convo: PastTurn[] = [];
-  const ideas = kind === "engine" ? (await keyIdeas(cfg, topic)).ideas : undefined;
+  const ideas = kind === "engine" ? (await keyIdeas(fennyCfg, topic)).ideas : undefined;
   const moves: string[] = [];
+  // Fenny's own speed and token use, for comparing brains.
+  const ms: number[] = [];
+  const tokens = { prompt: 0, cached: 0, completion: 0 };
   for (let i = 0; i < turns; i++) {
     const said = await learnerSay(persona, topic, convo);
     let reply: string;
     if (kind === "old") reply = await oldFenny(topic, convo, said);
     else {
       // Same split as live.ts: the whole call for state, the last 20 lines for the model.
-      const t = await engineTurn(cfg, { transcript: said, history: convo.slice(-20), callHistory: convo, topic, ideas, limits: { canShowMe: true } });
+      const t0 = Date.now();
+      const t = await engineTurn(fennyCfg, { transcript: said, history: convo.slice(-20), callHistory: convo, topic, ideas, limits: { canShowMe: true } });
+      ms.push(Date.now() - t0);
+      for (const u of t.usage) {
+        tokens.prompt += u.prompt_tokens ?? 0;
+        tokens.cached += u.prompt_tokens_details?.cached_tokens ?? 0;
+        tokens.completion += u.completion_tokens ?? 0;
+      }
       reply = t.say;
       moves.push(t.move);
       if (t.move === "wrap") {
@@ -94,6 +109,9 @@ async function run(kind: "old" | "engine", persona: string, topic: string, turns
   return {
     convo,
     moves,
+    ms,
+    tokens,
+    words: convo.reduce((n, t) => n + t.text.split(/\s+/).length, 0),
     vague: fenny.filter((l) => isVague(l) && !/shakiest/i.test(l)).length,
     probes: fenny.filter((l) => PROBES.includes(moveOf(l))).length / fenny.length,
     score: await judge(topic, convo),
@@ -118,6 +136,8 @@ for (const k of kinds) {
   console.log(`\n${k}: ${rs.length} calls`);
   console.log(`  natural ${avg((r) => r.score.natural)}  nag ${avg((r) => r.score.nag)}  on-subject ${avg((r) => r.score.on_subject)}  loop ${avg((r) => r.score.loop)}`);
   console.log(`  annoying ${rs.filter((r) => r.score.would_annoy).length}/${rs.length}  leaked ${rs.filter((r) => r.score.leaked).length}/${rs.length}  vague lines ${rs.reduce((n, r) => n + r.vague, 0)}  probe share ${avg((r) => r.probes)}`);
+  const allMs = rs.flatMap((r) => r.ms).sort((a, b) => a - b);
+  if (allMs.length) console.log(`  turn latency median ${allMs[allMs.length >> 1]}ms  p90 ${allMs[Math.floor(allMs.length * 0.9)]}ms`);
   for (const p of Object.keys(PERSONAS)) {
     const pr = results.filter((x) => x.k === k && x.p === p && x.r).map((x) => x.r!);
     console.log(`  ${p.padEnd(10)} annoying ${pr.filter((r) => r.score.would_annoy).length}/${pr.length}  nag ${(pr.reduce((n, r) => n + r.score.nag, 0) / pr.length).toFixed(1)}`);

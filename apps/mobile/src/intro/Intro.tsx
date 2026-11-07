@@ -27,10 +27,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { finishIntro, getProfile, SUBJECTS } from "../data/profile";
 import { colour, font } from "../theme";
 import { Glass, Icon, Label, PillButton, T } from "../ui/kit";
-import { GlowRing } from "../ui/GlowRing";
 import { LivingLight } from "../ui/LivingLight";
+import { useFennyCue } from "../ui/FennyOrb";
 import { smooth, snappy, spring } from "../ui/motion";
-import { SilverRing } from "../ui/SilverRing";
+import { Soft } from "../ui/Soft";
 
 const img = {
   dawn: require("../../assets/images/intro-dawn.webp"),
@@ -90,6 +90,15 @@ export default function Intro() {
 
   const onStage = STAGE.includes(screen);
   const slide = screen === "s0" ? 0 : screen === "s1" ? 1 : screen === "s2" ? 2 : -1;
+
+  // Fenny says hello as it meets them on the second slide.
+  const [cue, react] = useFennyCue();
+  useEffect(() => {
+    if (screen !== "s1") return;
+    const id = setTimeout(() => react("hello"), 350);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen]);
 
   // The splash moves on by itself, as on the board.
   useEffect(() => {
@@ -164,7 +173,7 @@ export default function Intro() {
           <Pressable style={StyleSheet.absoluteFill} onPress={screen === "auth" ? undefined : next} accessibilityLabel="Next" accessibilityRole="button">
             <Animated.View pointerEvents="none" style={[styles.hero, heroStyle]}>
               {(screen === "splash" || screen === "s0" || screen === "s1") && <Ripples size={HERO_SIZE} />}
-              <LivingLight size={HERO_SIZE} energy={screen === "s1" ? 1 : 0} />
+              <LivingLight size={HERO_SIZE} energy={screen === "s1" ? 1 : 0} mood={screen === "s1" ? "curious" : "rest"} peek cue={cue} />
             </Animated.View>
 
             {screen === "splash" && <Splash bottom={insets.bottom} />}
@@ -194,17 +203,17 @@ export default function Intro() {
               )}
               <Animated.View style={[styles.morph, ctlStyle]}>
                 <Press onPress={next} accessibilityRole="button" accessibilityLabel={last ? "Get started" : "Next"} style={{ flex: 1 }}>
-                  <SilverRing width={last ? width - 52 : 62} height={62}>
+                  <Soft lit style={{ flex: 1 }}>
                     {last ? (
                       <Animated.View entering={FadeIn.delay(200)}>
-                        <T size={16} weight="semibold">
+                        <T size={16} weight="semibold" tone="dark">
                           Get started
                         </T>
                       </Animated.View>
                     ) : (
-                      <Arrow />
+                      <Arrow color={colour.onLight} />
                     )}
-                  </SilverRing>
+                  </Soft>
                 </Press>
               </Animated.View>
             </Animated.View>
@@ -290,9 +299,9 @@ export default function Intro() {
         <Step top={insets.top} bottom={insets.bottom} progress={3} centre plain>
           <View style={{ width: 150, height: 150, marginTop: 110, alignItems: "center", justifyContent: "center" }}>
             <Ripples size={150} />
-            <SilverRing width={90} height={90}>
+            <Soft style={{ width: 90, height: 90 }}>
               <Icon name="mic" size={28} />
-            </SilverRing>
+            </Soft>
           </View>
           <Rise d={1}>
             <T size={34} weight="medium" style={{ marginTop: 50, textAlign: "center" }}>
@@ -472,10 +481,10 @@ function Dot({ on }: { on: boolean }) {
   return <Animated.View style={[{ height: 6, borderRadius: 3, backgroundColor: on ? colour.silver : "rgba(255,255,255,0.22)" }, st]} />;
 }
 
-function Arrow() {
+function Arrow({ color = colour.text }: { color?: string }) {
   return (
     <Svg width={20} height={20} viewBox="0 0 24 24">
-      <Path d="M5 12h14M13 6l6 6-6 6" stroke={colour.text} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <Path d="M5 12h14M13 6l6 6-6 6" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </Svg>
   );
 }
@@ -538,7 +547,7 @@ function Step({
           {light && (
             <Rise d={0}>
               <View style={{ marginTop: 44, width: 64, height: 64 }}>
-                <LivingLight size={64} />
+                <LivingLight size={64} mood="listen" />
               </View>
             </Rise>
           )}
@@ -562,9 +571,9 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
     >
       <Animated.View style={st}>
         {on ? (
-          <SilverRing width={chipWidth(label)} height={46} fill="#1A1B1F">
-            <T size={15}>{label}</T>
-          </SilverRing>
+          <Soft lit style={{ width: chipWidth(label), height: 46 }}>
+            <T size={15} tone="dark">{label}</T>
+          </Soft>
         ) : (
           <Glass style={{ height: 46, borderRadius: 999, paddingHorizontal: 17, justifyContent: "center" }}>
             <T size={15} tone="soft">
@@ -606,7 +615,7 @@ function Meet({ name, bottom, onDone, onReplay }: { name: string; bottom: number
       <Animated.Image source={img.glow} resizeMode="cover" style={[StyleSheet.absoluteFill, { opacity: 0.8 }]} />
       <Animated.View entering={FadeInDown.duration(1900).easing(ease)} style={{ position: "absolute", top: "20%", alignSelf: "center", width: 220, height: 220 }}>
         <Ripples size={220} />
-        <GlowRing size={220} energy={typed ? 0 : 1} />
+        <LivingLight size={220} energy={typed ? 0 : 1} mood={typed ? "listen" : "curious"} />
       </Animated.View>
       <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 26, paddingBottom: Math.max(bottom, 20) + 10, alignItems: "center" }}>
         <Animated.View entering={FadeInDown.delay(1200).duration(700)}>
@@ -635,7 +644,7 @@ const styles = StyleSheet.create({
   hero: { position: "absolute", left: 0, top: 0, width: HERO_SIZE, height: HERO_SIZE, alignItems: "center", justifyContent: "center" },
   copy: { position: "absolute", left: 26, right: 26 },
   controls: { position: "absolute", left: 26, right: 26, height: 62, flexDirection: "row", alignItems: "center", gap: 14 },
-  morph: { position: "absolute", right: 0, top: 0, height: 62, borderRadius: 999, overflow: "hidden" },
+  morph: { position: "absolute", right: 0, top: 0, height: 62, borderRadius: 999 },
   sheet: {
     position: "absolute",
     left: 8,

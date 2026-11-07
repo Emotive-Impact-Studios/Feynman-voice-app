@@ -5,75 +5,44 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { setFinishedCall } from "../data/lastCall";
-import { ShowMeCard } from "../live/ShowMeCard";
-import { findTopic, minutesLeft, recordSession, useProfile } from "../data/profile";
+import { findTopic, recordSession, useProfile } from "../data/profile";
 import { colour } from "../theme";
 import { DotWave } from "../ui/Dots";
-import { Backdrop, Glass, Icon, images, Label, PillButton, RoundButton, T } from "../ui/kit";
-import { GlowRing } from "../ui/GlowRing";
+import { Backdrop, Icon, Label, PillButton, T } from "../ui/kit";
+import { HoldButton } from "../ui/HoldButton";
 import { LivingLight } from "../ui/LivingLight";
-import { SilverRing } from "../ui/SilverRing";
-import { Press } from "../ui/Press";
+import { moodFor } from "../ui/mood";
+import { useFennyCue } from "../ui/FennyOrb";
+import { reactionFor } from "../ui/reactions";
+import { GotChip, IdeaBar } from "../ui/IdeaProgress";
+import * as Haptics from "expo-haptics";
+import { RecordDisc } from "../ui/RecordDisc";
 import { ScreenIn } from "../ui/ScreenIn";
 import { VoiceGlow } from "../ui/VoiceGlow";
-import { ViewIcon, ViewMenu, VIEWS, type SessionView } from "../live/ViewMenu";
+import type { SessionView } from "../live/ViewMenu";
 import type { LiveEars, LiveVoice } from "../api";
-import { phononAvailable, useLiveCall, type CallTurnStats } from "../live/useLiveCall";
+import { useLiveCall } from "../live/useLiveCall";
+import { getNotes } from "../data/notes";
+import { TeachMode } from "../teach/TeachMode";
+import { Press } from "../ui/Press";
+import Animated from "react-native-reanimated";
+import { riseIn } from "../ui/motion";
 
 type View3 = SessionView;
 
 const OPENING = "Explain it as if I know nothing. I'll ask when I get lost.";
 
-const STATUS = {
-  loading: "Getting ready",
-  ready: "Tap the ring to start the call",
-  listening: "Listening",
-  thinking: "Thinking of a question. Keep talking to carry on.",
-  speaking: "Your student is asking. Talk or tap to cut in.",
-  error: "Something went wrong",
+// What the button does now (first line) and the next thing to know (second).
+const HINTS = {
+  loading: ["Getting ready", "Hold the button to end the session"],
+  ready: ["Tap to start explaining", "Hold the button to end the session"],
+  listening: ["Listening", "Tap when you pause for a question"],
+  thinking: ["Thinking of a question", "Keep talking if you weren't finished"],
+  speaking: ["Your student is asking", "Tap to answer. Hold to end the session"],
+  error: ["Something went wrong", "Hold the button to end the session"],
 } as const;
-
-// Test switches: which voice speaks and which service hears.
-const VOICES: { id: LiveVoice; label: string }[] = [
-  ...(phononAvailable ? [{ id: "phonon" as const, label: "Phonon" }] : []),
-  { id: "sonic", label: "Sonic" },
-  { id: "kitten", label: "Kitten" },
-];
-const EARS: { id: LiveEars; label: string }[] = [
-  { id: "auto", label: "Auto" },
-  { id: "cartesia", label: "Cartesia" },
-  { id: "openai", label: "OpenAI" },
-];
-const VOICE_NAME: Record<LiveVoice, string> = { phonon: "Phonon", sonic: "Sonic", kitten: "Kitten" };
-
-function statLine(s: CallTurnStats) {
-  const first = s.firstWordMs ? `first word ${(s.firstWordMs / 1000).toFixed(1)}s` : "no sound";
-  const ears = s.ears === "cartesia" ? "Cartesia" : "OpenAI";
-  return `${VOICE_NAME[s.voice]} voice, ${ears} ears. ${first}, ${s.pence.toFixed(2)}p`;
-}
-
-function Segmented<V extends string>({ items, value, onChange }: { items: { id: V; label: string }[]; value: V; onChange: (v: V) => void }) {
-  return (
-    <View style={styles.segment}>
-      {items.map((it) => (
-        <Press
-          key={it.id}
-          accessibilityRole="button"
-          accessibilityState={{ selected: it.id === value }}
-          onPress={() => onChange(it.id)}
-          style={[styles.switchItem, it.id === value && { backgroundColor: "rgba(255,255,255,0.14)" }]}
-        >
-          <T size={13} tone={it.id === value ? "text" : "muted"}>
-            {it.label}
-          </T>
-        </Press>
-      ))}
-    </View>
-  );
-}
 
 function clock(seconds: number) {
   const s = Math.floor(seconds);
@@ -95,13 +64,17 @@ export default function Session() {
   const opening = params.prompt ?? OPENING;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const [view, setView] = useState<View3>("light");
-  const [voice, setVoice] = useState<LiveVoice>("sonic");
-  const [ears, setEars] = useState<LiveEars>("auto");
-  const [showSettings, setShowSettings] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const loop = useLiveCall(brainTopic, { voice, ears });
-  const lastStat = loop.stats.at(-1);
+  // The view is chosen in Me, under Settings. The session itself has no switch.
+  const [view] = useState<View3>(() => profile.sessionView ?? "light");
+  // Chosen in Settings (Me): Cartesia Sonic, or Phonon on the phone for demos.
+  const [voice] = useState<LiveVoice>(() => profile.voice ?? "sonic");
+  const ears: LiveEars = "auto";
+  const [fast] = useState(() => !!profile.fastReplies);
+  // Pages they scanned for this topic: Fenny uses them to spot what they leave out.
+  const [notes] = useState(() => getNotes(topic));
+  const loop = useLiveCall(brainTopic, { voice, ears, fast, notes });
+  // Faster-replies trial: how long the last reply took, so we can compare.
+  const lastStats = fast ? loop.stats[loop.stats.length - 1] : undefined;
 
   const spoken = loop.heardSeconds + (loop.phase === "listening" ? loop.liveSpeaking : 0);
   const asked = [...loop.turns].reverse().find((t) => t.speaker === "student")?.text ?? opening;
@@ -109,7 +82,31 @@ export default function Session() {
   const lastYou = [...loop.turns].reverse().find((t) => t.speaker === "learner")?.text;
 
   const studentEnergy = loop.phase === "speaking" ? 1 : loop.phase === "thinking" ? 0.5 : 0;
+  // Fenny's eyes: on you while you talk, up while it thinks, and the face for
+  // what it is saying while it speaks.
+  const mood = moodFor(loop.phase, loop.move);
+  // Nodding along while they talk.
+  const nod = loop.phase === "listening" && loop.isTalking ? 1 : 0;
   const voiceLevel = loop.phase === "listening" ? (loop.isTalking ? 1 : 0.25) : 0;
+  // Fenny's reactions: hello as the call starts, aha when you finish a turn,
+  // hmm when it's lost, yay when it gets it. Talking while it speaks.
+  const talk = loop.phase === "speaking" ? 1 : 0;
+  const [cue, react] = useFennyCue();
+  const was = useRef({ phase: loop.phase as string, move: loop.move });
+  useEffect(() => {
+    const next = { phase: loop.phase as string, move: loop.move };
+    const r = reactionFor(was.current, next);
+    was.current = next;
+    if (r) react(r);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loop.phase, loop.move]);
+  // The got it moment: each key idea they nail gets a hop, a buzz and a chip.
+  useEffect(() => {
+    if (!loop.got) return;
+    react("yay");
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loop.got?.n]);
 
   // Gently animate the dot wave while you talk.
   const [tick, setTick] = useState(0);
@@ -120,9 +117,15 @@ export default function Session() {
   }, [loop.phase]);
 
   // The ring starts the call, sends the turn early, or cuts the student off.
+  // Holding it ends the session.
   const canTap = loop.phase !== "loading";
   const onRing =
-    loop.phase === "listening" ? loop.finish : loop.phase === "thinking" || loop.phase === "speaking" ? loop.interrupt : loop.start;
+    loop.phase === "listening"
+      ? loop.finish
+      : loop.phase === "thinking" || loop.phase === "speaking"
+        ? loop.interrupt
+        : // First start: Fenny says its opening question out loud.
+          () => loop.start(loop.turns.length ? undefined : opening).catch(() => {});
   const ringIcon = loop.phase === "listening" ? "check" : loop.phase === "thinking" || loop.phase === "speaking" ? "pause" : "mic";
   const ringLabel =
     loop.phase === "listening" ? "Done, ask me" : loop.phase === "thinking" || loop.phase === "speaking" ? "Cut in" : "Start the call";
@@ -131,12 +134,13 @@ export default function Session() {
   // analysis), or back to Today if nothing was said.
   // Saved once, whether you tap End, close, or go back with the system.
   const saved = useRef(false);
-  const latest = useRef({ spoken, questions: 0 });
-  latest.current = { spoken, questions: loop.turns.filter((t) => t.speaker === "student").length };
+  const latest = useRef({ spoken, questions: 0, ideas: [] as { id: string; idea: string; label?: string }[], covered: [] as string[] });
+  latest.current = { spoken, questions: loop.turns.filter((t) => t.speaker === "student").length, ideas: loop.ideas, covered: loop.covered };
   const save = useCallback(() => {
     if (saved.current) return;
     saved.current = true;
-    recordSession(topic, latest.current.spoken, latest.current.questions, goal);
+    const l = latest.current;
+    recordSession(topic, l.spoken, l.questions, goal, l.ideas.length ? { ideas: l.ideas, covered: l.covered } : undefined);
   }, [topic, goal]);
   useEffect(() => save, [save]);
   const end = () => {
@@ -151,12 +155,25 @@ export default function Session() {
         turns: loop.turns,
         seconds: latest.current.spoken,
         shakiest: loop.shakiest ?? undefined,
-        missedIdeas: loop.ideas.filter((i) => !i.covered).map((i) => i.idea),
+        missedIdeas: loop.ideas.filter((i) => !loop.covered.includes(i.id)).map((i) => i.idea),
       });
       router.replace("/results");
     } else router.back();
   };
-  const close = end;
+  // Teach me: the call steps aside for a short lesson on the stuck idea.
+  const [teaching, setTeaching] = useState<{ idea: string; said?: string } | null>(null);
+  const openTeach = () => {
+    if (!loop.teach) return;
+    loop.cancel();
+    setTeaching({ idea: loop.teach.idea, said: lastYou });
+  };
+  // They said yes out loud: open it once Fenny has finished speaking.
+  useEffect(() => {
+    if (loop.teach?.open && !teaching && loop.phase === "listening") openTeach();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loop.teach, loop.phase]);
+  const offerTeach = !!loop.teach && !loop.teach.open && !teaching && (loop.phase === "listening" || loop.phase === "speaking");
+
   // Fenny said goodbye: save and leave, as if they tapped End.
   useEffect(() => {
     if (loop.finished) end();
@@ -165,16 +182,15 @@ export default function Session() {
 
   return (
     <ScreenIn style={styles.root}>
+      <Backdrop scene="session" />
       {view === "light" && (
         <>
-          <Backdrop source={images.horizon} opacity={0.3} />
           <VoiceGlow level={voiceLevel} height={230} dim />
-          <View style={[styles.centre, { paddingTop: insets.top + 120 }]}>
-            <GlowRing size={230} energy={studentEnergy} />
-            <Label tone="student" style={{ marginTop: 28 }}>
-              Student
-            </Label>
-            <T size={22} weight="medium" style={{ textAlign: "center", marginTop: 10, maxWidth: 330, lineHeight: 30 }}>
+          {/* Calm and empty, like a voice mode: one small living light and
+              one line in the middle of the screen, nothing else lit. */}
+          <View style={[StyleSheet.absoluteFill, styles.centre, { justifyContent: "center", paddingBottom: 140 }]} pointerEvents="box-none">
+            <LivingLight size={120} energy={studentEnergy} mood={mood} nod={nod} talk={talk} cue={cue} touchable />
+            <T size={22} weight="medium" style={{ textAlign: "center", marginTop: 26, maxWidth: 320, lineHeight: 30 }}>
               {question}
             </T>
           </View>
@@ -186,7 +202,7 @@ export default function Session() {
           <VoiceGlow level={voiceLevel} height={260} />
           <View style={{ paddingTop: insets.top + 130, paddingHorizontal: 26 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <LivingLight size={30} energy={studentEnergy} />
+              <LivingLight size={30} energy={studentEnergy} mood={mood} nod={nod} talk={talk} cue={cue} />
               <Label tone="student">Student</Label>
             </View>
             <T size={36} weight="medium" style={{ marginTop: 14, lineHeight: 40 }}>
@@ -203,15 +219,22 @@ export default function Session() {
 
       {view === "chat" && (
         <>
-          <Backdrop source={images.aurora} opacity={0.9} />
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingTop: insets.top + 130, paddingBottom: 140, paddingHorizontal: 20, gap: 14, flexGrow: 1, justifyContent: "flex-end" }}
+            contentContainerStyle={{ paddingTop: insets.top + 130, paddingBottom: 200, paddingHorizontal: 20, gap: 14, flexGrow: 1, justifyContent: "flex-end" }}
           >
             {(loop.turns.length ? loop.turns : [{ speaker: "student" as const, text: opening }]).map((t, i) =>
               t.speaker === "student" ? (
                 <View key={i} style={styles.studentRow}>
-                  <LivingLight size={34} energy={i === loop.turns.length - 1 ? studentEnergy : 0} />
+                  <LivingLight
+                    size={34}
+                    energy={i === loop.turns.length - 1 ? studentEnergy : 0}
+                    // Only the latest question has a face; older ones rest.
+                    mood={i === loop.turns.length - 1 || !loop.turns.length ? mood : "rest"}
+                    nod={i === loop.turns.length - 1 ? nod : 0}
+                    talk={i === loop.turns.length - 1 ? talk : 0}
+                    cue={i === loop.turns.length - 1 ? cue : null}
+                  />
                   <View style={styles.studentBubble}>
                     <T size={16.5}>{t.text}</T>
                   </View>
@@ -228,7 +251,7 @@ export default function Session() {
         </>
       )}
 
-      {/* Top, as on the website: subject and time centred, view and close on the right */}
+      {/* Top: subject and time centred. No buttons: the view is set in Me. */}
       <View style={[styles.top, { top: insets.top + 8 }]}>
         <View style={styles.topRow}>
           <View style={styles.side} />
@@ -240,99 +263,70 @@ export default function Session() {
               {topic}
             </T>
           </View>
-          <View style={[styles.side, { flexDirection: "row", justifyContent: "flex-end", gap: 8 }]}>
-            <RoundButton
-              label={`View: ${VIEWS.find((v) => v.id === view)?.label}. Change view`}
-              size={44}
-              on={menuOpen}
-              onPress={() => setMenuOpen((o) => !o)}
-            >
-              <ViewIcon id={view} />
-            </RoundButton>
-            <RoundButton label="Close session" size={44} onPress={close}>
-              <Icon name="close" size={15} />
-            </RoundButton>
-          </View>
+          <View style={styles.side} />
         </View>
-        {showSettings && (
-          <Glass strong style={styles.settings}>
-            <View style={styles.rowBetween}>
-              <Label>Voice</Label>
-              <Press onPress={() => setShowSettings(false)} accessibilityRole="button" accessibilityLabel="Hide voice and ears" hitSlop={10}>
-                <Icon name="close" size={13} color={colour.muted} />
-              </Press>
-            </View>
-            <Segmented items={VOICES} value={voice} onChange={setVoice} />
-            <Label>Ears</Label>
-            <Segmented items={EARS} value={ears} onChange={setEars} />
-            <T size={12.5} tone="muted">
-              {lastStat ? `Last turn: ${statLine(lastStat)}` : "Changes apply from your next turn."}
-            </T>
-          </Glass>
-        )}
+        {/* The topic's key ideas, filling as they explain each one. */}
+        <IdeaBar total={loop.ideas.length} done={loop.covered.length} />
+        <GotChip got={loop.got} />
       </View>
 
-      {/* Shared controls */}
-      <Glass strong style={[styles.controls, { bottom: Math.max(insets.bottom, 10) }]}>
-        <Press
-          accessibilityRole="button"
-          accessibilityLabel={ringLabel}
-          accessibilityHint="Hold to change the view"
-          disabled={!canTap}
-          onPress={onRing}
-          // Holding opens the view menu; the release after a hold is not a tap.
-          delayLongPress={480}
-          onLongPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            setMenuOpen(true);
-          }}
-          style={{ opacity: canTap ? 1 : 0.4 }}
-        >
-          <SilverRing width={58} height={58}>
-            <Icon name={ringIcon} />
-          </SilverRing>
-        </Press>
-        <View style={{ flex: 1, gap: 4 }}>
+      {/* Teach me, when Fenny can tell this bit is new to them. */}
+      {offerTeach && (
+        <Animated.View entering={riseIn()} style={[styles.offer, { bottom: Math.max(insets.bottom, 12) + 150 }]}>
+          <PillButton label="Teach me" variant="solid" onPress={openTeach} style={{ alignSelf: "stretch" }} />
+          <Press accessibilityRole="button" accessibilityLabel="Not now, keep going" onPress={loop.dismissTeach} hitSlop={8} style={{ paddingVertical: 8 }}>
+            <T size={14} tone="soft">
+              Not now, keep going
+            </T>
+          </Press>
+        </Animated.View>
+      )}
+
+      {/* One button at the bottom, with no panel: what it does sits just above it. */}
+      <View pointerEvents="box-none" style={[styles.controls, { bottom: Math.max(insets.bottom, 12) + 8 }]}>
+        {lastStats ? (
+          <T size={11.5} tone="muted" lines={1} style={{ textAlign: "center", marginBottom: 6 }}>
+            {`Last reply ${secs(lastStats.quietSeconds * 1000 + lastStats.firstWordMs)}: wait ${secs(lastStats.quietSeconds * 1000)}, hearing ${secs(lastStats.transcribeMs)}, thinking ${secs(lastStats.brainMs)}`}
+          </T>
+        ) : null}
+        {/* One quiet line: what is happening, or the dots while you talk. */}
+        <View style={styles.hintLine}>
           {loop.phase === "listening" ? (
-            <DotWave width={width - 210} height={34} level={loop.isTalking ? 1 : 0.3} tick={tick} />
+            <DotWave width={Math.min(200, width - 80)} height={20} level={loop.isTalking ? 1 : 0.3} tick={tick} />
           ) : (
-            <T size={14} tone="muted" lines={2}>
-              {loop.notice ?? loop.error ?? STATUS[loop.phase]}
+            <T size={13.5} tone="soft" lines={1} style={{ textAlign: "center" }}>
+              {loop.phase === "error" && loop.error ? loop.error : loop.notice ?? HINTS[loop.phase][0]}
             </T>
           )}
-          {lastStat && !showSettings ? (
-            <T size={11.5} tone="dim" lines={1}>
-              {statLine(lastStat)}
-            </T>
-          ) : null}
         </View>
-        <PillButton label="End" variant="solid" onPress={end} style={{ height: 54 }} />
-      </Glass>
+        <HoldButton size={76} label={ringLabel} onTap={canTap ? onRing : undefined} onHold={end}>
+          {(hold) => (
+            <View style={{ opacity: canTap ? 1 : 0.4 }}>
+              <RecordDisc size={76} listening={loop.phase === "listening"} hold={hold}>
+                <Icon name={ringIcon} size={26} color={colour.onLight} />
+              </RecordDisc>
+            </View>
+          )}
+        </HoldButton>
+      </View>
 
-      {menuOpen && (
-        <ViewMenu
-          top={insets.top + 60}
-          view={view}
-          onPick={(v) => {
-            setView(v);
-            setMenuOpen(false);
-          }}
-          onClose={() => setMenuOpen(false)}
-          onTesting={() => {
-            setShowSettings(true);
-            setMenuOpen(false);
-          }}
-        />
-      )}
-      {/* The learner took Fenny's offer of a quick explanation. */}
-      {loop.showMeGap && (
-        <ShowMeCard
+      {teaching && (
+        <TeachMode
           topic={topic}
-          gap={loop.showMeGap}
-          notes={findTopic(topic)?.notes}
-          turns={loop.turns}
-          bottom={Math.max(insets.bottom, 10) + 106}
-          onDone={loop.dismissShowMe}
+          notes={notes}
+          idea={teaching.idea}
+          said={teaching.said}
+          speak={loop.speak}
+          hush={loop.hush}
+          onClose={() => {
+            setTeaching(null);
+            loop.dismissTeach();
+            loop.start().catch(() => {});
+          }}
+          onDone={(q) => {
+            setTeaching(null);
+            loop.resumeAfterLesson(q);
+          }}
         />
       )}
     </ScreenIn>
@@ -344,13 +338,11 @@ const styles = StyleSheet.create({
   centre: { alignItems: "center", paddingHorizontal: 24 },
   top: { position: "absolute", left: 16, right: 16, gap: 14 },
   topRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  side: { width: 96 },
+  side: { width: 52 },
   title: { flex: 1, minWidth: 0, alignItems: "center", gap: 4 },
-  rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  segment: { flexDirection: "row", gap: 2, padding: 3, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.05)", alignSelf: "flex-start" },
-  settings: { padding: 14, borderRadius: 24, gap: 8 },
-  switchItem: { height: 32, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center" },
-  controls: { position: "absolute", left: 10, right: 10, height: 96, borderRadius: 38, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14 },
+  controls: { position: "absolute", left: 24, right: 24, alignItems: "center", gap: 4 },
+  offer: { position: "absolute", left: 40, right: 40, alignItems: "center", gap: 6 },
+  hintLine: { height: 26, justifyContent: "center", marginBottom: 14 },
   studentRow: { alignSelf: "flex-start", flexDirection: "row", alignItems: "flex-end", gap: 10, maxWidth: 320 },
   studentBubble: {
     flexShrink: 1,
@@ -372,3 +364,8 @@ const styles = StyleSheet.create({
     borderColor: colour.hairline,
   },
 });
+
+/** 1234 ms as "1.2 s". */
+function secs(ms: number): string {
+  return `${(ms / 1000).toFixed(1)} s`;
+}

@@ -34,6 +34,14 @@
         }
       ],
       "expo-asset",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to scan your notes and to see things you point it at, so Fenny can ask you about them.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "./plugins/withOnnxruntime",
       "expo-router",
       "expo-image",
@@ -45,6 +53,12 @@
             "deploymentTarget": "18.0"
           }
         }
+      ],
+      [
+        "react-native-document-scanner-plugin",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to scan your notes and to see things you point it at, so Fenny can ask you about them."
+        }
       ]
     ],
     "scheme": "feynman",
@@ -54,6 +68,14 @@
         "projectId": "566f8aea-e600-4b92-b18a-0654bfe9fb08"
       }
     },
-    "owner": "emotiveimpact"
+    "owner": "emotiveimpact",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/566f8aea-e600-4b92-b18a-0654bfe9fb08",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    }
   }
 }

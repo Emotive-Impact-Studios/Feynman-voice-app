@@ -11,6 +11,7 @@
     "build": "node build.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.6.0",
     "@feynman/kitten-tts": "*",
     "phonemizer": "1.2.1"
   },

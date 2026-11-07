@@ -1,6 +1,6 @@
 // The session's view menu, from the canvas board: "Show me" Light only,
 // Subtitles or Full chat, with a tick on the current one. It springs in from
-// the view button at the top right. Holding the mic ring opens it too.
+// the view button at the top right.
 import { Pressable, StyleSheet, View } from "react-native";
 import Animated, { Easing, FadeOut, withSpring, withTiming } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
@@ -9,7 +9,9 @@ import { Label, T } from "../ui/kit";
 import { spring } from "../ui/motion";
 import { Press } from "../ui/Press";
 
-export type SessionView = "light" | "subtitles" | "chat";
+import type { SessionViewPref } from "../data/profile";
+
+export type SessionView = SessionViewPref;
 
 export const VIEWS: { id: SessionView; label: string }[] = [
   { id: "light", label: "Light only" },
@@ -22,6 +24,16 @@ const VIEW_ICON: Record<SessionView, string> = {
   subtitles: "M4 6h16v12H4zM7.5 14h4M13.5 14h3M7.5 10.5h9",
   chat: "M5 5h14v10H10l-4 3.5V15H5z",
 };
+
+/** The session's options button: three sliders, so it reads as settings. */
+export function OptionsIcon({ size = 18, color = colour.text }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" accessibilityElementsHidden importantForAccessibility="no">
+      <Path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1" stroke={color} strokeWidth={1.7} strokeLinecap="round" fill="none" />
+      <Path d="M15 5v4M9 10v4M17 15v4" stroke={color} strokeWidth={1.7} strokeLinecap="round" fill="none" />
+    </Svg>
+  );
+}
 
 export function ViewIcon({ id, size = 18, color = colour.text }: { id: SessionView; size?: number; color?: string }) {
   return (
@@ -84,9 +96,6 @@ export function ViewMenu({
             </Press>
           );
         })}
-        <T size={12} tone="muted" style={styles.tip}>
-          Tip: hold the mic to open this too.
-        </T>
         <View style={styles.rule} />
         <Press accessibilityRole="menuitem" onPress={onTesting} style={styles.item}>
           <T size={13} tone="muted">
@@ -117,6 +126,5 @@ const styles = StyleSheet.create({
   },
   head: { fontSize: 11, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6 },
   item: { height: 48, paddingHorizontal: 12, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 12 },
-  tip: { paddingHorizontal: 12, paddingVertical: 8 },
-  rule: { height: StyleSheet.hairlineWidth, backgroundColor: colour.hairline, marginHorizontal: 12 },
+  rule: { height: StyleSheet.hairlineWidth, backgroundColor: colour.hairline, marginHorizontal: 12, marginTop: 6 },
 });
