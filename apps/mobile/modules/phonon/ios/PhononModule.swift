@@ -6,6 +6,7 @@ import PhononTTS
 /// speak() for each sentence as it arrives, and stop() when the learner cuts in.
 public class PhononModule: Module {
   private var tts: Phonon?
+  private var loading: Task<Phonon, Error>?
   private var player: SpeakerPlayer?
   private let lock = NSLock()
   // Bumped by stop(), so audio from a cancelled sentence is never queued.
@@ -23,25 +24,13 @@ public class PhononModule: Module {
       PhononModels.isInstalled()
     }
 
-    /// Download the model bundle if needed (it is checked file by file and
-    /// resumes), load it, and pick a voice. Returns the voice names.
+    /// Download the model bundle the first time (it is checked file by file
+    /// and resumes), load it once, and pick a voice. Returns the voice names.
     AsyncFunction("prepare") { (baseUrl: String, voice: String) async throws -> [String] in
       guard let url = URL(string: baseUrl) else { throw PhononError(description: "Bad model URL \(baseUrl)") }
-      let dir = try await PhononModels.download(from: url) { [weak self] fraction in
-        self?.sendEvent("onProgress", ["fraction": fraction])
-      }
-      let tts: Phonon
-      if let loaded = self.tts {
-        tts = loaded
-      } else {
-        tts = try await Phonon.load(models: dir, language: .english)
-        self.tts = tts
-      }
+      let tts = try await self.loadOnce(from: url)
       self.useSpeaker()
-      if self.player == nil {
-        // expo-audio owns the session (play and record), so the player must not change it.
-        self.player = try SpeakerPlayer()
-      }
+      try self.makePlayerOnce()
       if tts.voices.contains(voice), tts.voice != voice {
         try await tts.setVoice(voice)
       }
@@ -104,6 +93,61 @@ public class PhononModule: Module {
     }
   }
 
+  /// One player, even if two prepares finish together.
+  private func makePlayerOnce() throws {
+    lock.lock()
+    defer { lock.unlock() }
+    if player == nil {
+      // expo-audio owns the session (play and record), so the player must not change it.
+      player = try SpeakerPlayer()
+    }
+  }
+
+  /// Loads the voice once, however many callers ask at the same time (the app
+  /// warms it up on launch while a call may also be starting). Two loads at
+  /// once would hold two copies of the model in memory. Once the bundle is on
+  /// the phone it loads straight from there, without asking the server first:
+  /// the bundle's address names its version, so it never changes in place.
+  private func loadOnce(from url: URL) async throws -> Phonon {
+    lock.lock()
+    if let tts = self.tts {
+      lock.unlock()
+      return tts
+    }
+    let task: Task<Phonon, Error>
+    if let running = loading {
+      task = running
+    } else {
+      task = Task { [weak self] () throws -> Phonon in
+        let dir: URL
+        if PhononModels.isInstalled() {
+          dir = PhononModels.defaultDirectory
+          self?.sendEvent("onProgress", ["fraction": 1.0])
+        } else {
+          dir = try await PhononModels.download(from: url) { fraction in
+            self?.sendEvent("onProgress", ["fraction": fraction])
+          }
+        }
+        return try await Phonon.load(models: dir, language: .english)
+      }
+      loading = task
+    }
+    lock.unlock()
+    do {
+      let tts = try await task.value
+      lock.lock()
+      self.tts = tts
+      loading = nil
+      lock.unlock()
+      return tts
+    } catch {
+      lock.lock()
+      loading = nil
+      lock.unlock()
+      throw error
+    }
+  }
+
   /// A play-and-record session sends audio to the earpiece unless told
   /// otherwise. The student should come out of the speaker.
   private func useSpeaker() {
@@ -117,50 +161,72 @@ public class PhononModule: Module {
 /// engine running: iOS stops an AVAudioEngine whenever the audio setup
 /// changes, such as the microphone closing when Teach me opens, and a
 /// stopped engine silently drops every sentence queued after it.
+///
+/// Three threads touch the engine: Phonon's (new audio), JavaScript's (stop)
+/// and the main thread (iOS saying the audio setup changed), and Teach me
+/// opening sets off all three at once. AVAudioEngine is not safe to use from
+/// several threads, and it raises an exception that closes the app if a
+/// player is started just as iOS stops the engine. So every engine call runs
+/// in order on one queue, and each is guarded so a refusal only skips a
+/// sentence instead of closing the app.
 final class SpeakerPlayer: @unchecked Sendable {
   private let engine = AVAudioEngine()
   private let node = AVAudioPlayerNode()
   private let format = AVAudioFormat(standardFormatWithSampleRate: Phonon.sampleRate, channels: 1)!
+  private let queue = DispatchQueue(label: "phonon-player")
   private var observer: NSObjectProtocol?
 
   init() throws {
-    engine.attach(node)
-    engine.connect(node, to: engine.mainMixerNode, format: format)
-    try engine.start()
-    node.play()
+    var failure: Error?
+    try PhononCatch.run {
+      engine.attach(node)
+      engine.connect(node, to: engine.mainMixerNode, format: format)
+      do { try engine.start() } catch { failure = error }
+      if engine.isRunning { node.play() }
+    }
+    if let failure { throw failure }
     observer = NotificationCenter.default.addObserver(
-      forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
-    ) { [weak self] _ in self?.ensureRunning() }
+      forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
+    ) { [weak self] _ in self?.queue.async { self?.ensureRunning() } }
   }
 
   deinit {
     if let observer { NotificationCenter.default.removeObserver(observer) }
-    node.stop()
-    engine.stop()
+    try? PhononCatch.run {
+      node.stop()
+      engine.stop()
+    }
   }
 
   /// Start the engine again if iOS stopped it. Queued audio was lost with it.
-  func ensureRunning() {
-    if !engine.isRunning {
-      engine.prepare()
-      try? engine.start()
+  /// Only call on `queue`.
+  private func ensureRunning() {
+    try? PhononCatch.run {
+      if !engine.isRunning {
+        engine.prepare()
+        try? engine.start()
+      }
+      if engine.isRunning && !node.isPlaying { node.play() }
     }
-    if engine.isRunning && !node.isPlaying { node.play() }
   }
 
   func enqueue(_ samples: [Float]) {
     guard !samples.isEmpty,
           let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count))
     else { return }
-    ensureRunning()
     buf.frameLength = AVAudioFrameCount(samples.count)
     samples.withUnsafeBufferPointer { buf.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
-    node.scheduleBuffer(buf)
+    queue.async { [self] in
+      ensureRunning()
+      try? PhononCatch.run { node.scheduleBuffer(buf) }
+    }
   }
 
   /// Drop everything queued and go quiet. Playing again afterwards works.
   func stop() {
-    node.stop()
-    ensureRunning()
+    queue.sync {
+      try? PhononCatch.run { node.stop() }
+      ensureRunning()
+    }
   }
 }

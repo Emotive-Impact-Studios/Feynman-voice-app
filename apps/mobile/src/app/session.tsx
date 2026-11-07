@@ -24,6 +24,7 @@ import type { SessionView } from "../live/ViewMenu";
 import type { LiveEars, LiveVoice } from "../api";
 import { useLiveCall } from "../live/useLiveCall";
 import { getNotes } from "../data/notes";
+import { LessonGuard } from "../teach/LessonGuard";
 import { TeachMode } from "../teach/TeachMode";
 import { Press } from "../ui/Press";
 import Animated from "react-native-reanimated";
@@ -149,6 +150,11 @@ export default function Session() {
     if (!loop.teach) return;
     loop.cancel();
     setTeaching({ idea: loop.teach.idea, said: lastYou });
+  };
+  const closeTeach = () => {
+    setTeaching(null);
+    loop.dismissTeach();
+    loop.start().catch(() => {});
   };
   // They said yes out loud: open it once Fenny has finished speaking.
   useEffect(() => {
@@ -294,23 +300,21 @@ export default function Session() {
       </View>
 
       {teaching && (
-        <TeachMode
-          topic={topic}
-          notes={notes}
-          idea={teaching.idea}
-          said={teaching.said}
-          speak={loop.speak}
-          hush={loop.hush}
-          onClose={() => {
-            setTeaching(null);
-            loop.dismissTeach();
-            loop.start().catch(() => {});
-          }}
-          onDone={(q) => {
-            setTeaching(null);
-            loop.resumeAfterLesson(q);
-          }}
-        />
+        <LessonGuard onClose={closeTeach}>
+          <TeachMode
+            topic={topic}
+            notes={notes}
+            idea={teaching.idea}
+            said={teaching.said}
+            speak={loop.speak}
+            hush={loop.hush}
+            onClose={closeTeach}
+            onDone={(q) => {
+              setTeaching(null);
+              loop.resumeAfterLesson(q);
+            }}
+          />
+        </LessonGuard>
       )}
     </ScreenIn>
   );
