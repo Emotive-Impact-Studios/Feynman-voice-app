@@ -95,11 +95,11 @@ public class PhononModule: Module {
 
   /// One player, even if two prepares finish together.
   private func makePlayerOnce() throws {
-    lock.lock()
-    defer { lock.unlock() }
-    if player == nil {
-      // expo-audio owns the session (play and record), so the player must not change it.
-      player = try SpeakerPlayer()
+    try lock.withLock {
+      if player == nil {
+        // expo-audio owns the session (play and record), so the player must not change it.
+        player = try SpeakerPlayer()
+      }
     }
   }
 
@@ -109,16 +109,10 @@ public class PhononModule: Module {
   /// the phone it loads straight from there, without asking the server first:
   /// the bundle's address names its version, so it never changes in place.
   private func loadOnce(from url: URL) async throws -> Phonon {
-    lock.lock()
-    if let tts = self.tts {
-      lock.unlock()
-      return tts
-    }
-    let task: Task<Phonon, Error>
-    if let running = loading {
-      task = running
-    } else {
-      task = Task { [weak self] () throws -> Phonon in
+    let task: Task<Phonon, Error> = lock.withLock {
+      if let tts = self.tts { return Task { () throws -> Phonon in tts } }
+      if let running = loading { return running }
+      let fresh = Task { [weak self] () throws -> Phonon in
         let dir: URL
         if PhononModels.isInstalled() {
           dir = PhononModels.defaultDirectory
@@ -130,20 +124,18 @@ public class PhononModule: Module {
         }
         return try await Phonon.load(models: dir, language: .english)
       }
-      loading = task
+      loading = fresh
+      return fresh
     }
-    lock.unlock()
     do {
       let tts = try await task.value
-      lock.lock()
-      self.tts = tts
-      loading = nil
-      lock.unlock()
+      lock.withLock {
+        self.tts = tts
+        loading = nil
+      }
       return tts
     } catch {
-      lock.lock()
-      loading = nil
-      lock.unlock()
+      lock.withLock { loading = nil }
       throw error
     }
   }
