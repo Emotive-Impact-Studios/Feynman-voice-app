@@ -4,6 +4,8 @@ import type { GeminiUsage } from "./pricing";
 export interface PastTurn {
   speaker: "learner" | "student";
   text: string;
+  /** For Fenny's lines: the engine move it made, sent back by newer phones. */
+  move?: string;
 }
 
 export interface StudentReply {

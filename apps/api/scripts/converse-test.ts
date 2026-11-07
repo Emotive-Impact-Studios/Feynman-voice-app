@@ -88,7 +88,7 @@ async function run(kind: "old" | "engine", persona: string, topic: string, turns
     else {
       // Same split as live.ts: the whole call for state, the last 20 lines for the model.
       const t0 = Date.now();
-      const t = await engineTurn(fennyCfg, { transcript: said, history: convo.slice(-20), callHistory: convo, topic, ideas, limits: { canShowMe: true } });
+      const t = await engineTurn(fennyCfg, { transcript: said, history: convo.slice(-20), callHistory: convo, topic, ideas, limits: { canTeach: true } });
       ms.push(Date.now() - t0);
       for (const u of t.usage) {
         tokens.prompt += u.prompt_tokens ?? 0;
@@ -103,7 +103,7 @@ async function run(kind: "old" | "engine", persona: string, topic: string, turns
         break;
       }
     }
-    convo.push({ speaker: "learner", text: said }, { speaker: "student", text: reply });
+    convo.push({ speaker: "learner", text: said }, { speaker: "student", text: reply, ...(kind === "engine" ? { move: moves.at(-1) } : {}) });
   }
   const fenny = convo.filter((t) => t.speaker === "student").map((t) => t.text);
   return {
@@ -114,8 +114,22 @@ async function run(kind: "old" | "engine", persona: string, topic: string, turns
     words: convo.reduce((n, t) => n + t.text.split(/\s+/).length, 0),
     vague: fenny.filter((l) => isVague(l) && !/shakiest/i.test(l)).length,
     probes: fenny.filter((l) => PROBES.includes(moveOf(l))).length / fenny.length,
+    repeats: repeats(fenny),
     score: await judge(topic, convo),
   };
+}
+
+/** Share of Fenny's lines that open like an earlier line, or say a sentence it already said. */
+function repeats(lines: string[]): number {
+  const open = (l: string) => l.toLowerCase().replace(/’/g, "'").replace(/[^a-z' ]/g, "").split(/\s+/).slice(0, 2).join(" ");
+  const said = new Set<string>();
+  let n = 0;
+  lines.forEach((l, i) => {
+    const ss = l.toLowerCase().match(/[^.!?]+[.!?]/g)?.map((x) => x.trim()) ?? [];
+    if (lines.slice(0, i).some((p) => open(p) === open(l)) || ss.some((x) => said.has(x))) n++;
+    ss.forEach((x) => said.add(x));
+  });
+  return lines.length ? n / lines.length : 0;
 }
 
 const which = (process.argv[2] ?? "both") as "old" | "engine" | "both";
@@ -135,7 +149,7 @@ for (const k of kinds) {
   const avg = (f: (r: (typeof rs)[number]) => number) => (rs.reduce((n, r) => n + f(r), 0) / rs.length).toFixed(2);
   console.log(`\n${k}: ${rs.length} calls`);
   console.log(`  natural ${avg((r) => r.score.natural)}  nag ${avg((r) => r.score.nag)}  on-subject ${avg((r) => r.score.on_subject)}  loop ${avg((r) => r.score.loop)}`);
-  console.log(`  annoying ${rs.filter((r) => r.score.would_annoy).length}/${rs.length}  leaked ${rs.filter((r) => r.score.leaked).length}/${rs.length}  vague lines ${rs.reduce((n, r) => n + r.vague, 0)}  probe share ${avg((r) => r.probes)}`);
+  console.log(`  annoying ${rs.filter((r) => r.score.would_annoy).length}/${rs.length}  leaked ${rs.filter((r) => r.score.leaked).length}/${rs.length}  vague lines ${rs.reduce((n, r) => n + r.vague, 0)}  probe share ${avg((r) => r.probes)}  repeated lines ${avg((r) => r.repeats)}`);
   const allMs = rs.flatMap((r) => r.ms).sort((a, b) => a - b);
   if (allMs.length) console.log(`  turn latency median ${allMs[allMs.length >> 1]}ms  p90 ${allMs[Math.floor(allMs.length * 0.9)]}ms`);
   for (const p of Object.keys(PERSONAS)) {

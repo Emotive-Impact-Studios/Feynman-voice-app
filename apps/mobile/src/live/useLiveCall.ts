@@ -471,7 +471,7 @@ export function useLiveCall(topic: string, settings: CallSettings) {
         if (waited) return; // not finished: nothing to record yet
         nextQuiet.current = quietAfter(e.question, settingsRef.current.fast);
         setHeardSeconds((n) => n + speakingSeconds);
-        setTurns((t) => [...t, { speaker: "learner", text: e.transcript }, { speaker: "student", text: e.question }]);
+        setTurns((t) => [...t, { speaker: "learner", text: e.transcript }, { speaker: "student", text: e.question, ...(e.move ? { move: e.move } : {}) }]);
         if (sent.current?.id === id) sent.current.recorded = true;
       }
       if (e.type === "engine" && e.move !== "wait") setMove(e.move);

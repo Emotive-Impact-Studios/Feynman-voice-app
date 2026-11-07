@@ -125,6 +125,20 @@ describe("POST /api/lesson", () => {
     expect(j.lesson.bites).toHaveLength(2);
   });
 
+  it("tells the writer how simply to explain, and keeps each level's lesson apart", async () => {
+    const sent: string[] = [];
+    const f = (async (_u: unknown, init?: RequestInit) => {
+      sent.push(String(init?.body));
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(draft()) } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }));
+    }) as unknown as typeof fetch;
+    for (const level of ["simple", "deep", undefined]) await handleLesson(post({ ...req, idea: "level idea", level }), { OPENAI_API_KEY: "k" }, f);
+    expect(sent).toHaveLength(3);
+    expect(sent[0]).toContain("five year old");
+    expect(sent[1]).toContain("Level: university");
+    expect(sent[2]).toContain("12 year old");
+    expect((await handleLesson(post({ ...req, level: "toddler" }), { OPENAI_API_KEY: "k" })).status).toBe(400);
+  });
+
   it("needs a topic and an idea", async () => {
     expect((await handleLesson(post({ topic: "x" }), { OPENAI_API_KEY: "k" })).status).toBe(400);
   });

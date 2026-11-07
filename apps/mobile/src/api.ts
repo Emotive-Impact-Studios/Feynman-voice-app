@@ -8,6 +8,8 @@ const TOKEN = process.env.EXPO_PUBLIC_PROTOTYPE_TOKEN ?? "";
 export interface Turn {
   speaker: "learner" | "student";
   text: string;
+  /** For Fenny's lines: the move the server's engine made, handed back next turn so it keeps its place. */
+  move?: string;
 }
 
 export interface TurnResponse {
@@ -48,6 +50,8 @@ export type LiveEvent =
   | { type: "sentence"; index: number; text: string; speech?: PhonemeChunk[]; audio?: string; sampleRate?: number }
   | {
       type: "done";
+      /** The engine's move for this reply, when the engine answered. */
+      move?: string;
       transcript: string;
       question: string;
       voice: LiveVoice;
@@ -174,7 +178,10 @@ export interface Lesson {
 }
 
 /** A short lesson on one idea the learner is stuck on, built on the server from their notes. */
-export async function fetchLesson(input: { topic: string; idea: string; notes?: string; said?: string }, signal?: AbortSignal): Promise<Lesson> {
+/** How simply a lesson explains: a five year old, a bright 12 year old, or university level. */
+export type LessonLevel = "simple" | "standard" | "deep";
+
+export async function fetchLesson(input: { topic: string; idea: string; notes?: string; said?: string; level?: LessonLevel }, signal?: AbortSignal): Promise<Lesson> {
   if (!API_URL) throw new Error("Set EXPO_PUBLIC_API_URL in apps/mobile/.env");
   const res = await fetch(`${API_URL.replace(/\/$/, "")}/api/lesson`, {
     method: "POST",
