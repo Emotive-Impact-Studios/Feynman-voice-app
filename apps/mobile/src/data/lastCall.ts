@@ -1,5 +1,8 @@
-// Hands the call that just ended to the results screen. In memory only: the
-// results are saved on the topic (see profile.ts) once they are back.
+// Hands the call that just ended to the results screen. Kept in a small file
+// too, so a call whose results never came back (the app was closed, or the
+// phone reclaimed it) is picked up again on the next open. Cleared once the
+// results are saved on the topic (see profile.ts) or the learner leaves them.
+import { File, Paths } from "expo-file-system";
 import type { Turn } from "../api";
 
 export interface FinishedCall {
@@ -17,14 +20,38 @@ export interface FinishedCall {
   seconds: number;
 }
 
-let pending: FinishedCall | null = null;
+const file = new File(Paths.document, "last-call.json");
+let pending: FinishedCall | null | undefined;
 
 export function setFinishedCall(call: FinishedCall) {
   pending = call;
+  try {
+    file.write(JSON.stringify(call));
+  } catch {
+    // Not fatal: it still works while the app stays open.
+  }
 }
 
+/** The call waiting for its results, if any, from memory or the file. */
 export function getFinishedCall(): FinishedCall | null {
+  if (pending === undefined) {
+    try {
+      pending = file.exists ? (JSON.parse(file.textSync()) as FinishedCall) : null;
+    } catch {
+      pending = null;
+    }
+  }
   return pending;
+}
+
+/** The results are saved (or the learner left them): nothing to pick up. */
+export function clearFinishedCall() {
+  pending = null;
+  try {
+    if (file.exists) file.delete();
+  } catch {
+    // Ignore: an old file only means one extra results screen.
+  }
 }
 
 /** The button that hands back after Show me. */

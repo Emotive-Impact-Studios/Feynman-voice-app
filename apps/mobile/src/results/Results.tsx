@@ -16,7 +16,7 @@ import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown, FadeOutLeft, SlideInRight } from "react-native-reanimated";
 import { analyseCall, showMe, type Analysis, type Gap } from "../api";
-import { getFinishedCall, SHAKIEST_MIN_SECONDS, TELL_ME, TELL_ME_BUTTON, type FinishedCall } from "../data/lastCall";
+import { clearFinishedCall, getFinishedCall, SHAKIEST_MIN_SECONDS, TELL_ME, TELL_ME_BUTTON, type FinishedCall } from "../data/lastCall";
 import { getNotes } from "../data/notes";
 import { findTopic, minutesLeft, saveAnalysis, useProfile, type SavedGap } from "../data/profile";
 import { colour, font } from "../theme";
@@ -72,6 +72,7 @@ function ResultsFor({ call }: { call: FinishedCall }) {
       );
       if (ctl.signal.aborted) return;
       const saved = saveAnalysis(call.topic, a, { focusId: call.focusId, attempt: learnerText });
+      clearFinishedCall();
       setResult(a);
       setCards(saved.length ? saved : a.gaps.map((g, i) => ({ ...g, id: String(i), at: Date.now() })));
       setPhase("summary");
@@ -149,7 +150,12 @@ function ResultsFor({ call }: { call: FinishedCall }) {
             Your time is saved. {error}
           </T>
           <PillButton label="Try again" variant="solid" onPress={analyse} style={{ marginTop: 32, alignSelf: "stretch" }} />
-          <PillButton label="Back to today" onPress={home} style={{ marginTop: 10, alignSelf: "stretch", backgroundColor: "transparent", borderWidth: 0 }} />
+          <PillButton
+            label="Back to today"
+            onPress={() => {
+              clearFinishedCall();
+              home();
+            }} style={{ marginTop: 10, alignSelf: "stretch", backgroundColor: "transparent", borderWidth: 0 }} />
         </Animated.View>
       )}
 

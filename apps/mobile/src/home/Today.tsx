@@ -1,6 +1,7 @@
 // Today, from the canvas board "THE APP: start here". One way in, your last
 // topic to pick up, and the gaps from your sessions to explain again. (The
 // spaced review queue, build step 6, will decide which day each comes back.)
+import { useState } from "react";
 import { Press } from "../ui/Press";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { useReducedMotion } from "react-native-reanimated";
@@ -32,6 +33,7 @@ export function Today({
   const last = profile.topics[0];
   const streak = softStreak(profile.days);
   const gaps = openGaps(profile);
+  const [showAll, setShowAll] = useState(false);
   // "It caught N gaps": the gaps found on the day of the last session.
   const lastDay = profile.topics[0] ? dayNumber(profile.topics[0].at) : -1;
   const caught = profile.topics.flatMap((t) => t.gaps ?? []).filter((g) => dayNumber(g.at) === lastDay).length;
@@ -106,7 +108,7 @@ export function Today({
           </T>
         ) : (
           <Glass style={styles.list}>
-            {gaps.slice(0, 5).map(({ topic, gap }, i) => (
+            {(showAll ? gaps : gaps.slice(0, 5)).map(({ topic, gap }, i) => (
               <Press
                 key={gap.id}
                 onPress={() => onGap(topic, gap)}
@@ -128,6 +130,13 @@ export function Today({
                 </T>
               </Press>
             ))}
+            {gaps.length > 5 && (
+              <Press onPress={() => setShowAll((v) => !v)} accessibilityRole="button" style={[styles.gapRow, styles.divider, { justifyContent: "center" }]}>
+                <T size={14} tone="soft">
+                  {showAll ? "Show fewer" : `Show all ${gaps.length}`}
+                </T>
+              </Press>
+            )}
           </Glass>
         )}
       </In>

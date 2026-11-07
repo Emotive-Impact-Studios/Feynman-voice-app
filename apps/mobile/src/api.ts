@@ -82,6 +82,8 @@ export async function streamLiveTurn(
     features?: string[];
     /** Their scanned notes on this topic, so Fenny can spot what they leave out. */
     notes?: string;
+    /** A gap they are going back over, kept apart from the topic. */
+    focus?: string;
   },
   onEvent: (e: LiveEvent) => void,
   signal?: AbortSignal,

@@ -57,9 +57,8 @@ export default function Session() {
   // Their goal for the topic, in their words, steers Fenny's questions.
   const [goal] = useState(() => params.goal?.trim() || findTopic(topic)?.goal || "");
   const focus = params.focus?.trim() || "";
-  const brainTopic =
-    (goal ? `${topic}. What they want to be able to explain: ${goal}` : topic) +
-    (focus ? `. They are going back over one part they found shaky, so ask about it: ${focus}` : "");
+  // The focus travels separately, so the topic's key ideas stay the same.
+  const brainTopic = goal ? `${topic}. What they want to be able to explain: ${goal}` : topic;
   const profile = useProfile();
   const opening = params.prompt ?? OPENING;
   const insets = useSafeAreaInsets();
@@ -72,7 +71,7 @@ export default function Session() {
   const [fast] = useState(() => !!profile.fastReplies);
   // Pages they scanned for this topic: Fenny uses them to spot what they leave out.
   const [notes] = useState(() => getNotes(topic));
-  const loop = useLiveCall(brainTopic, { voice, ears, fast, notes });
+  const loop = useLiveCall(brainTopic, { voice, ears, fast, notes, focus: focus || undefined });
   // Faster-replies trial: how long the last reply took, so we can compare.
   const lastStats = fast ? loop.stats[loop.stats.length - 1] : undefined;
 
